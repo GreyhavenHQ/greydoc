@@ -10,6 +10,39 @@ Claude Code:
 claude mcp add --transport http greydoc https://notes.example.com/mcp
 ```
 
+opencode: add the server to `opencode.json` (in the project) or `~/.config/opencode/opencode.json` (for all projects):
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "greydoc": {
+      "type": "remote",
+      "url": "https://notes.example.com/mcp",
+      "enabled": true
+    }
+  }
+}
+```
+
+opencode asks you to sign in the first time it uses the server. To sign in before that, run `opencode mcp auth greydoc`. `opencode mcp list` shows the status, and `opencode mcp logout greydoc` removes the stored tokens.
+
+To use a personal access token in opencode instead of OAuth, turn OAuth off and send the token as a header:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "greydoc": {
+      "type": "remote",
+      "url": "https://notes.example.com/mcp",
+      "oauth": false,
+      "headers": { "Authorization": "Bearer {env:GREYDOC_TOKEN}" }
+    }
+  }
+}
+```
+
 Other clients: use the URL `https://notes.example.com/mcp` with HTTP transport.
 
 - With OIDC, the client finds the OAuth server through `/.well-known/oauth-protected-resource/mcp`, registers itself, and opens a browser window. You sign in and press "Allow".

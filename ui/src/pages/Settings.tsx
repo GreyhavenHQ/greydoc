@@ -36,6 +36,23 @@ function CopyLine({ value }: { value: string }) {
   )
 }
 
+function CopyBlock({ value }: { value: string }) {
+  return (
+    <div className="relative">
+      <pre className="overflow-x-auto rounded-md border bg-card p-3 pr-12 font-mono text-xs">{value}</pre>
+      <Button
+        size="icon"
+        variant="outline"
+        className="absolute top-2 right-2"
+        aria-label="Copy"
+        onClick={() => navigator.clipboard?.writeText(value).then(() => toast.success('Copied'))}
+      >
+        <Copy className="size-4" />
+      </Button>
+    </div>
+  )
+}
+
 export default function Settings() {
   const { me } = useMe()
   const [tokens, setTokens] = useState<Token[]>([])
@@ -89,6 +106,21 @@ export default function Settings() {
             <CopyLine value={mcpURL} />
             <Label className="mt-2">Claude Code</Label>
             <CopyLine value={`claude mcp add --transport http greydoc ${mcpURL}`} />
+            <Label className="mt-2">opencode</Label>
+            <CopyBlock
+              value={JSON.stringify(
+                {
+                  $schema: 'https://opencode.ai/config.json',
+                  mcp: { greydoc: { type: 'remote', url: mcpURL, enabled: true } },
+                },
+                null,
+                2,
+              )}
+            />
+            <p className="text-muted-foreground">
+              Add this to <code className="font-mono text-xs">opencode.json</code>
+              {me?.local_mode ? '.' : <>, then run <code className="font-mono text-xs">opencode mcp auth greydoc</code> to sign in.</>}
+            </p>
             <p className="text-muted-foreground">
               {me?.local_mode
                 ? 'Local mode: no sign-in is needed.'

@@ -42,11 +42,24 @@ To use it as a team, configure OIDC. See [docs/configuration.md](docs/configurat
 
 ## Connect an agent
 
+Claude Code:
+
 ```bash
 claude mcp add --transport http greydoc https://notes.example.com/mcp
 ```
 
-The client signs you in through the browser. Each note's owner sets what agents may do on it: nothing, read, suggest (the default) or edit. See [docs/mcp.md](docs/mcp.md).
+opencode, in `opencode.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "greydoc": { "type": "remote", "url": "https://notes.example.com/mcp", "enabled": true }
+  }
+}
+```
+
+The client signs you in through the browser. In opencode, `opencode mcp auth greydoc` starts the sign-in. Each note's owner sets what agents may do on it: nothing, read, suggest (the default) or edit. See [docs/mcp.md](docs/mcp.md).
 
 ## Data
 
