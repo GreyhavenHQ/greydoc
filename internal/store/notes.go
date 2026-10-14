@@ -53,7 +53,7 @@ type NewNote struct {
 // reservedAliases collide with UI routes and API prefixes.
 var reservedAliases = []string{
 	"new", "n", "s", "p", "api", "auth", "ws", "mcp", "oauth", "assets", "fonts", "uploads",
-	"healthz", "login", "logout", "favicon.svg", ".well-known", "index.html",
+	"healthz", "login", "logout", "favicon.svg", ".well-known", "index.html", "settings",
 }
 
 var aliasPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)

@@ -52,6 +52,8 @@ func main() {
 	switch os.Args[1] {
 	case "serve":
 		err = cmdServe(os.Args[2:])
+	case "token":
+		err = cmdToken(os.Args[2:])
 	case "version", "--version":
 		fmt.Println(versionString(version, gitCommit, buildTime))
 	default:
@@ -68,8 +70,9 @@ func usage() {
 	fmt.Fprintln(os.Stderr, `usage: greydoc <command>
 
 commands:
-  serve     run the server
-  version   print the version`)
+  serve                  run the server
+  token create --user U  mint a personal access token for the API and MCP
+  version                print the version`)
 }
 
 func cmdServe(args []string) error {
@@ -113,5 +116,40 @@ func cmdServe(args []string) error {
 	if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
+	return nil
+}
+
+func cmdToken(args []string) error {
+	if len(args) < 1 || args[0] != "create" {
+		return errors.New("usage: greydoc token create --user USERNAME [--label LABEL] [--read-only]")
+	}
+	fs := flag.NewFlagSet("token create", flag.ExitOnError)
+	user := fs.String("user", "", "username (local in local mode)")
+	label := fs.String("label", "cli", "label shown in the token list")
+	readOnly := fs.Bool("read-only", false, "only allow reading")
+	_ = fs.Parse(args[1:])
+	cfg := config.FromEnv()
+	if *user == "" {
+		if !cfg.LocalMode() {
+			return errors.New("--user is required")
+		}
+		*user = "local"
+	}
+	srv, err := server.Open(cfg)
+	if err != nil {
+		return err
+	}
+	defer srv.Close()
+	scope := ""
+	if *readOnly {
+		scope = "notes:read"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	tok, err := srv.CreatePAT(ctx, *user, *label, scope)
+	if err != nil {
+		return err
+	}
+	fmt.Println(tok)
 	return nil
 }

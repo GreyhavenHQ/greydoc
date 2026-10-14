@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/greyhavenhq/greydoc/internal/ai"
@@ -37,6 +38,7 @@ type Server struct {
 	workers       sync.WaitGroup
 	noteLocks     sync.Map
 	ai            *ai.Client
+	seenBase      atomic.Value
 }
 
 type noteMirror interface {
@@ -171,6 +173,21 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /auth/logout", s.handleAuthLogout)
 	s.mux.HandleFunc("GET /api/me", s.handleMe)
 	s.mux.HandleFunc("GET /api/users", s.handleSearchUsers)
+	s.mux.HandleFunc("GET /api/tokens", s.handleListTokens)
+	s.mux.HandleFunc("POST /api/tokens", s.handleCreateToken)
+	s.mux.HandleFunc("DELETE /api/tokens/{id}", s.handleDeleteToken)
+
+	s.mux.HandleFunc("GET /.well-known/oauth-protected-resource", s.handleResourceMetadata)
+	s.mux.HandleFunc("GET /.well-known/oauth-protected-resource/mcp", s.handleResourceMetadata)
+	s.mux.HandleFunc("GET /.well-known/oauth-authorization-server", s.handleASMetadata)
+	s.mux.HandleFunc("GET /.well-known/oauth-authorization-server/mcp", s.handleASMetadata)
+	s.mux.HandleFunc("GET /.well-known/openid-configuration", s.handleASMetadata)
+	s.mux.HandleFunc("POST /oauth/register", s.handleRegister)
+	s.mux.HandleFunc("GET /oauth/authorize", s.handleAuthorize)
+	s.mux.HandleFunc("POST /oauth/authorize", s.handleAuthorizeDecision)
+	s.mux.HandleFunc("POST /oauth/token", s.handleToken)
+	s.mux.HandleFunc("POST /oauth/revoke", s.handleRevoke)
+	s.mux.Handle("/mcp", s.mcpHandler())
 
 	s.mux.HandleFunc("GET /api/notes", s.handleListNotes)
 	s.mux.HandleFunc("GET /api/tags", s.handleTags)

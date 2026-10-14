@@ -183,6 +183,40 @@ CREATE TABLE IF NOT EXISTS suggestion (
     decided_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_suggestion_note ON suggestion(note_id, status);
+-- Bearer tokens: personal access tokens, and OAuth access and refresh tokens for MCP clients.
+CREATE TABLE IF NOT EXISTS api_token (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    label TEXT NOT NULL DEFAULT '',
+    client_id TEXT NOT NULL DEFAULT '',
+    scope TEXT NOT NULL DEFAULT '',
+    family TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    expires_at TEXT,
+    last_used_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_api_token_user ON api_token(user_id, kind);
+CREATE INDEX IF NOT EXISTS idx_api_token_family ON api_token(family);
+CREATE TABLE IF NOT EXISTS oauth_client (
+    id TEXT PRIMARY KEY,
+    secret_hash TEXT NOT NULL DEFAULT '',
+    name TEXT NOT NULL DEFAULT '',
+    redirect_uris TEXT NOT NULL,
+    auth_method TEXT NOT NULL DEFAULT 'none',
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS oauth_code (
+    code_hash TEXT PRIMARY KEY,
+    client_id TEXT NOT NULL REFERENCES oauth_client(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+    redirect_uri TEXT NOT NULL,
+    challenge TEXT NOT NULL,
+    scope TEXT NOT NULL DEFAULT '',
+    resource TEXT NOT NULL DEFAULT '',
+    expires_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS note_tag (
     note_id TEXT NOT NULL REFERENCES note(id) ON DELETE CASCADE,
     tag TEXT NOT NULL,

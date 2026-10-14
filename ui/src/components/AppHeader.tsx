@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { LogIn, LogOut, Moon, Plus, Sun } from 'lucide-react'
+import { LogIn, LogOut, Moon, Plus, Settings, Sun } from 'lucide-react'
 import { Logo } from '@/components/Logo'
 import { Button } from '@/components/ui/button'
 import {
@@ -62,6 +62,11 @@ export function UserMenu() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link to="/settings">
+            <Settings className="size-4" /> Settings and agents
+          </Link>
+        </DropdownMenuItem>
         {me.local_mode ? (
           <DropdownMenuItem
             onSelect={() => {

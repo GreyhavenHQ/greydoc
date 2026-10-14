@@ -3,6 +3,7 @@ import { MeProvider } from '@/lib/me'
 import Home from '@/pages/Home'
 import NewNote from '@/pages/NewNote'
 import Editor from '@/pages/Editor'
+import Settings from '@/pages/Settings'
 
 export default function App() {
   return (
@@ -11,6 +12,7 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/new" element={<NewNote />} />
         <Route path="/n/:alias" element={<Editor />} />
+        <Route path="/settings" element={<Settings />} />
         <Route path="/:alias" element={<ShortLink />} />
         <Route path="*" element={<Home />} />
       </Routes>

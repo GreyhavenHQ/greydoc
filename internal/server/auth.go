@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/greyhavenhq/greydoc/internal/secrets"
 	"github.com/greyhavenhq/greydoc/internal/store"
@@ -19,6 +20,9 @@ type Identity struct {
 	Via string
 	// Client names the MCP or API client for token and oauth callers.
 	Client string
+	// Scopes limit token callers. Nil means no limit.
+	Scopes      []string
+	tokenExpiry time.Time
 }
 
 func (id *Identity) UserID() string {
@@ -53,11 +57,15 @@ func (s *Server) withIdentity(next http.Handler) http.Handler {
 var errInvalidToken = errors.New("the access token is invalid or expired")
 
 func (s *Server) identify(r *http.Request) (*Identity, error) {
+	if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
+		id, err := s.identifyBearer(r.Context(), strings.TrimSpace(auth[len("Bearer "):]))
+		if err == nil && s.cfg.LocalMode() {
+			id.Local = true
+		}
+		return id, err
+	}
 	if s.cfg.LocalMode() {
 		return &Identity{User: s.localUser, Local: true, Via: "local"}, nil
-	}
-	if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
-		return s.identifyBearer(r.Context(), strings.TrimSpace(auth[len("Bearer "):]))
 	}
 	if c, err := r.Cookie(sessionCookieName); err == nil && c.Value != "" {
 		u, err := s.store.UserBySessionHash(r.Context(), secrets.Hash(s.secret, c.Value))
@@ -71,13 +79,6 @@ func (s *Server) identify(r *http.Request) (*Identity, error) {
 	return nil, nil
 }
 
-func (s *Server) identifyBearer(ctx context.Context, token string) (*Identity, error) {
-	return nil, errInvalidToken
-}
-
-func (s *Server) wwwAuthenticate(r *http.Request) string {
-	return `Bearer realm="greydoc"`
-}
 
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	id := identityFrom(r.Context())

@@ -11,7 +11,9 @@ import (
 )
 
 // isAgent reports whether the caller is a program (MCP client, token) rather than a browser.
-func (id *Identity) isAgent() bool { return id != nil && (id.Via == "token" || id.Via == "oauth") }
+func (id *Identity) isAgent() bool {
+	return id != nil && (id.Via == "token" || id.Via == "oauth" || id.Via == "mcp")
+}
 
 func (id *Identity) source() store.Source {
 	if id.isAgent() {
@@ -78,6 +80,9 @@ func (s *Server) noteLevel(ctx context.Context, id *Identity, n *store.Note, sha
 	l := permission.Determine(in)
 	if id.isAgent() {
 		l = permission.AgentLevel(l, permission.Policy(n.AgentPolicy))
+	}
+	if !id.canWriteScope() {
+		l = min(l, permission.Read)
 	}
 	return l, nil
 }
