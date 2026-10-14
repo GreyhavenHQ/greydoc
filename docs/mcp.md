@@ -88,6 +88,14 @@ The policy only lowers access. An agent never gets more than the person it acts 
 
 A note can be given as its alias, as `/n/<alias>`, or as its full URL. A view-only link works too and gives read access.
 
+## Audit
+
+Every tool call is recorded in the audit log as `mcp.call`: the tool, the note, the arguments, whether it worked, the error, and how long it took. Long text arguments are cut to their first words and their length. Each new client session is recorded as `mcp.session`, with the client's name and version.
+
+On the audit page, the filter "Agent (MCP) calls" shows these events and a usage summary for the last 7, 30 or 90 days: calls and errors by tool, by client and by person. The same summary is at `GET /api/audit/mcp?days=30`. Admins see all calls. Others see calls on notes they can read and their own calls.
+
+Note timelines leave out these calls, so they only show what changed the note.
+
 ## What people see
 
 Agent suggestions appear in the editor as tracked changes with an "agent" tag. Accepted agent text and direct agent edits show a dotted underline in the authors view. The timeline marks agent revisions and events with "Agent" and the client name, for example "via Claude".

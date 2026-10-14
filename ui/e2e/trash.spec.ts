@@ -27,3 +27,22 @@ test('trash, restore and audit', async ({ page }) => {
   await page.goto('/audit')
   await expect(page.getByTestId('audit-event').first()).toContainText('restored the note from the trash')
 })
+
+test('agent calls appear in the audit log with a usage summary', async ({ page, request }) => {
+  const alias = (await (await request.post('/api/notes', { data: { content: '# Watched\nx' } })).json()).alias
+  const rpc = async (body: object, session?: string) => {
+    const headers: Record<string, string> = { Accept: 'application/json, text/event-stream', 'Content-Type': 'application/json' }
+    if (session) headers['Mcp-Session-Id'] = session
+    return request.post('/mcp', { headers, data: body })
+  }
+  const init = await rpc({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'e2e-agent', version: '1' } } })
+  const session = init.headers()['mcp-session-id']
+  await rpc({ jsonrpc: '2.0', method: 'notifications/initialized' }, session)
+  await rpc({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'read_note', arguments: { note: alias } } }, session)
+
+  await page.goto('/audit?kind=mcp')
+  await expect(page.getByTestId('mcp-usage')).toContainText('read_note')
+  await expect(page.getByTestId('mcp-usage')).toContainText('e2e-agent')
+  await expect(page.getByTestId('audit-event').filter({ hasText: 'called read_note' })).toContainText('Watched')
+  await expect(page.getByTestId('audit-event').filter({ hasText: 'opened an MCP session' })).toContainText('e2e-agent')
+})

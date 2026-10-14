@@ -77,8 +77,20 @@ export function describe(e: AuditEvent): string {
       return 'revoked an access token'
     case 'oauth.connect':
       return `connected the agent ${String(d.client ?? '')}`
+    case 'mcp.call':
+      return `called ${String(d.tool ?? 'a tool')}`
+    case 'mcp.session':
+      return `opened an MCP session${d.client ? ` with ${String(d.client)}${d.version ? ' ' + String(d.version) : ''}` : ''}`
     default:
       return e.kind
   }
 }
 
+
+// callArgs renders MCP call arguments on one line, for the audit log.
+export function callArgs(args: unknown): string {
+  if (!args || typeof args !== 'object') return ''
+  return Object.entries(args as Record<string, unknown>)
+    .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
+    .join(' · ')
+}

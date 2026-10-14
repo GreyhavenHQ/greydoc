@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { api } from '@/lib/api'
-import { describe, type AuditEvent } from '@/lib/events'
+import { callArgs, describe, type AuditEvent } from '@/lib/events'
 import { authorColor } from '@/lib/authors'
 import { loginHref, useMe } from '@/lib/me'
 import { relativeTime, shortDateTime } from '@/lib/time'
@@ -24,7 +24,91 @@ const kinds = [
   { id: 'user', label: 'Sign-ins' },
   { id: 'token', label: 'Access tokens' },
   { id: 'oauth', label: 'Connected agents' },
+  { id: 'mcp', label: 'Agent (MCP) calls' },
 ]
+
+interface UsageRow {
+  name: string
+  calls: number
+  errors: number
+  avg_ms: number
+  last: string
+}
+
+interface Usage {
+  days: number
+  calls: number
+  errors: number
+  tools: UsageRow[]
+  clients: UsageRow[]
+  people: UsageRow[]
+}
+
+function UsageTable({ title, rows }: { title: string; rows: UsageRow[] }) {
+  return (
+    <div className="min-w-0">
+      <div className="mb-1 text-xs font-medium text-muted-foreground">{title}</div>
+      <table className="w-full text-sm">
+        <tbody>
+          {rows.slice(0, 8).map((r) => (
+            <tr key={r.name} className="border-t">
+              <td className="truncate py-1 pr-2 font-mono text-xs">{r.name}</td>
+              <td className="py-1 text-right tabular-nums">{r.calls}</td>
+              <td className={'py-1 pl-2 text-right text-xs tabular-nums ' + (r.errors ? 'text-destructive' : 'text-muted-foreground')}>
+                {r.errors ? `${r.errors} err` : '—'}
+              </td>
+            </tr>
+          ))}
+          {rows.length === 0 && (
+            <tr>
+              <td className="py-1 text-xs text-muted-foreground">No calls.</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function UsageSummary() {
+  const [days, setDays] = useState('30')
+  const [u, setU] = useState<Usage | null>(null)
+  useEffect(() => {
+    api.get<Usage>('/api/audit/mcp?days=' + days).then(setU)
+  }, [days])
+  return (
+    <div className="mb-4 rounded-lg border bg-card p-4" data-testid="mcp-usage">
+      <div className="mb-3 flex items-center gap-3">
+        <div className="text-sm font-medium">Agent usage</div>
+        {u && (
+          <div className="text-sm text-muted-foreground">
+            {u.calls} calls · {u.errors} errors{u.calls ? ` (${Math.round((100 * u.errors) / u.calls)}%)` : ''}
+          </div>
+        )}
+        <div className="flex-1" />
+        <Select value={days} onValueChange={setDays}>
+          <SelectTrigger className="h-8 w-32 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {['7', '30', '90'].map((d) => (
+              <SelectItem key={d} value={d} className="text-xs">
+                Last {d} days
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      {u && (
+        <div className="grid gap-6 sm:grid-cols-3">
+          <UsageTable title="By tool" rows={u.tools} />
+          <UsageTable title="By client" rows={u.clients} />
+          <UsageTable title="By person" rows={u.people} />
+        </div>
+      )}
+    </div>
+  )
+}
 
 const sources = [
   { id: 'all', label: 'Anyone' },
@@ -146,6 +230,7 @@ export default function Audit() {
             </Badge>
           )}
         </div>
+        {kind === 'mcp' && <UsageSummary />}
         <ol className="flex flex-col divide-y rounded-lg border bg-card" data-testid="audit-list">
           {events.map((ev) => (
             <li key={ev.id} className="flex gap-3 px-4 py-3 text-sm" data-testid="audit-event">
@@ -161,6 +246,13 @@ export default function Audit() {
                   <span className="text-muted-foreground">{describe(ev)}</span>
                   <SourceBadge source={ev.source} />
                 </div>
+                {ev.kind === 'mcp.call' && (
+                  <div className="mt-0.5 flex flex-wrap gap-x-2 font-mono text-[11px] text-muted-foreground">
+                    <span className="break-all">{callArgs(ev.data?.args)}</span>
+                    <span>{String(ev.data?.ms ?? 0)} ms</span>
+                    {ev.data?.ok === false && <span className="text-destructive">{String(ev.data?.error ?? 'error')}</span>}
+                  </div>
+                )}
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <span title={shortDateTime(ev.created_at)}>{relativeTime(ev.created_at)}</span>
                   {ev.client && <span>via {ev.client}</span>}
