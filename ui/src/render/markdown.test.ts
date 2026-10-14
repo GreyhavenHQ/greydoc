@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { renderMarkdown } from '@/render/markdown'
-import { mermaidConfig } from '@/render/mermaidTheme'
+import { diagramUsesElk, mermaidConfig } from '@/render/mermaidTheme'
 
 const html = (src: string) => renderMarkdown(src).html
 
@@ -128,10 +128,21 @@ describe('mermaid theme', () => {
   it('uses Greyhaven tokens, ELK layout and strict security', () => {
     const light = mermaidConfig('light')
     expect(light.securityLevel).toBe('strict')
-    expect(light.layout).toBe('elk')
+    expect(light.layout).toBeUndefined()
+    expect(mermaidConfig('light', true).layout).toBe('elk')
     expect(light.theme).toBe('base')
     expect(light.themeVariables?.primaryBorderColor).toBe('#d95e2a')
     expect(String(light.themeVariables?.fontFamily)).toContain('Aspekta')
     expect(mermaidConfig('dark').themeVariables?.background).not.toBe(light.themeVariables?.background)
+  })
+})
+
+describe('ELK layout', () => {
+  it('applies only to diagrams that support it', () => {
+    expect(diagramUsesElk('flowchart LR\nA-->B')).toBe(true)
+    expect(diagramUsesElk('%% comment\ngraph TD\nA-->B')).toBe(true)
+    expect(diagramUsesElk('---\ntitle: x\n---\nstateDiagram-v2\n[*]-->A')).toBe(true)
+    expect(diagramUsesElk('mindmap\n  root')).toBe(false)
+    expect(diagramUsesElk('sequenceDiagram\nA->>B: hi')).toBe(false)
   })
 })

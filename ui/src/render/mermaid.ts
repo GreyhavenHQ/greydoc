@@ -1,20 +1,25 @@
 import type { Mermaid } from 'mermaid'
-import { mermaidConfig } from '@/render/mermaidTheme'
+import { diagramUsesElk, mermaidConfig } from '@/render/mermaidTheme'
 
 type Mode = 'light' | 'dark'
 
 let loader: Promise<Mermaid> | null = null
-let initialized: Mode | null = null
+let initialized = ''
+
 const cache = new Map<string, string>()
 let counter = 0
 
+// load fetches Mermaid once. A failed fetch is forgotten so the next diagram tries again.
 function load(): Promise<Mermaid> {
   loader ??= (async () => {
     const m = (await import('mermaid')).default
     const elk = (await import('@mermaid-js/layout-elk')).default
     m.registerLayoutLoaders(elk)
     return m
-  })()
+  })().catch((e) => {
+    loader = null
+    throw e
+  })
   return loader
 }
 
@@ -34,14 +39,15 @@ export function renderMermaid(src: string, mode: Mode = themeMode()): Promise<st
   const pending = inflight.get(key)
   if (pending) return pending
   const job = queue.then(async () => {
-    const m = await load()
-    if (initialized !== mode) {
-      m.initialize(mermaidConfig(mode))
-      initialized = mode
-    }
     const id = 'mermaid-' + ++counter
     let out: string
     try {
+      const m = await load()
+      const elk = diagramUsesElk(src)
+      if (initialized !== mode + elk) {
+        m.initialize(mermaidConfig(mode, elk))
+        initialized = mode + elk
+      }
       const { svg } = await m.render(id, src)
       out = svg
     } catch (e) {
@@ -50,9 +56,10 @@ export function renderMermaid(src: string, mode: Mode = themeMode()): Promise<st
     } finally {
       document.getElementById('d' + id)?.remove()
     }
+    inflight.delete(key)
+    if (!loader) return out
     if (cache.size > 200) cache.delete(cache.keys().next().value!)
     cache.set(key, out)
-    inflight.delete(key)
     return out
   })
   queue = job.catch(() => undefined)

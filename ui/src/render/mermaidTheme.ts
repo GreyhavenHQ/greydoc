@@ -6,13 +6,28 @@ const tokens = {
   dark: { bg: '#161614', card: '#2f2f2c', fg: '#f9f9f7', muted: '#c4c4bd', border: '#575753', accent: '#575753', primary: '#d95e2a' },
 }
 
-export function mermaidConfig(mode: 'light' | 'dark'): MermaidConfig {
+// diagramUsesElk is true for diagram types the ELK layout supports. Others, such as mindmaps, break with it.
+export function diagramUsesElk(src: string): boolean {
+  const lines = src.split('\n')
+  let i = 0
+  if (lines[0]?.trim() === '---') {
+    i = lines.findIndex((l, j) => j > 0 && l.trim() === '---') + 1
+  }
+  for (; i < lines.length; i++) {
+    const l = lines[i].trim()
+    if (!l || l.startsWith('%%')) continue
+    return /^(flowchart|graph|stateDiagram)\b/.test(l)
+  }
+  return false
+}
+
+export function mermaidConfig(mode: 'light' | 'dark', elk = false): MermaidConfig {
   const t = tokens[mode]
   return {
     startOnLoad: false,
     securityLevel: 'strict',
     theme: 'base',
-    layout: 'elk',
+    ...(elk ? { layout: 'elk' } : {}),
     fontFamily: 'Aspekta, ui-sans-serif, system-ui, sans-serif',
     themeVariables: {
       darkMode: mode === 'dark',

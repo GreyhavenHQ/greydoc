@@ -162,3 +162,19 @@ test('markdown download', async ({ page }) => {
   const resp = await page.request.get(`/api/notes/${alias}/download.md`)
   expect(await resp.text()).toBe('# Plain\ntext')
 })
+
+test('every common diagram type renders', async ({ page }) => {
+  const kinds = [
+    'flowchart LR\nA --> B',
+    'sequenceDiagram\nA->>B: hi',
+    'mindmap\n  root((x))\n    a\n    b',
+    'stateDiagram-v2\n[*] --> S',
+    'pie title P\n"a" : 1\n"b" : 2',
+  ]
+  const alias = await noteWith(page, kinds.map((k) => '```mermaid\n' + k + '\n```').join('\n\n'))
+  await page.goto('/s/' + alias)
+  const blocks = page.locator('.mermaid-block')
+  await expect(blocks).toHaveCount(kinds.length)
+  for (let i = 0; i < kinds.length; i++) await expect(blocks.nth(i).locator('svg').first()).toBeVisible({ timeout: 15_000 })
+  await expect(page.locator('.mermaid-error')).toHaveCount(0)
+})
