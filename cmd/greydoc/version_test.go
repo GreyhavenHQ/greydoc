@@ -15,3 +15,18 @@ func TestVersionString(t *testing.T) {
 		}
 	}
 }
+
+func TestTokenCommandMintsAPAT(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("GREYDOC_DATABASE_URL", dir+"/db")
+	t.Setenv("GREYDOC_SECRET_FILE", dir+"/secret")
+	t.Setenv("GREYDOC_OIDC_ISSUER", "")
+	out := captureStdout(t, func() {
+		if err := cmdToken([]string{"create", "--label", "ci"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if len(out) < 20 || out[:7] != "gd_pat_" {
+		t.Fatalf("token %q", out)
+	}
+}

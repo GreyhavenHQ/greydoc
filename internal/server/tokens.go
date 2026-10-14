@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"slices"
 	"strings"
@@ -101,6 +102,10 @@ func (s *Server) handleCreateToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) createPAT(ctx context.Context, userID, label, scope string) (string, *store.Token, error) {
+	return mintPAT(ctx, s.store, s.secret, userID, label, scope)
+}
+
+func mintPAT(ctx context.Context, st *store.Store, secret []byte, userID, label, scope string) (string, *store.Token, error) {
 	if strings.TrimSpace(label) == "" {
 		label = "personal token"
 	}
@@ -109,16 +114,21 @@ func (s *Server) createPAT(ctx context.Context, userID, label, scope string) (st
 	}
 	tok := secrets.NewToken(patPrefix)
 	t := &store.Token{UserID: userID, Kind: store.TokenPAT, Label: label, Scope: scope}
-	return tok, t, s.store.CreateToken(ctx, t, secrets.Hash(s.secret, tok))
+	return tok, t, st.CreateToken(ctx, t, secrets.Hash(secret, tok))
 }
 
-// CreatePAT mints a personal access token for the CLI.
-func (s *Server) CreatePAT(ctx context.Context, username, label, scope string) (string, error) {
-	u, err := s.store.UserByUsername(ctx, username)
-	if err != nil {
-		return "", err
+// MintPAT creates a personal access token for a username, for the CLI. It does not need a running server.
+func MintPAT(ctx context.Context, st *store.Store, secret []byte, username, label, scope string) (string, error) {
+	if username == store.LocalUserID {
+		if _, err := st.EnsureLocalUser(ctx); err != nil {
+			return "", err
+		}
 	}
-	tok, _, err := s.createPAT(ctx, u.ID, label, scope)
+	u, err := st.UserByUsername(ctx, username)
+	if err != nil {
+		return "", fmt.Errorf("user %q: %w", username, err)
+	}
+	tok, _, err := mintPAT(ctx, st, secret, u.ID, label, scope)
 	return tok, err
 }
 

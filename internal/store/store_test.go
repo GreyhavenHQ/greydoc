@@ -69,3 +69,26 @@ func TestOpenTestUsesTempFile(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestSecondInstanceRefusedOnPostgres(t *testing.T) {
+	url := os.Getenv("GREYDOC_TEST_POSTGRES_URL")
+	if url == "" {
+		t.Skip("GREYDOC_TEST_POSTGRES_URL not set")
+	}
+	first := openPostgresTest(t, url)
+	if err := first.LockInstance(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	second, err := Open(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer second.Close()
+	if err := second.LockInstance(context.Background()); err == nil {
+		t.Fatal("second instance got the lock")
+	}
+	first.Close()
+	if err := second.LockInstance(context.Background()); err != nil {
+		t.Fatalf("lock not released: %v", err)
+	}
+}

@@ -42,8 +42,6 @@ type Server struct {
 	seenBase      atomic.Value
 }
 
-
-
 func Open(cfg config.Config) (*Server, error) {
 	secret, err := secrets.LoadOrCreate(cfg.Secret, cfg.SecretFile)
 	if err != nil {
@@ -56,6 +54,10 @@ func Open(cfg config.Config) (*Server, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := st.Init(ctx); err != nil {
+		st.Close()
+		return nil, err
+	}
+	if err := st.LockInstance(ctx); err != nil {
 		st.Close()
 		return nil, err
 	}

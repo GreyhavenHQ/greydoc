@@ -16,7 +16,9 @@ import (
 	"time"
 
 	"github.com/greyhavenhq/greydoc/internal/config"
+	"github.com/greyhavenhq/greydoc/internal/secrets"
 	"github.com/greyhavenhq/greydoc/internal/server"
+	"github.com/greyhavenhq/greydoc/internal/store"
 )
 
 var (
@@ -135,18 +137,25 @@ func cmdToken(args []string) error {
 		}
 		*user = "local"
 	}
-	srv, err := server.Open(cfg)
+	secret, err := secrets.LoadOrCreate(cfg.Secret, cfg.SecretFile)
 	if err != nil {
 		return err
 	}
-	defer srv.Close()
+	st, err := store.Open(cfg.DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer st.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := st.Init(ctx); err != nil {
+		return err
+	}
 	scope := ""
 	if *readOnly {
 		scope = "notes:read"
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	tok, err := srv.CreatePAT(ctx, *user, *label, scope)
+	tok, err := server.MintPAT(ctx, st, secret, *user, *label, scope)
 	if err != nil {
 		return err
 	}
