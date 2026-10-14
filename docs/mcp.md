@@ -62,6 +62,8 @@ Each note has an agent policy. The owner sets it in the Share dialog.
 | `suggest` (default) | Also comment and suggest. `edit_note` creates a suggestion instead of editing. |
 | `edit` | Also edit the text directly. |
 
+Agents cannot delete a note for good. They can move it to the trash, where a person can restore it.
+
 The policy only lowers access. An agent never gets more than the person it acts for. A token with only the `notes:read` scope is limited to reading.
 
 ## Tools
@@ -78,6 +80,8 @@ The policy only lowers access. An agent never gets more than the person it acts 
 | `resolve_comment` | Resolve or reopen a thread. |
 | `suggest_edit` | Propose replacing `old_text` with `new_text`. |
 | `edit_note` | Replace `old_text` with `new_text`, or the whole note with `content`. Under `suggest` it creates a suggestion. |
+| `trash_note` | Move a note to the trash. Only for a note the user owns, with agent policy `edit`. |
+| `restore_note` | Bring a note back from the trash. Same rules as `trash_note`. |
 | `get_history` | Edit sessions with authors and sources, and comment, suggestion and permission events. Pass `revision_id` for the full text and diff. |
 
 `old_text` and `quote` must match the note exactly. If the text appears more than once, quote more context or pass `occurrence` (1 is the first match).

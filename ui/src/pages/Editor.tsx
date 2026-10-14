@@ -15,6 +15,7 @@ import {
   MoreHorizontal,
   Pencil,
   Presentation,
+  ScrollText,
   Share2,
   Trash2,
 } from 'lucide-react'
@@ -117,6 +118,7 @@ export default function Editor() {
   const { me } = useMe()
   const [note, setNote] = useState<Note | null>(null)
   const [error, setError] = useState<string>('')
+  const [inTrash, setInTrash] = useState(false)
   const [level, setLevel] = useState<Level>('read')
   const [mode, setModeState] = useState<Mode>(savedMode)
   const setMode = useCallback((m: Mode) => {
@@ -151,6 +153,7 @@ export default function Editor() {
   useEffect(() => {
     setNote(null)
     setError('')
+    setInTrash(false)
     api
       .get<Note>(withShare(`/api/notes/${alias}?visit=1`))
       .then((n) => {
@@ -164,7 +167,16 @@ export default function Editor() {
           location.href = loginHref()
           return
         }
-        setError(e instanceof ApiError && e.status === 404 ? 'This note does not exist.' : e instanceof Error ? e.message : String(e))
+        if (e instanceof ApiError && e.code === 'in_trash') setInTrash(true)
+        setError(
+          e instanceof ApiError && e.status === 404
+            ? 'This note does not exist.'
+            : e instanceof ApiError && e.code === 'in_trash'
+              ? 'This note is in the trash.'
+              : e instanceof Error
+                ? e.message
+                : String(e),
+        )
       })
   }, [alias, navigate])
 
@@ -187,8 +199,8 @@ export default function Editor() {
       if (ev.type === 'timeline') setTimelineKey((k) => k + 1)
       if (ev.type === 'comments') loadThreadsRef.current()
       if (ev.type === 'suggestions') loadSuggestionsRef.current()
-      if (ev.type === 'deleted') {
-        toast.error('This note was deleted.')
+      if (ev.type === 'deleted' || ev.type === 'trashed') {
+        toast.error(ev.type === 'trashed' ? 'This note was moved to the trash.' : 'This note was deleted.')
         navigate('/')
       }
     })
@@ -452,9 +464,17 @@ export default function Editor() {
     [syncScroll],
   )
 
-  const deleteNote = async () => {
-    if (!confirm('Delete this note for everyone? This cannot be undone.')) return
-    await api.del('/api/notes/' + alias)
+  const trashNote = async () => {
+    const target = note?.alias ?? alias
+    try {
+      await api.del('/api/notes/' + target)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e))
+      return
+    }
+    toast.success('Moved to the trash', {
+      action: { label: 'Undo', onClick: () => api.post(`/api/notes/${target}/restore`).then(() => navigate('/n/' + target)) },
+    })
     navigate('/')
   }
 
@@ -462,9 +482,23 @@ export default function Editor() {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-4">
         <p className="text-muted-foreground">{error}</p>
-        <Button asChild variant="outline">
-          <Link to="/">Back to notes</Link>
-        </Button>
+        <div className="flex gap-2">
+          {inTrash && (
+            <Button
+              onClick={() =>
+                api
+                  .post(`/api/notes/${alias}/restore`)
+                  .then(() => location.reload())
+                  .catch((e) => toast.error(e instanceof Error ? e.message : String(e)))
+              }
+            >
+              Restore it
+            </Button>
+          )}
+          <Button asChild variant="outline">
+            <Link to="/">Back to notes</Link>
+          </Button>
+        </div>
       </div>
     )
   }
@@ -617,13 +651,16 @@ export default function Editor() {
                   <FileCode className="size-4" /> Download HTML
                 </a>
               </DropdownMenuItem>
-              {isOwner && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-destructive" onSelect={deleteNote}>
-                    <Trash2 className="size-4" /> Delete note
-                  </DropdownMenuItem>
-                </>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link to={'/audit?note=' + note.alias}>
+                  <ScrollText className="size-4" /> Audit log of this note
+                </Link>
+              </DropdownMenuItem>
+              {(isOwner || me?.admin) && (
+                <DropdownMenuItem className="text-destructive" onSelect={trashNote}>
+                  <Trash2 className="size-4" /> Move to trash
+                </DropdownMenuItem>
               )}
             </DropdownMenuContent>
           </DropdownMenu>

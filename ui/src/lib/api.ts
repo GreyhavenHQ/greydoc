@@ -53,6 +53,7 @@ export interface Me {
   username?: string
   display_name?: string
   groups?: string[]
+  admin?: boolean
 }
 
 export interface User {

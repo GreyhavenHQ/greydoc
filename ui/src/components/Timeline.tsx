@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Bot, ChevronDown, ChevronRight, History, RotateCcw, Sparkles } from 'lucide-react'
+import { Bot, ChevronDown, Cog, ChevronRight, History, RotateCcw, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { api, ApiError, withShare } from '@/lib/api'
 import { authorColor, sourceLabel, type Source } from '@/lib/authors'
 import { relativeTime, shortDateTime } from '@/lib/time'
+import { describe, type AuditEvent as Event } from '@/lib/events'
 import { cn } from '@/lib/utils'
 
 interface Author {
@@ -27,16 +28,6 @@ interface Revision {
   text?: string
 }
 
-interface Event {
-  id: string
-  actor_name: string
-  source: Source
-  client?: string
-  kind: string
-  data: Record<string, unknown>
-  created_at: string
-}
-
 interface Entry {
   kind: 'revision' | 'event'
   at: string
@@ -49,9 +40,9 @@ interface TimelineData {
   pending: { authors: Author[]; since: string } | null
 }
 
-function SourceBadge({ source }: { source: Source }) {
+export function SourceBadge({ source }: { source: Source }) {
   if (source === 'human') return null
-  const Icon = source === 'agent' ? Bot : source === 'ai_assisted' ? Sparkles : RotateCcw
+  const Icon = source === 'agent' ? Bot : source === 'ai_assisted' ? Sparkles : source === 'system' ? Cog : RotateCcw
   return (
     <Badge variant="outline" className="gap-1 px-1.5 py-0 text-[10px] font-medium">
       <Icon className="size-3" /> {sourceLabel[source]}
@@ -69,58 +60,6 @@ function Avatar({ name, id }: { name: string; id: string }) {
       {(name || '?').slice(0, 1).toUpperCase()}
     </span>
   )
-}
-
-const levelWords: Record<string, string> = { deny: 'no access', read: 'view access', comment: 'comment access', write: 'edit access' }
-
-function describe(e: Event): string {
-  const d = e.data ?? {}
-  switch (e.kind) {
-    case 'note.create':
-      return 'created the note'
-    case 'note.delete':
-      return 'deleted the note'
-    case 'permission.user':
-      return d.level === 'deny' ? `removed @${d.username}` : `gave @${d.username} ${levelWords[String(d.level)] ?? d.level}`
-    case 'permission.group': {
-      const g = d.group === '_everyone' ? 'anyone with the address' : d.group === '_signed_in' ? 'signed-in users' : `group ${d.group}`
-      return d.level === 'deny' ? `removed access for ${g}` : `gave ${g} ${levelWords[String(d.level)] ?? d.level}`
-    }
-    case 'permission.owner':
-      return `made @${d.username} the owner`
-    case 'agent_policy':
-      return `set the agent policy to “${d.policy}”`
-    case 'share_link.create':
-      return 'created a view-only link'
-    case 'share_link.revoke':
-      return 'revoked a view-only link'
-    case 'alias.add':
-      return `added the address /${d.alias}`
-    case 'alias.primary':
-      return `made /${d.alias} the main address`
-    case 'alias.remove':
-      return `removed the address /${d.alias}`
-    case 'revision.restore':
-      return `restored the version from ${shortDateTime(String(d.at))}`
-    case 'comment.create':
-      return `commented: “${String(d.excerpt ?? '')}”`
-    case 'comment.reply':
-      return `replied: “${String(d.excerpt ?? '')}”`
-    case 'comment.resolve':
-      return 'resolved a comment'
-    case 'comment.reopen':
-      return 'reopened a comment'
-    case 'comment.delete':
-      return 'deleted a comment'
-    case 'suggestion.create':
-      return 'suggested a change'
-    case 'suggestion.accept':
-      return 'accepted a suggestion'
-    case 'suggestion.reject':
-      return 'rejected a suggestion'
-    default:
-      return e.kind
-  }
 }
 
 function DiffView({ patch }: { patch: string }) {

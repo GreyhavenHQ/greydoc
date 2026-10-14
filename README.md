@@ -40,6 +40,8 @@ To use it as a team, configure OIDC. See [docs/configuration.md](docs/configurat
 | Slides | Menu, "Slide mode". `---` starts a slide, `----` a vertical slide, `note:` starts speaker notes. |
 | Download | Menu, "Download Markdown" or "Download HTML". The HTML file has no scripts and includes the diagrams. |
 | Images | Paste or drop an image in the editor. |
+| Delete | Menu, "Move to trash". The trash (account menu) restores notes for 30 days. "Delete for good" removes a note at once. |
+| Audit | Account menu, "Audit log": every action on notes and accounts, with filters, and Restore for trashed notes. |
 
 ## Connect an agent
 

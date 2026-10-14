@@ -1,4 +1,4 @@
-export type Source = 'human' | 'ai_assisted' | 'agent' | 'restore'
+export type Source = 'human' | 'ai_assisted' | 'agent' | 'restore' | 'system'
 
 export interface NoteClient {
   client_id: number
@@ -20,4 +20,5 @@ export const sourceLabel: Record<Source, string> = {
   ai_assisted: 'AI-assisted',
   agent: 'Agent',
   restore: 'Restored',
+  system: 'System',
 }

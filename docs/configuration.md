@@ -44,6 +44,13 @@ Levels are `deny`, `read`, `comment` and `write`. The owner always has full acce
 
 View-only links work for guests whatever these values are.
 
+## Administration
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `GREYDOC_ADMIN_GROUP` | empty | OIDC group whose members see the whole audit log and every note in the trash, and can restore or delete any trashed note. In local mode everyone has these rights. |
+| `GREYDOC_TRASH_RETENTION` | `720h` | How long a note stays in the trash before it is deleted for good. The deletion is recorded in the audit log. |
+
 ## Limits
 
 | Variable | Default | Meaning |
