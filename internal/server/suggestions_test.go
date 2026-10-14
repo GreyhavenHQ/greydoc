@@ -127,3 +127,19 @@ func TestInsertionSuggestion(t *testing.T) {
 		t.Fatalf("%q", text)
 	}
 }
+
+func TestGetOneSuggestion(t *testing.T) {
+	e := newTestEnv(t)
+	alias := e.createNote(nil, "alpha beta")
+	_, body := e.do(nil, "POST", "/api/notes/"+alias+"/suggestions", map[string]any{"quote": "beta", "proposed": "gamma", "reason": "why"})
+	var sg suggestionView
+	_ = json.Unmarshal([]byte(body), &sg)
+	e.do(nil, "POST", "/api/notes/"+alias+"/suggestions/"+sg.ID+"/reject", nil)
+	code, body := e.do(nil, "GET", "/api/notes/"+alias+"/suggestions/"+sg.ID, nil)
+	if code != 200 || !strings.Contains(body, `"proposed":"gamma"`) || !strings.Contains(body, `"status":"rejected"`) || !strings.Contains(body, `"decided_by":"Local user"`) {
+		t.Fatalf("%d %s", code, body)
+	}
+	if code, _ := e.do(nil, "GET", "/api/notes/"+alias+"/suggestions/missing", nil); code != 404 {
+		t.Fatalf("missing: %d", code)
+	}
+}

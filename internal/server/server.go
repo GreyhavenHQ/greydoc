@@ -224,6 +224,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/notes/{alias}/ai", s.handleAI)
 	s.mux.HandleFunc("GET /api/notes/{alias}/suggestions", s.handleListSuggestions)
 	s.mux.HandleFunc("POST /api/notes/{alias}/suggestions", s.handleCreateSuggestion)
+	s.mux.HandleFunc("GET /api/notes/{alias}/suggestions/{id}", s.handleGetSuggestion)
 	s.mux.HandleFunc("POST /api/notes/{alias}/suggestions/{id}/accept", func(w http.ResponseWriter, r *http.Request) { s.handleDecideSuggestion(w, r, true) })
 	s.mux.HandleFunc("POST /api/notes/{alias}/suggestions/{id}/reject", func(w http.ResponseWriter, r *http.Request) { s.handleDecideSuggestion(w, r, false) })
 

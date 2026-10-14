@@ -259,3 +259,21 @@ func (s *Server) lockNote(noteID string) func() {
 	mu.Lock()
 	return mu.Unlock
 }
+
+func (s *Server) handleGetSuggestion(w http.ResponseWriter, r *http.Request) {
+	n, _, ok := s.noteFor(w, r, permission.Read)
+	if !ok {
+		return
+	}
+	sg, err := s.store.Suggestion(r.Context(), n.ID, r.PathValue("id"))
+	if err != nil {
+		s.writeNoteError(w, err)
+		return
+	}
+	out, err := s.resolveSuggestions(r.Context(), n.ID, []store.Suggestion{*sg})
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, out[0])
+}
