@@ -22,6 +22,7 @@ import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } 
 import * as Y from 'yjs'
 import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next'
 import type { Awareness } from 'y-protocols/awareness'
+import { livePreview } from '@/editor/live'
 
 const theme = EditorView.theme({
   '&': { height: '100%', fontSize: '14px', backgroundColor: 'rgb(var(--card))', color: 'rgb(var(--foreground))' },
@@ -57,23 +58,27 @@ export interface CodeEditorProps {
   extensions?: Extension[]
   // overlay is reconfigurable at runtime, for the attribution layer.
   overlay?: Extension
+  // live renders Markdown in place instead of showing the source with line numbers.
+  live?: boolean
   onView?: (view: EditorView | null) => void
   autoFocus?: boolean
 }
 
-export function CodeEditor({ ytext, awareness, readOnly, extensions = [], overlay = [], onView, autoFocus }: CodeEditorProps) {
+const sourceView = () => [lineNumbers(), highlightActiveLineGutter(), highlightActiveLine()]
+
+export function CodeEditor({ ytext, awareness, readOnly, extensions = [], overlay = [], live = false, onView, autoFocus }: CodeEditorProps) {
   const host = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const readOnlyCompartment = useRef(new Compartment())
   const overlayCompartment = useRef(new Compartment())
+  const viewCompartment = useRef(new Compartment())
 
   useEffect(() => {
     const undoManager = new Y.UndoManager(ytext)
     const state = EditorState.create({
       doc: ytext.toString(),
       extensions: [
-        lineNumbers(),
-        highlightActiveLineGutter(),
+        viewCompartment.current.of(live ? livePreview() : sourceView()),
         highlightSpecialChars(),
         drawSelection(),
         dropCursor(),
@@ -86,7 +91,6 @@ export function CodeEditor({ ytext, awareness, readOnly, extensions = [], overla
         autocompletion(),
         rectangularSelection(),
         crosshairCursor(),
-        highlightActiveLine(),
         highlightSelectionMatches(),
         keymap.of([
           ...closeBracketsKeymap,
@@ -131,6 +135,10 @@ export function CodeEditor({ ytext, awareness, readOnly, extensions = [], overla
   useEffect(() => {
     viewRef.current?.dispatch({ effects: overlayCompartment.current.reconfigure(overlay) })
   }, [overlay])
+
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: viewCompartment.current.reconfigure(live ? livePreview() : sourceView()) })
+  }, [live])
 
   return <div ref={host} className="h-full overflow-hidden" data-testid="editor" />
 }

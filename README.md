@@ -28,13 +28,14 @@ To use it as a team, configure OIDC. See [docs/configuration.md](docs/configurat
 |---|---|
 | New note | Press "New note", or open `/new`. `/new?alias=standup` picks the address. |
 | Short address | `/<alias>` opens `/n/<alias>`. |
+| Read and edit in one view | Live mode (the book button, Ctrl+Alt+L) renders the note in place. The line you edit shows its Markdown. Click a diagram, table or formula to edit its source. The pencil, split and eye buttons give the source editor, editor with preview, and preview only. |
 | Tags | Add `tags: [design, q4]` to the front matter. Click a tag on the home page to filter. |
 | Protect a note | "Share" in the editor: people, groups, signed-in users, anyone with the address. Levels are view, comment and edit. |
 | Share with a client | "Share", then "New link". The link opens `/s/<alias>`: the rendered note with no editor, comments or toolbar. |
 | Comment | Select text, press "Comment". |
 | Suggest | Select text, press "Suggest", or switch the editor to "Suggesting" and type. People with comment access always suggest. |
 | AI | Select text, press "AI": refine, shorten, fix, diagram, continue, or ask. The answer is a suggestion. |
-| History | The clock button opens the timeline. Open a revision to see its diff or restore it. |
+| History | The clock button opens the timeline. Open a revision to see its diff or restore it. Open a suggestion or comment event to see it, accept or reject it, or jump to it in the note. |
 | Who wrote what | The people button colors text by author. Dashed underline means AI-assisted. Dotted means agent. |
 | Slides | Menu, "Slide mode". `---` starts a slide, `----` a vertical slide, `note:` starts speaker notes. |
 | Download | Menu, "Download Markdown" or "Download HTML". The HTML file has no scripts and includes the diagrams. |

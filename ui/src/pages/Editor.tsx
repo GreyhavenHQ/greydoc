@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import type { EditorView } from '@codemirror/view'
 import {
+  BookOpen,
   Columns2,
   Download,
   Eye,
@@ -53,7 +54,15 @@ import { localName, presenceColor } from '@/lib/presence'
 import { extractTitle } from '@/lib/meta'
 import { cn } from '@/lib/utils'
 
-type Mode = 'edit' | 'both' | 'view'
+type Mode = 'live' | 'edit' | 'both' | 'view'
+
+const MODE_KEY = 'greydoc-mode'
+const defaultEditMode: Mode = 'live'
+
+function savedMode(): Mode {
+  const m = localStorage.getItem(MODE_KEY)
+  return m === 'live' || m === 'edit' || m === 'both' || m === 'view' ? m : defaultEditMode
+}
 
 interface PresenceUser {
   clientId: number
@@ -107,9 +116,15 @@ export default function Editor() {
   const [note, setNote] = useState<Note | null>(null)
   const [error, setError] = useState<string>('')
   const [level, setLevel] = useState<Level>('read')
-  const [mode, setMode] = useState<Mode>('both')
+  const [mode, setModeState] = useState<Mode>(savedMode)
+  const setMode = useCallback((m: Mode) => {
+    setModeState(m)
+    localStorage.setItem(MODE_KEY, m)
+  }, [])
   const [session, setSession] = useState<NoteSession | null>(null)
   const [synced, setSynced] = useState(false)
+  // The editor mounts after the first sync, so it opens on the real text and not on an empty document.
+  const [loaded, setLoaded] = useState(false)
   const [connected, setConnected] = useState(true)
   const [shareOpen, setShareOpen] = useState(false)
   const [timelineOpen, setTimelineOpen] = useState(false)
@@ -139,7 +154,7 @@ export default function Editor() {
       .then((n) => {
         setNote(n)
         setLevel(n.level)
-        if (!atLeast(n.level, 'comment')) setMode('view')
+        if (!atLeast(n.level, 'comment')) setModeState('view')
         if (n.alias !== alias) navigate('/n/' + n.alias + location.search, { replace: true })
       })
       .catch((e: unknown) => {
@@ -155,7 +170,10 @@ export default function Editor() {
     if (!note || !me) return
     const s = new NoteSession(note.alias, { name: me.local_mode ? localName() : undefined, share: shareParam() })
     s.setUser({ name: me.local_mode ? localName() : me.display_name || me.username || 'guest', color: presenceColor() })
-    const onSync = (v: boolean) => setSynced(v)
+    const onSync = (v: boolean) => {
+      setSynced(v)
+      if (v) setLoaded(true)
+    }
     const onStatus = (e: { status: string }) => setConnected(e.status === 'connected')
     s.provider.on('sync', onSync)
     s.provider.on('status', onStatus)
@@ -174,13 +192,16 @@ export default function Editor() {
     })
     setSession(s)
     sessionRef.current = s
+    const fallback = setTimeout(() => setLoaded(true), 4000)
     return () => {
       off()
       s.provider.off('sync', onSync)
       s.provider.off('status', onStatus)
+      clearTimeout(fallback)
       s.destroy()
       setSession(null)
       setSynced(false)
+      setLoaded(false)
     }
   }, [note, me, navigate])
 
@@ -195,7 +216,7 @@ export default function Editor() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey) || !e.altKey) return
-      const next = ({ e: 'edit', b: 'both', v: 'view' } as Record<string, Mode>)[e.key.toLowerCase()]
+      const next = ({ l: 'live', e: 'edit', b: 'both', v: 'view' } as Record<string, Mode>)[e.key.toLowerCase()]
       if (next) {
         e.preventDefault()
         setMode(next)
@@ -438,7 +459,7 @@ export default function Editor() {
       </div>
     )
   }
-  if (!note || !session) {
+  if (!note || !session || !loaded) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Spinner />
@@ -447,7 +468,7 @@ export default function Editor() {
   }
 
   const showEditor = mode !== 'view' && atLeast(level, 'comment')
-  const showPreview = mode !== 'edit' || !atLeast(level, 'comment')
+  const showPreview = (mode !== 'edit' && mode !== 'live') || !atLeast(level, 'comment')
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -503,6 +524,9 @@ export default function Editor() {
           )}
           {atLeast(level, 'comment') && (
             <ToggleGroup type="single" value={mode} onValueChange={(v) => v && setMode(v as Mode)} size="sm" variant="outline">
+              <ToggleGroupItem value="live" aria-label="Live (Ctrl+Alt+L)">
+                <BookOpen className="size-4" />
+              </ToggleGroupItem>
               <ToggleGroupItem value="edit" aria-label="Editor only (Ctrl+Alt+E)">
                 <Pencil className="size-4" />
               </ToggleGroupItem>
@@ -524,7 +548,7 @@ export default function Editor() {
                   aria-pressed={showAuthors}
                   onClick={() => {
                     setShowAuthors(!showAuthors)
-                    if (mode === 'view') setMode('both')
+                    if (mode === 'view') setMode(defaultEditMode)
                   }}
                 >
                   <Users className="size-4" />
@@ -657,6 +681,7 @@ export default function Editor() {
                 awareness={session.provider.awareness}
                 readOnly={!atLeast(level, 'comment')}
                 overlay={authorsOverlay}
+                live={mode === 'live'}
                 extensions={editorExtensions}
                 onView={onView}
                 autoFocus
@@ -693,7 +718,24 @@ export default function Editor() {
           )}
         </main>
         <ShareDialog alias={note.alias} isOwner={isOwner} open={shareOpen} onOpenChange={setShareOpen} />
-        <Timeline alias={note.alias} open={timelineOpen} onOpenChange={setTimelineOpen} canRestore={canEdit} refreshKey={timelineKey} />
+        <Timeline
+          alias={note.alias}
+          open={timelineOpen}
+          onOpenChange={setTimelineOpen}
+          canRestore={canEdit}
+          refreshKey={timelineKey}
+          onShow={(id) => {
+            setCommentsOpen(true)
+            if (mode === 'view') setMode(defaultEditMode)
+            const item = [...threads, ...suggestions].find((x) => x.id === id)
+            if (item) selectThread(item as Thread)
+            else setActiveThread(id)
+          }}
+          onChanged={() => {
+            loadSuggestions()
+            loadThreads()
+          }}
+        />
       </div>
     </TooltipProvider>
   )

@@ -1,5 +1,12 @@
 import { expect, test, type Page } from '@playwright/test'
 
+// These tests read the preview pane, so they use the split view.
+const splitView = () => localStorage.setItem('greydoc-mode', 'both')
+
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(splitView)
+})
+
 async function typeInEditor(page: Page, text: string) {
   await page.locator('[data-testid=editor] .cm-content').click()
   await page.keyboard.press('ControlOrMeta+End')
@@ -16,13 +23,17 @@ test('new note opens an editor ready for typing', async ({ page }) => {
 })
 
 test('two browsers editing one note converge and see each other', async ({ browser }) => {
-  const a = await (await browser.newContext()).newPage()
+  const ctxA = await browser.newContext()
+  await ctxA.addInitScript(splitView)
+  const a = await ctxA.newPage()
   await a.goto('/new')
   await expect(a).toHaveURL(/\/n\/[a-z0-9]+$/)
   const url = a.url()
   await typeInEditor(a, 'from A.')
 
-  const b = await (await browser.newContext()).newPage()
+  const ctxB = await browser.newContext()
+  await ctxB.addInitScript(splitView)
+  const b = await ctxB.newPage()
   await b.goto(url)
   await expect(b.locator('[data-testid=editor] .cm-content')).toContainText('from A.')
   await typeInEditor(b, ' from B.')
