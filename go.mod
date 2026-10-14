@@ -3,7 +3,10 @@ module github.com/greyhavenhq/greydoc
 go 1.26.0
 
 require (
+	github.com/Deln0r/ygo v1.25.0
+	github.com/coder/websocket v1.8.15
 	github.com/jackc/pgx/v5 v5.11.0
+	github.com/sergi/go-diff v1.4.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.60.1
 )

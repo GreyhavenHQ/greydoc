@@ -61,7 +61,7 @@ func TestShareLinkGrantsReadOnly(t *testing.T) {
 	}
 	var created struct {
 		Link struct{ ID, Token string } `json:"link"`
-		URL  string                      `json:"url"`
+		URL  string                     `json:"url"`
 	}
 	_ = json.Unmarshal([]byte(body), &created)
 	if !strings.Contains(created.URL, "/s/"+alias+"?share=") {

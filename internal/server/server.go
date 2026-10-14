@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/greyhavenhq/greydoc/internal/collab"
 	"github.com/greyhavenhq/greydoc/internal/config"
 	"github.com/greyhavenhq/greydoc/internal/oidc"
 	"github.com/greyhavenhq/greydoc/internal/permission"
@@ -25,14 +26,8 @@ type Server struct {
 	localUser     *store.User
 	guestMax      permission.Level
 	defaultGroups map[string]permission.Level
-	hub           liveHub
+	hub           *collab.Hub
 	mirror        noteMirror
-}
-
-type liveHub interface {
-	LiveText(noteID string) (string, bool)
-	CloseNote(noteID, reason string)
-	PermissionsChanged(noteID string)
 }
 
 type noteMirror interface {
@@ -81,13 +76,26 @@ func Open(cfg config.Config) (*Server, error) {
 			return nil, err
 		}
 	}
+	s.hub = collab.NewHub(roomStore{st: st}, collab.Options{IdleGrace: cfg.RoomIdleGrace, SaveInterval: cfg.RoomSaveEvery, OnSaved: s.afterSave})
 	s.routes()
 	return s, nil
 }
 
 func (s *Server) Store() *store.Store { return s.store }
 
-func (s *Server) Close() error { return s.store.Close() }
+func (s *Server) Close() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	s.hub.Shutdown(ctx)
+	return s.store.Close()
+}
+
+// afterSave runs when a room stored a snapshot.
+func (s *Server) afterSave(noteID string) {
+	if s.mirror != nil {
+		s.mirror.Touch(noteID)
+	}
+}
 
 func (s *Server) Handler() http.Handler { return s.checkOrigin(s.withIdentity(s.mux)) }
 
@@ -108,6 +116,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/notes/{alias}/aliases", s.handleAliases)
 	s.mux.HandleFunc("PUT /api/notes/{alias}/aliases", s.handleAliases)
 	s.mux.HandleFunc("DELETE /api/notes/{alias}/aliases/{name}", s.handleAliases)
+
+	s.mux.HandleFunc("GET /ws/{alias}", s.handleWS)
 
 	s.mux.HandleFunc("GET /api/notes/{alias}/permissions", s.handleGetPermissions)
 	s.mux.HandleFunc("PUT /api/notes/{alias}/permissions/users/{username}", s.handleUserGrant)

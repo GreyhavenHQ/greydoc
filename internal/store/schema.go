@@ -36,6 +36,8 @@ CREATE TABLE IF NOT EXISTS note (
     description TEXT NOT NULL DEFAULT '',
     content TEXT NOT NULL DEFAULT '',
     ystate BLOB,
+    -- ystate_upto is the last note_update id the snapshot includes.
+    ystate_upto BIGINT NOT NULL DEFAULT 0,
     agent_policy TEXT NOT NULL DEFAULT 'suggest',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
@@ -87,6 +89,28 @@ CREATE TABLE IF NOT EXISTS audit_event (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_audit_event_note ON audit_event(note_id, created_at);
+-- Append-only Yjs update log with author and source. Merged runs of one client per row.
+CREATE TABLE IF NOT EXISTS note_update (
+    id SERIALPK,
+    note_id TEXT NOT NULL REFERENCES note(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL DEFAULT '',
+    display_name TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL,
+    client_id BIGINT NOT NULL,
+    data BLOB NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_note_update_note ON note_update(note_id, id);
+-- Maps each Yjs client ID in a note to a person and source, for attribution.
+CREATE TABLE IF NOT EXISTS note_client (
+    note_id TEXT NOT NULL REFERENCES note(id) ON DELETE CASCADE,
+    client_id BIGINT NOT NULL,
+    user_id TEXT NOT NULL DEFAULT '',
+    display_name TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (note_id, client_id)
+);
 CREATE TABLE IF NOT EXISTS note_tag (
     note_id TEXT NOT NULL REFERENCES note(id) ON DELETE CASCADE,
     tag TEXT NOT NULL,
@@ -97,9 +121,10 @@ CREATE INDEX IF NOT EXISTS idx_note_tag_tag ON note_tag(tag);
 
 func schemaFor(dialect string) string {
 	if dialect == "postgres" {
-		return strings.ReplaceAll(Schema, " BLOB", " BYTEA") + postgresExtra
+		s := strings.ReplaceAll(Schema, " BLOB", " BYTEA")
+		return strings.ReplaceAll(s, "SERIALPK", "BIGSERIAL PRIMARY KEY") + postgresExtra
 	}
-	return Schema + sqliteExtra
+	return strings.ReplaceAll(Schema, "SERIALPK", "INTEGER PRIMARY KEY AUTOINCREMENT") + sqliteExtra
 }
 
 const sqliteExtra = ``

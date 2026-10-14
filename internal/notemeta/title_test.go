@@ -28,8 +28,8 @@ func TestGenerateNoteTitle(t *testing.T) {
 
 func TestFirstHeadingStripsInlineMarkup(t *testing.T) {
 	cases := map[string]string{
-		"# Hello **bold** and `code`":        "Hello bold and code",
-		"## [Link text](http://x) here ##":   "Link text here",
+		"# Hello **bold** and `code`":         "Hello bold and code",
+		"## [Link text](http://x) here ##":    "Link text here",
 		"#NoSpace\n# Real":                    "Real",
 		"    # indented code\n# Real heading": "Real heading",
 	}

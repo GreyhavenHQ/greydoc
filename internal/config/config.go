@@ -42,6 +42,7 @@ type Config struct {
 	MaxUploadBytes int64
 	MirrorDebounce time.Duration
 	RoomIdleGrace  time.Duration
+	RoomSaveEvery  time.Duration
 
 	LLMBaseURL string
 	LLMAPIKey  string
@@ -78,6 +79,7 @@ func FromEnv() Config {
 		MaxUploadBytes:   envInt64("GREYDOC_MAX_UPLOAD_BYTES", 10<<20),
 		MirrorDebounce:   envDuration("GREYDOC_MIRROR_DEBOUNCE", 2*time.Second),
 		RoomIdleGrace:    envDuration("GREYDOC_ROOM_IDLE_GRACE", 10*time.Second),
+		RoomSaveEvery:    envDuration("GREYDOC_ROOM_SAVE_INTERVAL", 5*time.Second),
 		LLMBaseURL:       strings.TrimRight(envStr("LLM_API_BASEURL", ""), "/"),
 		LLMAPIKey:        envStr("LLM_API_KEY", ""),
 		LLMModel:         envStr("LLM_MODEL", ""),
