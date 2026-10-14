@@ -34,6 +34,7 @@ type Server struct {
 	history       *history.Processor
 	stop          chan struct{}
 	workers       sync.WaitGroup
+	noteLocks     sync.Map
 }
 
 type noteMirror interface {
@@ -191,6 +192,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/notes/{alias}/comments/{thread}/reopen", s.handleThreadStatus)
 	s.mux.HandleFunc("DELETE /api/notes/{alias}/comments/{thread}", s.handleDeleteThread)
 	s.mux.HandleFunc("PATCH /api/notes/{alias}/comments/{thread}/{comment}", s.handleEditComment)
+	s.mux.HandleFunc("GET /api/notes/{alias}/suggestions", s.handleListSuggestions)
+	s.mux.HandleFunc("POST /api/notes/{alias}/suggestions", s.handleCreateSuggestion)
+	s.mux.HandleFunc("POST /api/notes/{alias}/suggestions/{id}/accept", func(w http.ResponseWriter, r *http.Request) { s.handleDecideSuggestion(w, r, true) })
+	s.mux.HandleFunc("POST /api/notes/{alias}/suggestions/{id}/reject", func(w http.ResponseWriter, r *http.Request) { s.handleDecideSuggestion(w, r, false) })
 
 	s.mux.HandleFunc("GET /api/notes/{alias}/permissions", s.handleGetPermissions)
 	s.mux.HandleFunc("PUT /api/notes/{alias}/permissions/users/{username}", s.handleUserGrant)

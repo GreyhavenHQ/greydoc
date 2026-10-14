@@ -7,6 +7,7 @@ import {
   Eye,
   FileCode,
   History,
+  FilePenLine,
   MessageSquare,
   MessageSquarePlus,
   Users,
@@ -32,8 +33,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Spinner } from '@/components/ui/spinner'
 import { ShareDialog } from '@/components/ShareDialog'
 import { Timeline } from '@/components/Timeline'
-import { CommentsPanel, type Draft, type Thread } from '@/components/CommentsPanel'
-import { anchorRange, resolveRange } from '@/editor/anchors'
+import { CommentsPanel, type Draft, type Suggestion, type Thread } from '@/components/CommentsPanel'
+import { SuggestComposer, type SuggestDraft } from '@/components/SuggestComposer'
+import { captureEdits, setSuggestionRanges, suggestionDecorations, type SuggestionAction } from '@/editor/suggestions'
+import { anchorRange, resolvePoint, resolveRange } from '@/editor/anchors'
 import { setThreadRanges, threadDecorations } from '@/editor/threads'
 import { selectionListener, type SelectionInfo } from '@/editor/selection'
 import { EditorView as CMView } from '@codemirror/view'
@@ -116,7 +119,11 @@ export default function Editor() {
   const [draft, setDraft] = useState<Draft | null>(null)
   const [activeThread, setActiveThread] = useState<string | null>(null)
   const [selection, setSelection] = useState<SelectionInfo | null>(null)
+  const [rawSuggestions, setRawSuggestions] = useState<Suggestion[]>([])
+  const [suggesting, setSuggesting] = useState(false)
+  const [suggestDraft, setSuggestDraft] = useState<SuggestDraft | null>(null)
   const viewRef = useRef<EditorView | null>(null)
+  const sessionRef = useRef<NoteSession | null>(null)
   const previewPane = useRef<HTMLElement | null>(null)
   const article = useRef<HTMLElement | null>(null)
   const text = useYText(session)
@@ -157,12 +164,14 @@ export default function Editor() {
       }
       if (ev.type === 'timeline') setTimelineKey((k) => k + 1)
       if (ev.type === 'comments') loadThreadsRef.current()
+      if (ev.type === 'suggestions') loadSuggestionsRef.current()
       if (ev.type === 'deleted') {
         toast.error('This note was deleted.')
         navigate('/')
       }
     })
     setSession(s)
+    sessionRef.current = s
     return () => {
       off()
       s.provider.off('sync', onSync)
@@ -211,6 +220,80 @@ export default function Editor() {
   loadThreadsRef.current = loadThreads
   useEffect(loadThreads, [loadThreads])
 
+  const loadSuggestions = useCallback(() => {
+    if (!note) return
+    api.get<{ suggestions: Suggestion[] }>(withShare(`/api/notes/${note.alias}/suggestions`)).then((r) => setRawSuggestions(r.suggestions))
+  }, [note])
+  const loadSuggestionsRef = useRef(loadSuggestions)
+  loadSuggestionsRef.current = loadSuggestions
+  useEffect(loadSuggestions, [loadSuggestions])
+
+  const suggestions = useMemo(
+    () =>
+      session
+        ? rawSuggestions.map((sg) => {
+            const range = sg.original
+              ? resolveRange(session.doc, sg.anchor_start, sg.anchor_end)
+              : resolvePoint(session.doc, sg.anchor_start)
+            const stale = !range || session.text.toString().slice(range.from, range.to) !== sg.original
+            return { ...sg, range, stale }
+          })
+        : rawSuggestions,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rawSuggestions, session, text],
+  )
+
+  const decide = useCallback(
+    async (sg: Suggestion, accept: boolean) => {
+      if (!note) return
+      const base = `/api/notes/${note.alias}/suggestions/${sg.id}/`
+      try {
+        if (accept) {
+          try {
+            await api.post(base + 'accept')
+          } catch (e) {
+            if (e instanceof ApiError && e.code === 'stale' && confirm('The text changed since this suggestion. Apply it anyway?')) {
+              await api.post(base + 'accept', { force: true })
+            } else throw e
+          }
+        } else await api.post(base + 'reject')
+        loadSuggestions()
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : String(e))
+      }
+    },
+    [note, loadSuggestions],
+  )
+  const decideRef = useRef(decide)
+  decideRef.current = decide
+  const suggestionsRef = useRef(suggestions)
+  suggestionsRef.current = suggestions
+
+  const isCommenter = level === 'comment'
+  const suggestingRef = useRef(false)
+  suggestingRef.current = isCommenter || suggesting
+
+  useEffect(() => {
+    const myId = me?.id
+    viewRef.current?.dispatch({
+      effects: setSuggestionRanges.of(
+        suggestions
+          .filter((sg) => sg.range)
+          .map((sg) => ({
+            id: sg.id,
+            from: sg.range!.from,
+            to: sg.range!.to,
+            proposed: sg.proposed,
+            author: sg.author_name,
+            source: sg.source,
+            stale: !!sg.stale,
+            canDecide: atLeast(level, 'write'),
+            canWithdraw: sg.author_id === myId,
+          })),
+      ),
+    })
+  }, [suggestions, level, me])
+
   const threads = useMemo(
     () => (session ? rawThreads.map((t) => ({ ...t, range: resolveRange(session.doc, t.anchor_start, t.anchor_end) })) : rawThreads),
     // text is a dependency so ranges follow edits.
@@ -243,9 +326,39 @@ export default function Editor() {
         setCommentsOpen(true)
       }),
       selectionListener(setSelection),
+      suggestionDecorations((id: string, a: SuggestionAction) => {
+        const sg = suggestionsRef.current.find((x) => x.id === id)
+        if (!sg) return
+        if (a === 'focus') {
+          setActiveThread(id)
+          setCommentsOpen(true)
+        } else decideRef.current(sg, a === 'accept')
+      }),
+      captureEdits(
+        () => suggestingRef.current,
+        (e) => {
+          const s = sessionRef.current
+          if (!s) return
+          setSuggestDraft((d) => {
+            if (d && e.from === d.from && e.to === d.to) return { ...d, proposed: e.proposed }
+            return { from: e.from, to: e.to, original: e.original, proposed: e.proposed, ...anchorRange(s.text, e.from, e.to) }
+          })
+        },
+      ),
     ],
     [],
   )
+
+  const startSuggest = () => {
+    if (!session || !selection) return
+    setSuggestDraft({
+      from: selection.from,
+      to: selection.to,
+      original: selection.text,
+      proposed: selection.text,
+      ...anchorRange(session.text, selection.from, selection.to),
+    })
+  }
 
   const startComment = () => {
     if (!session || !selection) return
@@ -361,6 +474,22 @@ export default function Editor() {
             ))}
             {presence.length > 6 && <span className="pl-2 text-xs text-muted-foreground">+{presence.length - 6}</span>}
           </div>
+          {canEdit && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={suggesting ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="gap-1 px-2"
+                  aria-pressed={suggesting}
+                  onClick={() => setSuggesting(!suggesting)}
+                >
+                  <FilePenLine className="size-4" /> <span className="hidden text-xs lg:inline">{suggesting ? 'Suggesting' : 'Editing'}</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Suggest changes instead of editing</TooltipContent>
+            </Tooltip>
+          )}
           {atLeast(level, 'comment') && (
             <ToggleGroup type="single" value={mode} onValueChange={(v) => v && setMode(v as Mode)} size="sm" variant="outline">
               <ToggleGroupItem value="edit" aria-label="Editor only (Ctrl+Alt+E)">
@@ -401,7 +530,7 @@ export default function Editor() {
             className="gap-1 px-2"
           >
             <MessageSquare className="size-4" />
-            <span className="text-xs tabular-nums">{threads.filter((t) => t.status === 'open').length}</span>
+            <span className="text-xs tabular-nums">{threads.filter((t) => t.status === 'open').length + suggestions.length}</span>
           </Button>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -470,7 +599,23 @@ export default function Editor() {
                   <Button size="sm" variant="ghost" className="h-7 gap-1 px-2" onClick={startComment}>
                     <MessageSquarePlus className="size-3.5" /> Comment
                   </Button>
+                  <Button size="sm" variant="ghost" className="h-7 gap-1 px-2" onClick={startSuggest}>
+                    <FilePenLine className="size-3.5" /> Suggest
+                  </Button>
                 </div>
+              )}
+              {suggestDraft && note && (
+                <SuggestComposer
+                  alias={note.alias}
+                  draft={suggestDraft}
+                  top={viewRef.current?.coordsAtPos(suggestDraft.to) ? viewRef.current.coordsAtPos(suggestDraft.to)!.bottom - viewRef.current.dom.getBoundingClientRect().top + 8 : 40}
+                  onChange={(proposed) => setSuggestDraft({ ...suggestDraft, proposed })}
+                  onDone={(created) => {
+                    setSuggestDraft(null)
+                    if (created) loadSuggestions()
+                    viewRef.current?.focus()
+                  }}
+                />
               )}
               {showAuthors && legend.length > 0 && (
                 <div className="absolute right-3 bottom-3 z-10 flex max-w-[80%] flex-wrap gap-2 rounded-md border bg-card/95 px-2.5 py-1.5 text-xs shadow-sm" data-testid="authors-legend">
@@ -486,7 +631,7 @@ export default function Editor() {
               <CodeEditor
                 ytext={session.text}
                 awareness={session.provider.awareness}
-                readOnly={!canEdit}
+                readOnly={!atLeast(level, 'comment')}
                 overlay={authorsOverlay}
                 extensions={editorExtensions}
                 onView={onView}
@@ -508,6 +653,9 @@ export default function Editor() {
             <CommentsPanel
               alias={note.alias}
               threads={threads}
+              suggestions={suggestions}
+              canDecide={canEdit}
+              onDecide={decide}
               draft={draft}
               activeId={activeThread}
               canComment={atLeast(level, 'comment')}

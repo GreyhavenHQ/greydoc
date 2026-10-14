@@ -31,3 +31,13 @@ export function resolveRange(doc: Y.Doc, start: string, end: string): { from: nu
     return null
   }
 }
+
+// resolvePoint returns a collapsed range at an encoded anchor, for insertions.
+export function resolvePoint(doc: Y.Doc, start: string): { from: number; to: number } | null {
+  try {
+    const a = Y.createAbsolutePositionFromRelativePosition(Y.decodeRelativePosition(fromBase64(start)), doc)
+    return a ? { from: a.index, to: a.index } : null
+  } catch {
+    return null
+  }
+}

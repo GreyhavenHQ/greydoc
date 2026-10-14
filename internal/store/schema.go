@@ -164,6 +164,25 @@ CREATE TABLE IF NOT EXISTS comment (
     edited_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_comment_thread ON comment(thread_id, created_at);
+-- A proposed replacement of the anchored text. The note text does not change until accepted.
+CREATE TABLE IF NOT EXISTS suggestion (
+    id TEXT PRIMARY KEY,
+    note_id TEXT NOT NULL REFERENCES note(id) ON DELETE CASCADE,
+    anchor_start BLOB NOT NULL,
+    anchor_end BLOB NOT NULL,
+    original TEXT NOT NULL,
+    proposed TEXT NOT NULL,
+    reason TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'pending',
+    author_id TEXT NOT NULL DEFAULT '',
+    author_name TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL DEFAULT 'human',
+    client TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    decided_by TEXT NOT NULL DEFAULT '',
+    decided_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_suggestion_note ON suggestion(note_id, status);
 CREATE TABLE IF NOT EXISTS note_tag (
     note_id TEXT NOT NULL REFERENCES note(id) ON DELETE CASCADE,
     tag TEXT NOT NULL,

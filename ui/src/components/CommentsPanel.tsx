@@ -33,6 +33,80 @@ export interface Thread {
   range?: { from: number; to: number } | null
 }
 
+export interface Suggestion {
+  id: string
+  anchor_start: string
+  anchor_end: string
+  original: string
+  proposed: string
+  reason: string
+  status: 'pending' | 'accepted' | 'rejected'
+  author_id: string
+  author_name: string
+  source: Source
+  client?: string
+  created_at: string
+  range?: { from: number; to: number } | null
+  stale?: boolean
+}
+
+function SuggestionCard({
+  s,
+  active,
+  canDecide,
+  meId,
+  onDecide,
+  onSelect,
+}: {
+  s: Suggestion
+  active: boolean
+  canDecide: boolean
+  meId?: string
+  onDecide: (s: Suggestion, accept: boolean) => void
+  onSelect: () => void
+}) {
+  return (
+    <div className={cn('rounded-lg border bg-card p-3', active && 'border-primary/60 shadow-sm')} data-testid="suggestion" onClick={onSelect}>
+      <div className="mb-2 flex flex-wrap items-center gap-1.5 text-xs">
+        <span
+          className="flex size-5 items-center justify-center rounded-full text-[9px] font-semibold text-white"
+          style={{ backgroundColor: authorColor(s.author_id || s.author_name) }}
+        >
+          {(s.author_name || '?').slice(0, 1).toUpperCase()}
+        </span>
+        <span className="font-medium">{s.author_name}</span>
+        <span className="text-muted-foreground">suggested</span>
+        {s.source !== 'human' && (
+          <Badge variant="outline" className="px-1 py-0 text-[10px]">
+            {sourceLabel[s.source]}
+          </Badge>
+        )}
+        <span className="text-muted-foreground">{relativeTime(s.created_at)}</span>
+      </div>
+      <div className="flex flex-col gap-1 font-mono text-xs">
+        {s.original && <div className="line-clamp-4 rounded bg-red-500/10 px-1.5 py-0.5 whitespace-pre-wrap line-through decoration-red-500/60">{s.original}</div>}
+        {s.proposed && <div className="line-clamp-6 rounded bg-emerald-500/10 px-1.5 py-0.5 whitespace-pre-wrap">{s.proposed}</div>}
+      </div>
+      {s.reason && <p className="mt-2 text-sm whitespace-pre-wrap">{s.reason}</p>}
+      {(s.stale || s.range === null) && (
+        <div className="mt-2 text-[11px] text-amber-600">{s.range === null ? 'The original text was removed.' : 'The text changed since this suggestion.'}</div>
+      )}
+      <div className="mt-2 flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+        {(canDecide || s.author_id === meId) && (
+          <Button size="sm" variant="ghost" className="h-7" onClick={() => onDecide(s, false)}>
+            <X className="size-3.5" /> {canDecide ? 'Reject' : 'Withdraw'}
+          </Button>
+        )}
+        {canDecide && (
+          <Button size="sm" variant="outline" className="h-7" onClick={() => onDecide(s, true)}>
+            <Check className="size-3.5" /> Accept
+          </Button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export interface Draft {
   quote: string
   anchor_start: string
@@ -170,6 +244,9 @@ function ThreadCard({
 export function CommentsPanel({
   alias,
   threads,
+  suggestions,
+  canDecide,
+  onDecide,
   draft,
   activeId,
   canComment,
@@ -182,6 +259,9 @@ export function CommentsPanel({
 }: {
   alias: string
   threads: Thread[]
+  suggestions: Suggestion[]
+  canDecide: boolean
+  onDecide: (s: Suggestion, accept: boolean) => void
   draft: Draft | null
   activeId: string | null
   canComment: boolean
@@ -214,8 +294,8 @@ export function CommentsPanel({
   return (
     <aside className="flex w-80 shrink-0 flex-col border-l bg-background" data-testid="comments-panel">
       <div className="flex h-10 items-center gap-2 border-b px-3 text-sm font-medium">
-        <MessageSquare className="size-4" /> Comments
-        <span className="text-muted-foreground">{open.length}</span>
+        <MessageSquare className="size-4" /> Review
+        <span className="text-muted-foreground">{open.length + suggestions.length}</span>
         <div className="flex-1" />
         <Button size="icon" variant="ghost" className="size-7" aria-label="Close comments" onClick={onClose}>
           <X className="size-4" />
@@ -249,11 +329,17 @@ export function CommentsPanel({
             </div>
           </div>
         )}
+        {suggestions
+          .slice()
+          .sort((a, b) => (a.range?.from ?? Infinity) - (b.range?.from ?? Infinity))
+          .map((sg) => (
+            <SuggestionCard key={sg.id} s={sg} active={sg.id === activeId} canDecide={canDecide} meId={meId} onDecide={onDecide} onSelect={() => onSelect({ id: sg.id, range: sg.range } as Thread)} />
+          ))}
         {open.map((t) => (
           <ThreadCard key={t.id} alias={alias} thread={t} active={t.id === activeId} canModerate={canModerate} meId={meId} onSelect={() => onSelect(t)} onChanged={onChanged} />
         ))}
-        {open.length === 0 && !draft && (
-          <p className="px-1 text-sm text-muted-foreground">Select text in the editor and press Comment.</p>
+        {open.length === 0 && suggestions.length === 0 && !draft && (
+          <p className="px-1 text-sm text-muted-foreground">Select text in the editor and press Comment or Suggest.</p>
         )}
         {resolved.length > 0 && (
           <button className="self-start px-1 text-xs text-muted-foreground hover:text-foreground" onClick={() => setShowResolved(!showResolved)}>

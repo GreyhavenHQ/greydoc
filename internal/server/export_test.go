@@ -11,3 +11,7 @@ func (s *Server) EditForTest(ctx context.Context, noteID, text string) (string, 
 	return s.hub.Edit(ctx, noteID, collab.Author{UserID: "test", Name: "test", Source: "human"},
 		func(collab.EditView) (string, error) { return text, nil })
 }
+
+func (s *Server) TextForTest(ctx context.Context, noteID string) (string, error) {
+	return s.hub.Text(ctx, noteID)
+}
