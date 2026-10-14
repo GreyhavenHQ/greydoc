@@ -109,7 +109,12 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/me", s.handleMe)
 	s.mux.HandleFunc("GET /api/users", s.handleSearchUsers)
 
+	s.mux.HandleFunc("GET /api/notes", s.handleListNotes)
+	s.mux.HandleFunc("GET /api/tags", s.handleTags)
 	s.mux.HandleFunc("POST /api/notes", s.handleCreateNote)
+	s.mux.HandleFunc("PUT /api/notes/{alias}/pin", s.handlePin)
+	s.mux.HandleFunc("DELETE /api/notes/{alias}/pin", s.handlePin)
+	s.mux.HandleFunc("DELETE /api/notes/{alias}/visit", s.handleForgetVisit)
 	s.mux.HandleFunc("GET /api/notes/{alias}", s.handleGetNote)
 	s.mux.HandleFunc("DELETE /api/notes/{alias}", s.handleDeleteNote)
 	s.mux.HandleFunc("GET /api/notes/{alias}/content", s.handleGetNoteContent)

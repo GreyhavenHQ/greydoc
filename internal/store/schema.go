@@ -111,6 +111,14 @@ CREATE TABLE IF NOT EXISTS note_client (
     created_at TEXT NOT NULL,
     PRIMARY KEY (note_id, client_id)
 );
+CREATE TABLE IF NOT EXISTS note_visit (
+    user_id TEXT NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+    note_id TEXT NOT NULL REFERENCES note(id) ON DELETE CASCADE,
+    visited_at TEXT NOT NULL,
+    pinned INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, note_id)
+);
+CREATE INDEX IF NOT EXISTS idx_note_visit_user ON note_visit(user_id, visited_at);
 CREATE TABLE IF NOT EXISTS note_tag (
     note_id TEXT NOT NULL REFERENCES note(id) ON DELETE CASCADE,
     tag TEXT NOT NULL,
