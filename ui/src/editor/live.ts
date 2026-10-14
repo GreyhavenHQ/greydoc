@@ -1,9 +1,9 @@
 import { ensureSyntaxTree, syntaxTree } from '@codemirror/language'
-import { EditorState, StateField, type Extension, type Range } from '@codemirror/state'
+import { EditorState, StateEffect, StateField, type Extension, type Range } from '@codemirror/state'
 import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemirror/view'
 import katex from 'katex'
 import { renderMarkdown } from '@/render/markdown'
-import { renderMermaid, themeMode } from '@/render/mermaid'
+import { naturalSize, renderMermaid, themeMode } from '@/render/mermaid'
 
 // Live preview: Markdown that renders in place, like Obsidian. Lines and blocks under a selection show their source.
 
@@ -16,11 +16,14 @@ function revealAt(view: EditorView, dom: HTMLElement) {
 }
 
 class MermaidWidget extends WidgetType {
-  constructor(readonly src: string) {
+  constructor(
+    readonly src: string,
+    readonly mode: 'light' | 'dark',
+  ) {
     super()
   }
   eq(o: MermaidWidget) {
-    return o.src === this.src
+    return o.src === this.src && o.mode === this.mode
   }
   get estimatedHeight() {
     return 240
@@ -29,8 +32,9 @@ class MermaidWidget extends WidgetType {
     const el = document.createElement('div')
     el.className = 'cm-lp-block cm-lp-mermaid'
     el.textContent = 'Rendering diagram…'
-    void renderMermaid(this.src, themeMode()).then((svg) => {
+    void renderMermaid(this.src, this.mode).then((svg) => {
       el.innerHTML = svg
+      naturalSize(el)
       view.requestMeasure()
     })
     el.onmousedown = (e) => {
@@ -184,6 +188,7 @@ export function liveDecorations(state: EditorState): DecorationSet {
     return touches(l.from, l.to)
   }
   const out: Range<Decoration>[] = []
+  const mode = typeof document === 'undefined' ? 'light' : themeMode()
   const lineClass = (from: number, to: number, cls: string) => {
     for (let pos = from; pos <= to; ) {
       const l = doc.lineAt(pos)
@@ -304,7 +309,7 @@ export function liveDecorations(state: EditorState): DecorationSet {
           const src = textNode ? doc.sliceString(textNode.from, textNode.to) : ''
           const closed = node.node.getChildren('CodeMark').length >= 2
           if (lang === 'mermaid' && closed && !touches(node.from, node.to)) {
-            out.push(Decoration.replace({ widget: new MermaidWidget(src), block: true }).range(node.from, node.to))
+            out.push(Decoration.replace({ widget: new MermaidWidget(src, mode), block: true }).range(node.from, node.to))
             return false
           }
           lineClass(node.from, node.to, 'cm-lp-codeblock')
@@ -365,10 +370,19 @@ export function liveDecorations(state: EditorState): DecorationSet {
   return Decoration.set(out, true)
 }
 
+// refreshLive rebuilds the rendered blocks, for example after a theme change.
+export const refreshLive = StateEffect.define<null>()
+
 const liveField = StateField.define<DecorationSet>({
   create: (state) => liveDecorations(state),
   update(deco, tr) {
-    if (tr.docChanged || tr.selection || syntaxTree(tr.state) !== syntaxTree(tr.startState)) return liveDecorations(tr.state)
+    if (
+      tr.docChanged ||
+      tr.selection ||
+      tr.effects.some((e) => e.is(refreshLive)) ||
+      syntaxTree(tr.state) !== syntaxTree(tr.startState)
+    )
+      return liveDecorations(tr.state)
     return deco
   },
   provide: (f) => EditorView.decorations.from(f),
@@ -409,7 +423,7 @@ const liveTheme = EditorView.theme({
   '.cm-lp-alert-warning': { borderLeftColor: 'rgb(196 154 0 / 0.7) !important', backgroundColor: 'rgb(196 154 0 / 0.08)' },
   '.cm-lp-alert-caution': { borderLeftColor: 'rgb(var(--destructive) / 0.7) !important', backgroundColor: 'rgb(var(--destructive) / 0.07)' },
   '.cm-lp-mermaid': { textAlign: 'center', color: 'rgb(var(--muted-foreground))', fontSize: '0.85em' },
-  '.cm-lp-mermaid svg': { maxWidth: '100%', height: 'auto' },
+  '.cm-lp-mermaid svg': { margin: '0 auto', display: 'block' },
   '.cm-lp-table table': { margin: '0' },
   '.cm-lp-math': { textAlign: 'center' },
 })

@@ -23,12 +23,25 @@ const actions = [
   { id: 'refine', label: 'Refine' },
   { id: 'shorten', label: 'Shorten' },
   { id: 'fix', label: 'Fix spelling and grammar' },
-  { id: 'diagram', label: 'Make a diagram' },
+  { id: 'diagram', label: 'Make a diagram below' },
   { id: 'continue', label: 'Continue writing' },
 ]
 
 // AiMenu sends the selection to the server's AI endpoint. The answer comes back as a suggestion to review.
-export function AiMenu({ alias, target, onCreated }: { alias: string; target: () => AiTarget | null; onCreated: () => void }) {
+export function AiMenu({
+  alias,
+  target,
+  onCreated,
+  triggerClassName = 'h-7 gap-1 px-2',
+  onStart,
+}: {
+  alias: string
+  target: () => AiTarget | null
+  onCreated: () => void
+  triggerClassName?: string
+  // onStart runs once the request is sent, for example to close the selection toolbar.
+  onStart?: () => void
+}) {
   const [busy, setBusy] = useState(false)
   const [prompt, setPrompt] = useState('')
   const [open, setOpen] = useState(false)
@@ -38,12 +51,14 @@ export function AiMenu({ alias, target, onCreated }: { alias: string; target: ()
     if (!t) return
     setOpen(false)
     setBusy(true)
+    onStart?.()
+    const toastId = toast.loading('Asking the AI…')
     try {
       await api.post(withShare(`/api/notes/${alias}/ai`), { action, instruction, ...t })
-      toast.success('AI suggestion ready to review')
+      toast.success('AI suggestion ready to review', { id: toastId })
       onCreated()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e))
+      toast.error(e instanceof Error ? e.message : String(e), { id: toastId })
     } finally {
       setBusy(false)
       setPrompt('')
@@ -53,7 +68,7 @@ export function AiMenu({ alias, target, onCreated }: { alias: string; target: ()
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
-        <Button size="sm" variant="ghost" className="h-7 gap-1 px-2" disabled={busy}>
+        <Button size="sm" variant="ghost" className={triggerClassName} disabled={busy} title="AI: the answer comes back as a suggestion to review.">
           {busy ? <Spinner className="size-3.5" /> : <Sparkles className="size-3.5" />} AI
         </Button>
       </DropdownMenuTrigger>

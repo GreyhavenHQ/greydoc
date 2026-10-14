@@ -8,7 +8,9 @@ http
     req.on('data', (c) => (body += c))
     req.on('end', () => {
       res.setHeader('Content-Type', 'application/json')
-      res.end(JSON.stringify({ choices: [{ message: { content: 'The meeting went well.' } }] }))
+      const asksDiagram = body.includes('Mermaid diagram') || body.includes('mermaid')
+      const content = asksDiagram ? '```mermaid\nflowchart LR\n  W[Write] --> R[Review] --> S[Ship]\n```' : 'The meeting went well.'
+      res.end(JSON.stringify({ choices: [{ message: { content } }] }))
     })
   })
   .listen(3998, '127.0.0.1')

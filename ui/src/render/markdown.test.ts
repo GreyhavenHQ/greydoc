@@ -131,9 +131,11 @@ describe('mermaid theme', () => {
     expect(light.layout).toBeUndefined()
     expect(mermaidConfig('light', true).layout).toBe('elk')
     expect(light.theme).toBe('base')
-    expect(light.themeVariables?.primaryBorderColor).toBe('#d95e2a')
+    expect(light.themeVariables?.dropShadow).toBe('none')
+    expect(light.themeVariables?.useGradient).toBe(false)
+    expect(light.look).toBe('classic')
     expect(String(light.themeVariables?.fontFamily)).toContain('Aspekta')
-    expect(mermaidConfig('dark').themeVariables?.background).not.toBe(light.themeVariables?.background)
+    expect(mermaidConfig('dark').themeVariables?.primaryColor).not.toBe(light.themeVariables?.primaryColor)
   })
 })
 

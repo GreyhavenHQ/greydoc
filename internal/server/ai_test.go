@@ -66,17 +66,64 @@ func TestAIDisabledWithoutEndpoint(t *testing.T) {
 	}
 }
 
-func TestAIDiagramInsertsAtCursor(t *testing.T) {
+func TestAIDiagramIsAnInsertionAfterTheSelection(t *testing.T) {
 	llm := fakeLLM(t, "```mermaid\ngraph LR\nA-->B\n```")
 	e := newTestEnv(t, func(c *config.Config) { c.LLMBaseURL = llm.URL })
-	alias := e.createNote(nil, "A calls B.")
+	alias := e.createNote(nil, "A calls B.\nNext line.")
+	n, _ := e.srv.Store().NoteByAlias(context.Background(), alias)
 	code, body := e.do(nil, "POST", "/api/notes/"+alias+"/ai", map[string]any{"action": "diagram", "quote": "A calls B."})
-	if code != 201 || !strings.Contains(body, "```mermaid") {
+	if code != 201 {
 		t.Fatalf("%d %s", code, body)
 	}
 	var sg suggestionView
 	_ = json.Unmarshal([]byte(body), &sg)
-	if !strings.HasPrefix(sg.Proposed, "A calls B.\n\n```mermaid") {
-		t.Fatalf("diagram should follow the selection: %q", sg.Proposed)
+	if sg.Original != "" || sg.Proposed != "\n\n```mermaid\ngraph LR\nA-->B\n```\n" {
+		t.Fatalf("%+v", sg)
+	}
+	e.do(nil, "POST", "/api/notes/"+alias+"/suggestions/"+sg.ID+"/accept", nil)
+	text, _ := e.srv.TextForTest(context.Background(), n.ID)
+	if text != "A calls B.\n\n```mermaid\ngraph LR\nA-->B\n```\n\nNext line." {
+		t.Fatalf("%q", text)
+	}
+}
+
+func TestReviseAISuggestion(t *testing.T) {
+	var answers = []string{"Version one.", "Version two."}
+	var prompts []string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Messages []struct{ Content string } `json:"messages"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		prompts = append(prompts, req.Messages[len(req.Messages)-1].Content)
+		a := answers[0]
+		answers = answers[1:]
+		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"content": a}}}})
+	}))
+	defer ts.Close()
+	e := newTestEnv(t, func(c *config.Config) { c.LLMBaseURL = ts.URL })
+	alias := e.createNote(nil, "rough text here")
+	_, body := e.do(nil, "POST", "/api/notes/"+alias+"/ai", map[string]any{"action": "refine", "quote": "rough text here"})
+	var first suggestionView
+	_ = json.Unmarshal([]byte(body), &first)
+	code, body := e.do(nil, "POST", "/api/notes/"+alias+"/suggestions/"+first.ID+"/revise", map[string]any{"instruction": "shorter"})
+	if code != 201 {
+		t.Fatalf("revise %d %s", code, body)
+	}
+	var second suggestionView
+	_ = json.Unmarshal([]byte(body), &second)
+	if second.Proposed != "Version two." || second.Original != "rough text here" || second.Source != "ai_assisted" {
+		t.Fatalf("%+v", second)
+	}
+	if !strings.Contains(prompts[1], "shorter") || !strings.Contains(prompts[1], "<<<SELECTION>>>Version one.<<<END>>>") {
+		t.Fatalf("prompt %q", prompts[1])
+	}
+	_, body = e.do(nil, "GET", "/api/notes/"+alias+"/suggestions/"+first.ID, nil)
+	if !strings.Contains(body, `"status":"replaced"`) {
+		t.Fatalf("old suggestion %s", body)
+	}
+	_, body = e.do(nil, "GET", "/api/notes/"+alias+"/suggestions", nil)
+	if strings.Count(body, `"id"`) != 1 {
+		t.Fatalf("pending %s", body)
 	}
 }

@@ -1,6 +1,8 @@
 import { EditorState, StateEffect, StateField, type Extension, type Transaction } from '@codemirror/state'
 import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemirror/view'
 import { sourceLabel, type Source } from '@/lib/authors'
+import { renderMarkdown } from '@/render/markdown'
+import { hydrateMermaid } from '@/render/mermaid'
 
 export interface SuggestionRange {
   id: string
@@ -14,14 +16,80 @@ export interface SuggestionRange {
   canWithdraw: boolean
 }
 
-export type SuggestionAction = 'accept' | 'reject' | 'focus'
+export type SuggestionAction = 'accept' | 'reject' | 'focus' | 'revise'
 
 export const setSuggestionRanges = StateEffect.define<SuggestionRange[]>()
+
+type Act = (id: string, a: SuggestionAction, instruction?: string) => void
+
+// PreviewWidget shows a multi-line proposal rendered, under the text it changes, so a diagram is seen as a diagram.
+class PreviewWidget extends WidgetType {
+  constructor(
+    readonly s: SuggestionRange,
+    readonly onAction: Act,
+  ) {
+    super()
+  }
+  eq(o: PreviewWidget) {
+    const a = this.s
+    const b = o.s
+    return a.id === b.id && a.proposed === b.proposed && a.stale === b.stale && a.canDecide === b.canDecide
+  }
+  toDOM() {
+    const card = document.createElement('div')
+    card.className = 'cm-sugg-card cm-sugg-card-' + this.s.source + (this.s.stale ? ' cm-sugg-stale' : '')
+    card.dataset.suggestion = this.s.id
+    card.setAttribute('data-testid', 'suggestion-card')
+    const head = document.createElement('div')
+    head.className = 'cm-sugg-card-head'
+    const label = this.s.source === 'ai_assisted' ? '✦ AI suggestion' : this.s.source === 'agent' ? '⚙ Agent suggestion' : 'Suggestion'
+    head.textContent = `${label} · ${this.s.author}${this.s.stale ? ' · text changed since' : ''}`
+    card.appendChild(head)
+    const body = document.createElement('div')
+    body.className = 'cm-sugg-card-body markdown-body'
+    body.innerHTML = renderMarkdown(this.s.proposed.trim()).html
+    void hydrateMermaid(body, { interactive: false, natural: true })
+    card.appendChild(body)
+    const foot = document.createElement('div')
+    foot.className = 'cm-sugg-card-foot'
+    const button = (text: string, act: SuggestionAction, primary = false) => {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.textContent = text
+      b.className = 'cm-sugg-card-btn' + (primary ? ' is-primary' : '')
+      b.onclick = () => this.onAction(this.s.id, act)
+      foot.appendChild(b)
+    }
+    if (this.s.source === 'ai_assisted') {
+      const form = document.createElement('form')
+      form.className = 'cm-sugg-card-revise'
+      const input = document.createElement('input')
+      input.placeholder = 'Ask the AI to change it…'
+      input.setAttribute('aria-label', 'Ask the AI to change the suggestion')
+      form.appendChild(input)
+      form.onsubmit = (e) => {
+        e.preventDefault()
+        if (!input.value.trim()) return
+        form.classList.add('is-busy')
+        input.disabled = true
+        this.onAction(this.s.id, 'revise', input.value.trim())
+      }
+      foot.appendChild(form)
+    }
+    if (this.s.canDecide || this.s.canWithdraw) button(this.s.canDecide ? 'Reject' : 'Withdraw', 'reject')
+    if (this.s.canDecide) button('Accept', 'accept', true)
+    card.appendChild(foot)
+    return card
+  }
+  ignoreEvent() {
+    return true
+  }
+}
 
 class ProposedWidget extends WidgetType {
   constructor(
     readonly s: SuggestionRange,
-    readonly onAction: (id: string, a: SuggestionAction) => void,
+    readonly onAction: Act,
   ) {
     super()
   }
@@ -67,7 +135,7 @@ class ProposedWidget extends WidgetType {
   }
 }
 
-export function suggestionDecorations(onAction: (id: string, a: SuggestionAction) => void): Extension {
+export function suggestionDecorations(onAction: Act): Extension {
   const field = StateField.define<DecorationSet>({
     create: () => Decoration.none,
     update(deco, tr) {
@@ -79,7 +147,12 @@ export function suggestionDecorations(onAction: (id: string, a: SuggestionAction
         for (const s of [...e.value].sort((a, b) => a.from - b.from || a.to - b.to)) {
           if (s.to > max || s.from > s.to) continue
           if (s.from < s.to) items.push(Decoration.mark({ class: 'cm-sugg-del', attributes: { 'data-suggestion': s.id } }).range(s.from, s.to))
-          items.push(Decoration.widget({ widget: new ProposedWidget(s, onAction), side: 1 }).range(s.to))
+          if (s.proposed.trim().includes('\n')) {
+            const at = tr.state.doc.lineAt(s.to).to
+            items.push(Decoration.widget({ widget: new PreviewWidget(s, onAction), side: 1, block: true }).range(at))
+          } else {
+            items.push(Decoration.widget({ widget: new ProposedWidget(s, onAction), side: 1 }).range(s.to))
+          }
         }
         deco = Decoration.set(items, true)
       }
@@ -108,6 +181,28 @@ const suggestionTheme = EditorView.baseTheme({
     border: '1px solid rgb(var(--border))', borderRadius: '3px', backgroundColor: 'rgb(var(--card))', cursor: 'pointer', color: 'rgb(var(--foreground))',
   },
   '.cm-sugg-accept:hover': { borderColor: 'rgb(42 168 118)', color: 'rgb(42 168 118)' },
+  '.cm-sugg-card': {
+    margin: '6px 0 10px', border: '1px solid rgb(42 168 118 / 0.5)', borderLeftWidth: '3px', borderRadius: 'var(--radius)',
+    backgroundColor: 'rgb(var(--card))', fontFamily: 'var(--font-sans)', whiteSpace: 'normal', overflow: 'hidden',
+  },
+  '.cm-sugg-card-ai_assisted': { borderColor: 'rgb(166 42 217 / 0.45)' },
+  '.cm-sugg-card-agent': { borderColor: 'rgb(42 127 217 / 0.45)' },
+  '.cm-sugg-card-head': { fontSize: '11px', fontWeight: '600', padding: '6px 12px', color: 'rgb(var(--muted-foreground))', borderBottom: '1px solid rgb(var(--border) / 0.6)' },
+  '.cm-sugg-card-body': { padding: '10px 12px', fontSize: '14px', maxHeight: '480px', overflow: 'auto' },
+  '.cm-sugg-card-body .mermaid-block svg': { margin: '0 auto', display: 'block' },
+  '.cm-sugg-card-foot': { display: 'flex', gap: '6px', padding: '6px 8px', borderTop: '1px solid rgb(var(--border) / 0.6)', alignItems: 'center' },
+  '.cm-sugg-card-revise': { flex: '1' },
+  '.cm-sugg-card-revise input': {
+    width: '100%', font: 'inherit', fontSize: '13px', padding: '4px 8px', border: '1px solid rgb(var(--border))', borderRadius: '6px',
+    backgroundColor: 'rgb(var(--background))', color: 'rgb(var(--foreground))',
+  },
+  '.cm-sugg-card-revise.is-busy input': { opacity: '0.6' },
+  '.cm-sugg-card-btn': {
+    font: 'inherit', fontSize: '12px', fontWeight: '500', padding: '4px 10px', border: '1px solid rgb(var(--border))', borderRadius: '6px',
+    backgroundColor: 'transparent', color: 'rgb(var(--foreground))', cursor: 'pointer', marginLeft: 'auto',
+  },
+  '.cm-sugg-card-btn + .cm-sugg-card-btn': { marginLeft: '0' },
+  '.cm-sugg-card-btn.is-primary': { backgroundColor: 'rgb(var(--primary))', borderColor: 'rgb(var(--primary))', color: 'rgb(var(--primary-foreground))' },
   '.cm-sugg-reject:hover': { borderColor: 'rgb(180 50 50)', color: 'rgb(180 50 50)' },
 })
 

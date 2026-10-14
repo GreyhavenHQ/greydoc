@@ -61,7 +61,7 @@ test('mermaid diagrams render with tools', async ({ page }) => {
   await page.keyboard.type('```mermaid\ngraph TD\nA[Start] --> B[End]\n')
   const block = page.getByTestId('preview').locator('.mermaid-block')
   await expect(block.locator('svg').first()).toBeVisible({ timeout: 15_000 })
-  await expect(block.locator('.mermaid-toolbar button')).toHaveCount(4)
+  await expect(block.locator('.mermaid-toolbar button')).toHaveCount(6)
   await expect(block.locator('svg').first()).toContainText('Start')
 })
 

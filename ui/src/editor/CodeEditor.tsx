@@ -22,7 +22,8 @@ import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } 
 import * as Y from 'yjs'
 import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next'
 import type { Awareness } from 'y-protocols/awareness'
-import { livePreview } from '@/editor/live'
+import { livePreview, refreshLive } from '@/editor/live'
+import { useTheme } from '@/lib/theme'
 
 const theme = EditorView.theme({
   '&': { height: '100%', fontSize: '14px', backgroundColor: 'rgb(var(--card))', color: 'rgb(var(--foreground))' },
@@ -139,6 +140,11 @@ export function CodeEditor({ ytext, awareness, readOnly, extensions = [], overla
   useEffect(() => {
     viewRef.current?.dispatch({ effects: viewCompartment.current.reconfigure(live ? livePreview() : sourceView()) })
   }, [live])
+
+  const { resolvedTheme } = useTheme()
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: refreshLive.of(null) })
+  }, [resolvedTheme])
 
   return <div ref={host} className="h-full overflow-hidden" data-testid="editor" />
 }

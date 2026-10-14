@@ -56,6 +56,8 @@ import { cn } from '@/lib/utils'
 
 type Mode = 'live' | 'edit' | 'both' | 'view'
 
+const toolbarButton = 'h-7 gap-1 px-2 text-background hover:bg-background/15 hover:text-background'
+
 const MODE_KEY = 'greydoc-mode'
 const defaultEditMode: Mode = 'live'
 
@@ -358,10 +360,17 @@ export default function Editor() {
         () => aliasRef.current,
         () => canEditRef.current,
       ),
-      suggestionDecorations((id: string, a: SuggestionAction) => {
+      suggestionDecorations((id: string, a: SuggestionAction, instruction?: string) => {
         const sg = suggestionsRef.current.find((x) => x.id === id)
         if (!sg) return
-        if (a === 'focus') {
+        if (a === 'revise') {
+          const t = toast.loading('Asking the AI…')
+          api
+            .post(withShare(`/api/notes/${aliasRef.current}/suggestions/${id}/revise`), { instruction })
+            .then(() => toast.success('New version ready', { id: t }))
+            .catch((e) => toast.error(e instanceof Error ? e.message : String(e), { id: t }))
+            .finally(() => loadSuggestionsRef.current())
+        } else if (a === 'focus') {
           setActiveThread(id)
           setCommentsOpen(true)
         } else decideRef.current(sg, a === 'accept')
@@ -626,19 +635,32 @@ export default function Editor() {
             <section className={cn('relative min-w-0 border-r', showPreview ? 'w-1/2' : 'w-full')}>
               {selection && atLeast(level, 'comment') && (
                 <div
-                  className="absolute z-20 flex items-center gap-1 rounded-md border bg-popover p-1 shadow-md"
+                  className="absolute z-20 flex items-center gap-0.5 rounded-lg bg-foreground p-1 text-background shadow-lg ring-1 ring-black/10"
                   style={{ top: selection.top, left: Math.max(8, selection.left) }}
                   data-testid="selection-toolbar"
                   onMouseDown={(e) => e.preventDefault()}
                 >
-                  <Button size="sm" variant="ghost" className="h-7 gap-1 px-2" onClick={startComment}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className={toolbarButton}
+                    onClick={startComment}
+                    title="Comment: add a remark for others. The text does not change."
+                  >
                     <MessageSquarePlus className="size-3.5" /> Comment
                   </Button>
-                  <Button size="sm" variant="ghost" className="h-7 gap-1 px-2" onClick={startSuggest}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className={toolbarButton}
+                    onClick={startSuggest}
+                    title="Suggest: propose new text. A writer accepts or rejects it."
+                  >
                     <FilePenLine className="size-3.5" /> Suggest
                   </Button>
                   {me?.ai_enabled && (
                     <AiMenu
+                      triggerClassName={toolbarButton}
                       alias={note.alias}
                       target={() => {
                         const v = viewRef.current
@@ -648,6 +670,10 @@ export default function Editor() {
                         return { original: v.state.sliceDoc(sel.from, sel.to), ...anchorRange(session.text, sel.from, sel.to) }
                       }}
                       onCreated={loadSuggestions}
+                      onStart={() => {
+                        const v = viewRef.current
+                        if (v) v.dispatch({ selection: { anchor: v.state.selection.main.to } })
+                      }}
                     />
                   )}
                 </div>
