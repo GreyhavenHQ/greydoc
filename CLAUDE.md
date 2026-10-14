@@ -11,7 +11,7 @@ docker compose -f docker-compose.dev.yml run --rm dev just ui       # rebuild in
 docker compose -f docker-compose.dev.yml run --rm dev just ui-test  # vitest
 docker compose -f docker-compose.dev.yml run --rm dev just e2e      # Playwright against a built binary
 docker compose -f docker-compose.dev.yml --profile postgres up -d postgres && docker compose -f docker-compose.dev.yml run --rm dev just test-pg
-docker compose -f docker-compose.dev.yml up app                     # http://127.0.0.1:3000
+docker compose -f docker-compose.dev.yml up app                     # http://127.0.0.1:43030
 ```
 
 `.env` holds `LLM_API_BASEURL`, `LLM_API_KEY`, `LLM_MODEL`. It is read only through `env_file` in the containers. It MUST NOT be committed or copied into an image.

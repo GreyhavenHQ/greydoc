@@ -31,7 +31,7 @@ services:
     working_dir: /src
     command: go run ./cmd/greydoc serve
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:43030:3000"
     volumes:
       - .:/src
       - gomod:/go/pkg/mod

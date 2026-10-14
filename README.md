@@ -18,7 +18,7 @@ It keeps what HedgeDoc users expect: split editor and preview, Mermaid diagrams,
 docker compose up -d
 ```
 
-Open <http://127.0.0.1:3000>. Without OIDC, greydoc runs in local mode: there is no login and everyone can edit. Local mode listens on 127.0.0.1 only.
+Open <http://127.0.0.1:43030>. Without OIDC, greydoc runs in local mode: there is no login and everyone can edit. Local mode listens on 127.0.0.1 only.
 
 To use it as a team, configure OIDC. See [docs/configuration.md](docs/configuration.md).
 
