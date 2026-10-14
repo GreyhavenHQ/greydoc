@@ -1,0 +1,36 @@
+# golangci-lint v2 configuration.
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - misspell
+    - staticcheck
+    - unused
+  settings:
+    errcheck:
+      # Best-effort cleanup: Close, Rollback and temp removal.
+      exclude-functions:
+        - (io.Closer).Close
+        - (*database/sql.Rows).Close
+        - (*database/sql.Conn).Close
+        - (*database/sql.DB).Close
+        - (*database/sql.Tx).Rollback
+        - (*github.com/greyhavenhq/greydoc/internal/store.Store).Close
+        - (*github.com/greyhavenhq/greydoc/internal/server.Server).Close
+        - (*os.File).Close
+        - (*github.com/coder/websocket.Conn).CloseNow
+        - (*github.com/Deln0r/ygo/client.Client).Close
+        - (*github.com/modelcontextprotocol/go-sdk/mcp.ClientSession).Close
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - os.RemoveAll
+        - os.Remove
+
+formatters:
+  enable:
+    - gofmt

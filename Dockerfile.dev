@@ -6,8 +6,9 @@ COPY --from=node:22-bookworm /usr/local/lib/node_modules /usr/local/lib/node_mod
 RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
  && ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 
-RUN curl -sSfL https://just.systems/install.sh | bash -s -- --to /usr/local/bin \
- && curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b /usr/local/bin v2.6.2
+RUN curl -sSfL https://just.systems/install.sh | bash -s -- --to /usr/local/bin
+# Built from source so it understands the Go version of this module.
+RUN GOBIN=/usr/local/bin go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest && rm -rf /root/.cache/go-build
 
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 RUN npx -y playwright@1.64.1 install --with-deps chromium

@@ -50,7 +50,7 @@ func newFakeIdP(t *testing.T) *fakeIdP {
 		user := idp.codes[code]
 		idp.mu.Unlock()
 		if user == nil {
-			http.Error(w, "bad token", 401)
+			http.Error(w, "bad token", http.StatusUnauthorized)
 			return
 		}
 		_ = json.NewEncoder(w).Encode(user)

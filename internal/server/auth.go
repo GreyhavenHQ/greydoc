@@ -79,7 +79,6 @@ func (s *Server) identify(r *http.Request) (*Identity, error) {
 	return nil, nil
 }
 
-
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	id := identityFrom(r.Context())
 	view := map[string]any{
