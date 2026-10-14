@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+	"time"
 
 	"github.com/greyhavenhq/greydoc/internal/secrets"
 )
@@ -87,8 +88,9 @@ type AuditFilter struct {
 	Actor  string
 	Source string
 	NoteID string
-	// Before pages backwards through time.
+	// Before pages backwards through time. After bounds the window.
 	Before string
+	After  string
 	Limit  int
 }
 
@@ -105,6 +107,10 @@ func (s *Store) Audit(ctx context.Context, f AuditFilter) ([]AuditEntry, error) 
 	if f.Limit <= 0 || f.Limit > 500 {
 		f.Limit = 100
 	}
+	return s.auditRows(ctx, f)
+}
+
+func (s *Store) auditRows(ctx context.Context, f AuditFilter) ([]AuditEntry, error) {
 	where, args := "1 = 1", []any{}
 	if !f.Viewer.Local && !f.Viewer.Admin {
 		vw, vargs := s.visibleWhere(f.Viewer)
@@ -130,6 +136,10 @@ func (s *Store) Audit(ctx context.Context, f AuditFilter) ([]AuditEntry, error) 
 	if f.Before != "" {
 		where += " AND e.created_at < ?"
 		args = append(args, f.Before)
+	}
+	if f.After != "" {
+		where += " AND e.created_at >= ?"
+		args = append(args, f.After)
 	}
 	args = append(args, f.Limit)
 	rows, err := s.db.QueryContext(ctx, s.q(`SELECT e.id, e.note_id, COALESCE(e.actor_id, ''), e.actor_name, e.source, e.client, e.kind, e.data, e.created_at,
@@ -159,4 +169,33 @@ func (s *Store) Audit(ctx context.Context, f AuditFilter) ([]AuditEntry, error) 
 		out = append(out, a)
 	}
 	return out, rows.Err()
+}
+
+// MCPCall is one recorded tool call, for usage summaries.
+type MCPCall struct {
+	Actor  string
+	Client string
+	Tool   string
+	OK     bool
+	MS     int64
+	At     string
+}
+
+// MCPCalls returns the tool calls since a time that the viewer may see, newest first, at most limit.
+func (s *Store) MCPCalls(ctx context.Context, v Viewer, since time.Time, limit int) ([]MCPCall, error) {
+	entries, err := s.auditRows(ctx, AuditFilter{Viewer: v, Kind: "mcp.call", After: FormatTime(since), Limit: limit})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]MCPCall, 0, len(entries))
+	for _, e := range entries {
+		c := MCPCall{Actor: e.ActorName, Client: e.Client, At: e.CreatedAt}
+		c.Tool, _ = e.Data["tool"].(string)
+		c.OK, _ = e.Data["ok"].(bool)
+		if ms, ok := e.Data["ms"].(float64); ok {
+			c.MS = int64(ms)
+		}
+		out = append(out, c)
+	}
+	return out, nil
 }

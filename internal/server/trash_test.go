@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/greyhavenhq/greydoc/internal/config"
+	"github.com/greyhavenhq/greydoc/internal/store"
 )
 
 func TestTrashLifecycle(t *testing.T) {
@@ -98,7 +99,13 @@ func TestMCPTrash(t *testing.T) {
 		t.Fatalf("not restored: %d", code)
 	}
 	n, _ := e.srv.Store().NoteByAlias(context.Background(), alias)
-	events, _ := e.srv.Store().Events(context.Background(), n.ID, 10)
+	all, _ := e.srv.Store().Events(context.Background(), n.ID, 20)
+	var events []store.Event
+	for _, ev := range all {
+		if !strings.HasPrefix(ev.Kind, "mcp.") {
+			events = append(events, ev)
+		}
+	}
 	if events[0].Kind != "note.restore" || events[0].Source != "agent" || events[1].Kind != "note.trash" {
 		t.Fatalf("events %+v", events[:2])
 	}

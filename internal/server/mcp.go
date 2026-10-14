@@ -28,6 +28,7 @@ Everything you do is recorded in the note timeline as done by an agent on behalf
 func (s *Server) mcpHandler() http.Handler {
 	srv := mcp.NewServer(&mcp.Implementation{Name: "greydoc", Version: "1"}, &mcp.ServerOptions{Instructions: mcpInstructions})
 	s.registerTools(srv)
+	srv.AddReceivingMiddleware(s.auditMCP)
 	var h http.Handler = mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return srv }, &mcp.StreamableHTTPOptions{
 		SessionTimeout:             30 * time.Minute,
 		DisableLocalhostProtection: !s.cfg.LocalMode(),
@@ -72,9 +73,13 @@ func localOnlyOrigin(h http.Handler) http.Handler {
 
 // mcpIdentity is the caller of a tool call: the token's user, or the local user. Tools always act as an agent.
 func (s *Server) mcpIdentity(req *mcp.CallToolRequest) (*Identity, error) {
+	return s.mcpCaller(req.Extra, req.Session)
+}
+
+func (s *Server) mcpCaller(extra *mcp.RequestExtra, session *mcp.ServerSession) (*Identity, error) {
 	var id *Identity
-	if req.Extra != nil && req.Extra.TokenInfo != nil {
-		id, _ = req.Extra.TokenInfo.Extra["identity"].(*Identity)
+	if extra != nil && extra.TokenInfo != nil {
+		id, _ = extra.TokenInfo.Extra["identity"].(*Identity)
 	}
 	if id == nil {
 		if !s.cfg.LocalMode() {
@@ -85,7 +90,7 @@ func (s *Server) mcpIdentity(req *mcp.CallToolRequest) (*Identity, error) {
 	cp := *id
 	if cp.Via != "oauth" {
 		cp.Via = "mcp"
-		if p := req.Session.InitializeParams(); p != nil && p.ClientInfo != nil && p.ClientInfo.Name != "" {
+		if p := session.InitializeParams(); p != nil && p.ClientInfo != nil && p.ClientInfo.Name != "" {
 			cp.Client = p.ClientInfo.Name
 		}
 	}

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/greyhavenhq/greydoc/internal/collab"
@@ -47,6 +48,10 @@ func (s *Server) handleTimeline(w http.ResponseWriter, r *http.Request) {
 		entries = append(entries, timelineEntry{Kind: "revision", At: revs[i].EndedAt, Revision: &revs[i]})
 	}
 	for i := range events {
+		// Agent calls are in the audit log. The note timeline keeps what changed the note.
+		if strings.HasPrefix(events[i].Kind, "mcp.") {
+			continue
+		}
 		entries = append(entries, timelineEntry{Kind: "event", At: events[i].CreatedAt, Event: &events[i]})
 	}
 	sort.SliceStable(entries, func(i, j int) bool { return entries[i].At > entries[j].At })

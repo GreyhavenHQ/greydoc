@@ -323,3 +323,109 @@ func between(s, a, b string) string {
 	s = s[i+len(a):]
 	return s[:strings.Index(s, b)]
 }
+
+func TestMCPCallsAreAudited(t *testing.T) {
+	e := newTestEnv(t)
+	alias := e.createNote(nil, "# Audited note\nThe launch is in May.")
+	s := e.mcp("")
+	call(t, s, "read_note", map[string]any{"note": alias})
+	call(t, s, "edit_note", map[string]any{"note": alias, "old_text": "not there", "new_text": "x"})
+	long := strings.Repeat("word ", 200)
+	call(t, s, "create_note", map[string]any{"content": long})
+	call(t, s, "search_notes", map[string]any{"query": "launch"})
+
+	_, body := e.do(nil, "GET", "/api/audit?kind=mcp", nil)
+	var v struct {
+		Events []struct {
+			Kind      string         `json:"kind"`
+			Client    string         `json:"client"`
+			Source    string         `json:"source"`
+			NoteTitle string         `json:"note_title"`
+			Data      map[string]any `json:"data"`
+		} `json:"events"`
+	}
+	_ = json.Unmarshal([]byte(body), &v)
+	byTool := map[string]map[string]any{}
+	session := false
+	for _, ev := range v.Events {
+		if ev.Kind == "mcp.session" && ev.Client == "test-agent" {
+			session = true
+		}
+		if ev.Kind != "mcp.call" {
+			continue
+		}
+		if ev.Client != "test-agent" || ev.Source != "agent" {
+			t.Fatalf("event %+v", ev)
+		}
+		byTool[ev.Data["tool"].(string)] = ev.Data
+		if ev.Data["tool"] == "read_note" && ev.NoteTitle != "Audited note" {
+			t.Fatalf("read_note not tied to its note: %+v", ev)
+		}
+	}
+	if !session {
+		t.Fatalf("no session event: %s", body)
+	}
+	if byTool["read_note"]["ok"] != true || byTool["edit_note"]["ok"] != false || byTool["edit_note"]["error"] == "" {
+		t.Fatalf("outcomes %+v", byTool)
+	}
+	args := byTool["create_note"]["args"].(map[string]any)
+	if content := args["content"].(string); len(content) > 200 || !strings.Contains(content, "1000 characters") {
+		t.Fatalf("long argument stored as %q", content)
+	}
+	if byTool["search_notes"]["args"].(map[string]any)["query"] != "launch" {
+		t.Fatalf("search args %+v", byTool["search_notes"])
+	}
+	if _, ok := byTool["read_note"]["ms"]; !ok {
+		t.Fatal("no duration")
+	}
+}
+
+func TestMCPCallsStayOutOfNoteTimeline(t *testing.T) {
+	e := newTestEnv(t)
+	alias := e.createNote(nil, "x")
+	call(t, e.mcp(""), "read_note", map[string]any{"note": alias})
+	if _, body := e.do(nil, "GET", "/api/notes/"+alias+"/timeline", nil); strings.Contains(body, "mcp.call") {
+		t.Fatalf("timeline lists MCP calls: %s", body)
+	}
+	if _, body := e.do(nil, "GET", "/api/audit?note="+alias, nil); !strings.Contains(body, "mcp.call") {
+		t.Fatalf("audit misses the call: %s", body)
+	}
+}
+
+func TestMCPUsageSummary(t *testing.T) {
+	e := newTestEnv(t)
+	alias := e.createNote(nil, "x")
+	s := e.mcp("")
+	call(t, s, "read_note", map[string]any{"note": alias})
+	call(t, s, "read_note", map[string]any{"note": alias})
+	call(t, s, "read_note", map[string]any{"note": "missing"})
+	call(t, s, "list_notes", map[string]any{})
+	code, body := e.do(nil, "GET", "/api/audit/mcp?days=7", nil)
+	if code != 200 {
+		t.Fatalf("%d %s", code, body)
+	}
+	var v struct {
+		Calls  int `json:"calls"`
+		Errors int `json:"errors"`
+		Tools  []struct {
+			Name   string `json:"name"`
+			Calls  int    `json:"calls"`
+			Errors int    `json:"errors"`
+		} `json:"tools"`
+		Clients []struct {
+			Name  string `json:"name"`
+			Calls int    `json:"calls"`
+		} `json:"clients"`
+		People []struct {
+			Name  string `json:"name"`
+			Calls int    `json:"calls"`
+		} `json:"people"`
+	}
+	_ = json.Unmarshal([]byte(body), &v)
+	if v.Calls != 4 || v.Errors != 1 || v.Tools[0].Name != "read_note" || v.Tools[0].Calls != 3 || v.Tools[0].Errors != 1 {
+		t.Fatalf("%+v", v)
+	}
+	if len(v.Clients) != 1 || v.Clients[0].Name != "test-agent" || v.People[0].Name != "Local user" {
+		t.Fatalf("%+v", v)
+	}
+}
