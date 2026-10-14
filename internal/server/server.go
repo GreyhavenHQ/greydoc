@@ -4,11 +4,13 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/greyhavenhq/greydoc/internal/config"
 	"github.com/greyhavenhq/greydoc/internal/oidc"
+	"github.com/greyhavenhq/greydoc/internal/permission"
 	"github.com/greyhavenhq/greydoc/internal/secrets"
 	"github.com/greyhavenhq/greydoc/internal/store"
 )
@@ -20,7 +22,22 @@ type Server struct {
 	mux    *http.ServeMux
 	sso    *oidc.Client
 	// localUser is the identity of every request in local mode.
-	localUser *store.User
+	localUser     *store.User
+	guestMax      permission.Level
+	defaultGroups map[string]permission.Level
+	hub           liveHub
+	mirror        noteMirror
+}
+
+type liveHub interface {
+	LiveText(noteID string) (string, bool)
+	CloseNote(noteID, reason string)
+	PermissionsChanged(noteID string)
+}
+
+type noteMirror interface {
+	Touch(noteID string)
+	Remove(noteID string)
 }
 
 func Open(cfg config.Config) (*Server, error) {
@@ -39,6 +56,18 @@ func Open(cfg config.Config) (*Server, error) {
 		return nil, err
 	}
 	s := &Server{cfg: cfg, store: st, secret: secret, mux: http.NewServeMux()}
+	var ok bool
+	if s.guestMax, ok = permission.ParseLevel(cfg.GuestMax); !ok || s.guestMax == permission.Full {
+		st.Close()
+		return nil, fmt.Errorf("GREYDOC_GUEST_MAX must be deny, read, comment or write")
+	}
+	everyone, ok1 := permission.ParseLevel(cfg.DefaultEveryone)
+	signedIn, ok2 := permission.ParseLevel(cfg.DefaultSignedIn)
+	if !ok1 || !ok2 || everyone == permission.Full || signedIn == permission.Full {
+		st.Close()
+		return nil, fmt.Errorf("GREYDOC_DEFAULT_EVERYONE and GREYDOC_DEFAULT_SIGNED_IN must be deny, read, comment or write")
+	}
+	s.defaultGroups = map[string]permission.Level{store.GroupEveryone: min(everyone, s.guestMax), store.GroupSignedIn: signedIn}
 	if cfg.LocalMode() {
 		if s.localUser, err = st.EnsureLocalUser(ctx); err != nil {
 			st.Close()
@@ -60,7 +89,7 @@ func (s *Server) Store() *store.Store { return s.store }
 
 func (s *Server) Close() error { return s.store.Close() }
 
-func (s *Server) Handler() http.Handler { return s.withIdentity(s.mux) }
+func (s *Server) Handler() http.Handler { return s.checkOrigin(s.withIdentity(s.mux)) }
 
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -70,6 +99,25 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /auth/callback", s.handleAuthCallback)
 	s.mux.HandleFunc("POST /auth/logout", s.handleAuthLogout)
 	s.mux.HandleFunc("GET /api/me", s.handleMe)
+	s.mux.HandleFunc("GET /api/users", s.handleSearchUsers)
+
+	s.mux.HandleFunc("POST /api/notes", s.handleCreateNote)
+	s.mux.HandleFunc("GET /api/notes/{alias}", s.handleGetNote)
+	s.mux.HandleFunc("DELETE /api/notes/{alias}", s.handleDeleteNote)
+	s.mux.HandleFunc("GET /api/notes/{alias}/content", s.handleGetNoteContent)
+	s.mux.HandleFunc("POST /api/notes/{alias}/aliases", s.handleAliases)
+	s.mux.HandleFunc("PUT /api/notes/{alias}/aliases", s.handleAliases)
+	s.mux.HandleFunc("DELETE /api/notes/{alias}/aliases/{name}", s.handleAliases)
+
+	s.mux.HandleFunc("GET /api/notes/{alias}/permissions", s.handleGetPermissions)
+	s.mux.HandleFunc("PUT /api/notes/{alias}/permissions/users/{username}", s.handleUserGrant)
+	s.mux.HandleFunc("DELETE /api/notes/{alias}/permissions/users/{username}", s.handleUserGrant)
+	s.mux.HandleFunc("PUT /api/notes/{alias}/permissions/groups/{group}", s.handleGroupGrant)
+	s.mux.HandleFunc("DELETE /api/notes/{alias}/permissions/groups/{group}", s.handleGroupGrant)
+	s.mux.HandleFunc("PUT /api/notes/{alias}/permissions/owner", s.handleSetOwner)
+	s.mux.HandleFunc("PUT /api/notes/{alias}/agent-policy", s.handleSetAgentPolicy)
+	s.mux.HandleFunc("POST /api/notes/{alias}/share-links", s.handleCreateShareLink)
+	s.mux.HandleFunc("DELETE /api/notes/{alias}/share-links/{id}", s.handleDeleteShareLink)
 	s.mux.Handle("/", s.uiHandler())
 }
 
@@ -91,4 +139,28 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 	e.Error.Code = code
 	e.Error.Message = message
 	writeJSON(w, status, e)
+}
+
+// checkOrigin rejects cross-site browser requests that change state. Bearer callers send no Origin.
+func (s *Server) checkOrigin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cookieFree := r.Header.Get("Authorization") != "" || r.URL.Path == "/oauth/token" ||
+			r.URL.Path == "/oauth/register" || r.URL.Path == "/oauth/revoke"
+		switch r.Method {
+		case http.MethodGet, http.MethodHead, http.MethodOptions:
+		default:
+			if cookieFree {
+				break
+			}
+			if origin := r.Header.Get("Origin"); origin != "" && origin != s.baseURL(r) {
+				writeError(w, http.StatusForbidden, "cross_origin", "cross-origin request refused")
+				return
+			}
+			if r.Header.Get("Sec-Fetch-Site") == "cross-site" {
+				writeError(w, http.StatusForbidden, "cross_origin", "cross-origin request refused")
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }

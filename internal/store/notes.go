@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/greyhavenhq/greydoc/internal/permission"
 	"github.com/greyhavenhq/greydoc/internal/secrets"
 )
 
@@ -44,6 +45,9 @@ type NewNote struct {
 	OwnerID string
 	Alias   string
 	Content string
+	// Groups are the initial group grants, for example the configured defaults.
+	Groups map[string]permission.Level
+	Event  *Event
 }
 
 // reservedAliases collide with UI routes and API prefixes.
@@ -92,7 +96,22 @@ func (s *Store) CreateNote(ctx context.Context, nn NewNote) (*Note, error) {
 			VALUES (?, ?, ?, ?, ?, ?)`), n.ID, nullStr(n.OwnerID), n.Content, string(n.AgentPolicy), now, now); err != nil {
 			return err
 		}
-		return s.insertAlias(ctx, tx, n.ID, alias, true)
+		if err := s.insertAlias(ctx, tx, n.ID, alias, true); err != nil {
+			return err
+		}
+		for g, l := range nn.Groups {
+			if l == permission.Deny {
+				continue
+			}
+			if _, err := tx.ExecContext(ctx, s.q(`INSERT INTO note_group_grant (note_id, group_name, level) VALUES (?, ?, ?)`),
+				n.ID, g, l.String()); err != nil {
+				return err
+			}
+		}
+		if nn.Event != nil {
+			nn.Event.NoteID = n.ID
+		}
+		return s.insertEvent(ctx, tx, nn.Event)
 	})
 	if err != nil {
 		return nil, err

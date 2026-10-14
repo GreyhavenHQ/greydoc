@@ -1,6 +1,8 @@
 package server_test
 
 import (
+	"bytes"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -58,4 +60,47 @@ func (e *testEnv) get(path string, header ...string) (*http.Response, string) {
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
 	return resp, string(body)
+}
+
+// do sends a request with an optional JSON body through client c (nil means no cookies).
+func (e *testEnv) do(c *http.Client, method, path string, body any, header ...string) (int, string) {
+	e.t.Helper()
+	var rd io.Reader
+	if body != nil {
+		b, _ := json.Marshal(body)
+		rd = bytes.NewReader(b)
+	}
+	req, err := http.NewRequest(method, e.ts.URL+path, rd)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	for i := 0; i+1 < len(header); i += 2 {
+		req.Header.Set(header[i], header[i+1])
+	}
+	if c == nil {
+		c = http.DefaultClient
+	}
+	resp, err := c.Do(req)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, string(b)
+}
+
+func (e *testEnv) createNote(c *http.Client, content string) string {
+	e.t.Helper()
+	code, body := e.do(c, "POST", "/api/notes", map[string]string{"content": content})
+	if code != 201 {
+		e.t.Fatalf("create note: %d %s", code, body)
+	}
+	var n struct {
+		Alias string `json:"alias"`
+	}
+	_ = json.Unmarshal([]byte(body), &n)
+	return n.Alias
 }

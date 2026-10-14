@@ -32,8 +32,11 @@ type Config struct {
 	OIDCGroupsClaim  string
 	SessionTTL       time.Duration
 
-	// GuestAccess is the highest level a signed-out visitor can get in OIDC mode: none, read or write.
-	GuestAccess string
+	// GuestMax caps what a signed-out visitor can get in OIDC mode: deny, read, comment or write.
+	GuestMax string
+	// DefaultEveryone and DefaultSignedIn are the grants a new note starts with.
+	DefaultEveryone string
+	DefaultSignedIn string
 
 	MaxNoteLength  int
 	MaxUploadBytes int64
@@ -68,7 +71,9 @@ func FromEnv() Config {
 		OIDCScopes:       envStr("GREYDOC_OIDC_SCOPES", "openid profile email"),
 		OIDCGroupsClaim:  envStr("GREYDOC_OIDC_GROUPS_CLAIM", "groups"),
 		SessionTTL:       envDuration("GREYDOC_SESSION_TTL", 7*24*time.Hour),
-		GuestAccess:      envStr("GREYDOC_GUEST_ACCESS", "read"),
+		GuestMax:         envStr("GREYDOC_GUEST_MAX", "read"),
+		DefaultEveryone:  envStr("GREYDOC_DEFAULT_EVERYONE", "deny"),
+		DefaultSignedIn:  envStr("GREYDOC_DEFAULT_SIGNED_IN", "write"),
 		MaxNoteLength:    envInt("GREYDOC_MAX_NOTE_LENGTH", 1_000_000),
 		MaxUploadBytes:   envInt64("GREYDOC_MAX_UPLOAD_BYTES", 10<<20),
 		MirrorDebounce:   envDuration("GREYDOC_MIRROR_DEBOUNCE", 2*time.Second),

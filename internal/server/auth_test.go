@@ -78,7 +78,10 @@ func TestOIDCLoginSetsSessionWithGroups(t *testing.T) {
 
 	// Groups are replaced on the next login.
 	c = e.login(idp, map[string]any{"sub": "u-1", "preferred_username": "alice", "groups": []string{"eng"}})
-	r2, _ := c.Get(e.ts.URL + "/api/me")
+	r2, err := c.Get(e.ts.URL + "/api/me")
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer r2.Body.Close()
 	me = meView{}
 	_ = json.NewDecoder(r2.Body).Decode(&me)
@@ -95,7 +98,10 @@ func TestLogoutDeletesSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	r, _ := c.Get(e.ts.URL + "/api/me")
+	r, err := c.Get(e.ts.URL + "/api/me")
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer r.Body.Close()
 	var me meView
 	_ = json.NewDecoder(r.Body).Decode(&me)
