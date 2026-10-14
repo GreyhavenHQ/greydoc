@@ -16,7 +16,7 @@ services:
       - path: .env
         required: false
     environment:
-      GREYDOC_TEST_POSTGRES_URL: postgres://greydoc:greydoc@postgres:5432/greydoc?sslmode=disable
+      GREYDOC_TEST_POSTGRES_URL: ${GREYDOC_TEST_POSTGRES_URL:-}
 
   postgres:
     image: postgres:17-alpine

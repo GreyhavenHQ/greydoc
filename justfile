@@ -27,3 +27,7 @@ lint:
 
 serve:
     go run ./cmd/greydoc serve
+
+# Needs the postgres service: docker compose -f docker-compose.dev.yml --profile postgres up -d postgres
+test-pg:
+    GREYDOC_TEST_POSTGRES_URL='postgres://greydoc:greydoc@postgres:5432/greydoc?sslmode=disable' go test -count=1 ./internal/store/ ./internal/server/

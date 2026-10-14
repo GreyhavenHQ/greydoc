@@ -10,7 +10,7 @@ docker compose -f docker-compose.dev.yml run --rm dev just race
 docker compose -f docker-compose.dev.yml run --rm dev just ui       # rebuild internal/server/uidist
 docker compose -f docker-compose.dev.yml run --rm dev just ui-test  # vitest
 docker compose -f docker-compose.dev.yml run --rm dev just e2e      # Playwright against a built binary
-docker compose -f docker-compose.dev.yml --profile postgres up -d postgres   # then run tests: Postgres tests use GREYDOC_TEST_POSTGRES_URL
+docker compose -f docker-compose.dev.yml --profile postgres up -d postgres && docker compose -f docker-compose.dev.yml run --rm dev just test-pg
 docker compose -f docker-compose.dev.yml up app                     # http://127.0.0.1:3000
 ```
 
