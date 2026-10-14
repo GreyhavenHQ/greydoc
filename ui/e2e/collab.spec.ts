@@ -43,3 +43,13 @@ test('home lists notes and filters by tag', async ({ page }) => {
   await page.getByTestId('tag-filter').getByRole('button', { name: /#q4/ }).click()
   await expect(page.getByTestId('note-list').locator('li')).toHaveCount(1)
 })
+
+test('mermaid diagrams render with tools', async ({ page }) => {
+  await page.goto('/new')
+  await expect(page).toHaveURL(/\/n\//)
+  await page.keyboard.type('```mermaid\ngraph TD\nA[Start] --> B[End]\n')
+  const block = page.getByTestId('preview').locator('.mermaid-block')
+  await expect(block.locator('svg').first()).toBeVisible({ timeout: 15_000 })
+  await expect(block.locator('.mermaid-toolbar button')).toHaveCount(4)
+  await expect(block.locator('svg').first()).toContainText('Start')
+})

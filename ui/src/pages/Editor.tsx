@@ -29,7 +29,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { ShareDialog } from '@/components/ShareDialog'
 import { CodeEditor } from '@/editor/CodeEditor'
 import { NoteSession, type AppEvent } from '@/editor/session'
-import { Preview } from '@/render/Preview'
+import { Preview, scrollToSourceLine } from '@/render/Preview'
 import { api, ApiError, atLeast, shareParam, withShare, type Level, type Note } from '@/lib/api'
 import { loginHref, useMe } from '@/lib/me'
 import { localName, presenceColor } from '@/lib/presence'
@@ -96,6 +96,8 @@ export default function Editor() {
   const [connected, setConnected] = useState(true)
   const [shareOpen, setShareOpen] = useState(false)
   const viewRef = useRef<EditorView | null>(null)
+  const previewPane = useRef<HTMLElement | null>(null)
+  const article = useRef<HTMLElement | null>(null)
   const text = useYText(session)
   const presence = usePresence(session)
 
@@ -169,9 +171,22 @@ export default function Editor() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  const onView = useCallback((v: EditorView | null) => {
-    viewRef.current = v
+  const syncScroll = useCallback(() => {
+    const v = viewRef.current
+    if (!v || !previewPane.current || !article.current) return
+    const block = v.lineBlockAtHeight(v.scrollDOM.scrollTop - v.documentTop + v.scrollDOM.getBoundingClientRect().top)
+    const line = v.state.doc.lineAt(block.from).number - 1
+    const fraction = block.height ? (v.scrollDOM.scrollTop - block.top) / block.height : 0
+    scrollToSourceLine(previewPane.current, article.current, line, Math.max(0, Math.min(1, fraction)))
   }, [])
+
+  const onView = useCallback(
+    (v: EditorView | null) => {
+      viewRef.current = v
+      v?.scrollDOM.addEventListener('scroll', syncScroll, { passive: true })
+    },
+    [syncScroll],
+  )
 
   const deleteNote = async () => {
     if (!confirm('Delete this note for everyone? This cannot be undone.')) return
@@ -308,9 +323,12 @@ export default function Editor() {
             </section>
           )}
           {showPreview && (
-            <section className={cn('min-w-0 overflow-y-auto bg-background', showEditor ? 'w-1/2' : 'w-full')}>
+            <section
+              ref={previewPane}
+              className={cn('relative min-w-0 overflow-y-auto bg-background', showEditor ? 'w-1/2' : 'w-full')}
+            >
               <div className="mx-auto max-w-3xl px-8 py-8">
-                <Preview source={text} />
+                <Preview source={text} ref={article} />
               </div>
             </section>
           )}

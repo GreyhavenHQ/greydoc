@@ -1,0 +1,137 @@
+import { describe, expect, it } from 'vitest'
+import { renderMarkdown } from '@/render/markdown'
+import { mermaidConfig } from '@/render/mermaidTheme'
+
+const html = (src: string) => renderMarkdown(src).html
+
+describe('markdown extensions', () => {
+  it('renders GFM tables and strikethrough', () => {
+    const out = html('| a | b |\n|---|---|\n| 1 | 2 |\n\n~~gone~~')
+    expect(out).toContain('<table data-line="0">')
+    expect(out).toContain('<td>1</td>')
+    expect(out).toContain('<s>gone</s>')
+  })
+  it('renders task lists', () => {
+    const out = html('- [x] done\n- [ ] todo')
+    expect(out).toContain('type="checkbox"')
+    expect(out).toMatch(/checked/)
+  })
+  it('adds heading anchors and a table of contents', () => {
+    const out = html('[toc]\n\n# First\n\n## Second part')
+    expect(out).toContain('id="first"')
+    expect(out).toContain('class="toc"')
+    expect(out).toContain('href="#second-part"')
+  })
+  it('renders HedgeDoc containers and spoilers', () => {
+    const out = html(':::warning\nCareful\n:::\n\n:::spoiler Click me\nhidden\n:::')
+    expect(out).toContain('class="alert alert-warning"')
+    expect(out).toContain('<details')
+    expect(out).toContain('<summary>Click me</summary>')
+  })
+  it('renders GitHub alerts', () => {
+    const out = html('> [!NOTE]\n> Useful information.')
+    expect(out).toContain('class="alert alert-note"')
+    expect(out).not.toContain('[!NOTE]')
+  })
+  it('renders emoji shortcodes', () => {
+    expect(html(':smile:')).toContain('😄')
+  })
+  it('renders KaTeX inline and block math', () => {
+    const out = html('Inline $x^2$ and\n\n$$\n\\frac{a}{b}\n$$')
+    expect(out).toContain('class="katex"')
+    expect(out).toContain('katex-display')
+  })
+  it('highlights fenced code and keeps the language class', () => {
+    const out = html('```js\nconst x = 1\n```')
+    expect(out).toContain('class="hljs language-js"')
+    expect(out).toContain('hljs-keyword')
+  })
+  it('supports HedgeDoc image size syntax', () => {
+    const out = html('![logo](https://example.com/a.png =120x80)')
+    expect(out).toContain('width="120"')
+    expect(out).toContain('height="80"')
+    expect(out).toContain('alt="logo"')
+  })
+  it('renders csvpreview fences as tables', () => {
+    const out = html('```csvpreview {header="true"}\nname,age\nAda,36\n```')
+    expect(out).toContain('<th>name</th>')
+    expect(out).toContain('<td>Ada</td>')
+  })
+  it('renders mark, sub, sup, ins, footnotes, abbr and deflists', () => {
+    const out = html('==hi== H~2~O x^2^ ++new++ note[^1]\n\n[^1]: foot\n\n*[HTML]: Hyper Text\n\nHTML\n\nTerm\n:   Definition')
+    expect(out).toContain('<mark>hi</mark>')
+    expect(out).toContain('<sub>2</sub>')
+    expect(out).toContain('<sup>2</sup>')
+    expect(out).toContain('<ins>new</ins>')
+    expect(out).toContain('footnote')
+    expect(out).toContain('<abbr title="Hyper Text">HTML</abbr>')
+    expect(out).toContain('<dt>Term</dt>')
+  })
+  it('turns mermaid fences into placeholders with the source', () => {
+    const out = html('```mermaid\ngraph TD; A-->B\n```')
+    expect(out).toContain('class="mermaid-block"')
+    expect(out).toContain('graph TD; A--&gt;B')
+  })
+  it('marks block elements with their source line', () => {
+    const out = html('# A\n\npara\n\n- item')
+    expect(out).toMatch(/<h1[^>]* data-line="0"/)
+    expect(out).toContain('<p data-line="2"')
+    expect(out).toContain('<ul data-line="4"')
+  })
+  it('hides front matter and returns it', () => {
+    const r = renderMarkdown('---\ntitle: X\ntags: [a]\n---\n# Body')
+    expect(r.html).not.toContain('title: X')
+    expect(r.frontMatter?.title).toBe('X')
+    expect(r.html).toContain('data-line="4"')
+  })
+  it('links bare URLs', () => {
+    expect(html('see https://example.com')).toContain('href="https://example.com"')
+  })
+})
+
+describe('sanitizing', () => {
+  const payloads = [
+    '<script>alert(1)</script>',
+    '<img src=x onerror=alert(1)>',
+    '<a href="javascript:alert(1)">x</a>',
+    '[x](javascript:alert(1))',
+    '<iframe src="https://evil.example"></iframe>',
+    '<svg><script>alert(1)</script></svg>',
+    '<div onclick="alert(1)">x</div>',
+    '<style>body{display:none}</style>',
+    '<object data="x"></object>',
+    '<form action="https://evil.example"><input name=a></form>',
+    '<a href="data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==">x</a>',
+    '<math><mtext><table><mglyph><style><img src=x onerror=alert(1)>',
+  ]
+  for (const p of payloads) {
+    it(`strips ${p.slice(0, 40)}`, () => {
+      const out = html(p).toLowerCase()
+      expect(out).not.toContain('<script')
+      expect(out).not.toMatch(/\son[a-z]+=/)
+      expect(out).not.toMatch(/(href|src)="\s*javascript:/)
+      expect(out).not.toContain('<iframe')
+      expect(out).not.toContain('<style')
+      expect(out).not.toContain('<object')
+      expect(out).not.toContain('<form')
+      expect(out).not.toMatch(/(href|src)="data:text\/html/)
+    })
+  }
+  it('keeps safe HTML', () => {
+    const out = html('<details><summary>s</summary>body</details> <kbd>Ctrl</kbd>')
+    expect(out).toContain('<details>')
+    expect(out).toContain('<kbd>Ctrl</kbd>')
+  })
+})
+
+describe('mermaid theme', () => {
+  it('uses Greyhaven tokens, ELK layout and strict security', () => {
+    const light = mermaidConfig('light')
+    expect(light.securityLevel).toBe('strict')
+    expect(light.layout).toBe('elk')
+    expect(light.theme).toBe('base')
+    expect(light.themeVariables?.primaryBorderColor).toBe('#d95e2a')
+    expect(String(light.themeVariables?.fontFamily)).toContain('Aspekta')
+    expect(mermaidConfig('dark').themeVariables?.background).not.toBe(light.themeVariables?.background)
+  })
+})

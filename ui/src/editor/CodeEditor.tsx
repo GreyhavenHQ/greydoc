@@ -15,7 +15,8 @@ import {
 import { defaultKeymap, indentWithTab } from '@codemirror/commands'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
-import { bracketMatching, defaultHighlightStyle, indentOnInput, syntaxHighlighting } from '@codemirror/language'
+import { HighlightStyle, bracketMatching, defaultHighlightStyle, indentOnInput, syntaxHighlighting } from '@codemirror/language'
+import { tags } from '@lezer/highlight'
 import { highlightSelectionMatches, searchKeymap } from '@codemirror/search'
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete'
 import * as Y from 'yjs'
@@ -35,6 +36,19 @@ const theme = EditorView.theme({
   },
   '.cm-ySelectionInfo': { fontFamily: 'var(--font-sans)', fontSize: '11px', padding: '1px 4px', opacity: '1' },
 })
+
+const markdownStyle = HighlightStyle.define([
+  { tag: tags.heading1, fontWeight: '700', fontSize: '1.15em' },
+  { tag: tags.heading2, fontWeight: '700', fontSize: '1.08em' },
+  { tag: [tags.heading3, tags.heading4, tags.heading5, tags.heading6], fontWeight: '700' },
+  { tag: tags.strong, fontWeight: '700' },
+  { tag: tags.emphasis, fontStyle: 'italic' },
+  { tag: tags.strikethrough, textDecoration: 'line-through' },
+  { tag: [tags.link, tags.url], color: 'rgb(var(--primary))' },
+  { tag: [tags.processingInstruction, tags.meta, tags.contentSeparator], color: 'rgb(var(--muted-foreground))' },
+  { tag: tags.quote, color: 'rgb(var(--muted-foreground))', fontStyle: 'italic' },
+  { tag: tags.monospace, color: 'rgb(var(--foreground) / 0.85)' },
+])
 
 export interface CodeEditorProps {
   ytext: Y.Text
@@ -62,6 +76,7 @@ export function CodeEditor({ ytext, awareness, readOnly, extensions = [], onView
         dropCursor(),
         EditorState.allowMultipleSelections.of(true),
         indentOnInput(),
+        syntaxHighlighting(markdownStyle),
         syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
         bracketMatching(),
         closeBrackets(),
