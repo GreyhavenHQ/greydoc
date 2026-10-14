@@ -20,6 +20,15 @@ CREATE TABLE IF NOT EXISTS user_group (
     group_name TEXT NOT NULL,
     PRIMARY KEY (user_id, group_name)
 );
+-- The cookie holds an opaque token. Only its keyed hash is stored. Logout deletes the row.
+CREATE TABLE IF NOT EXISTS session (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+    token_hash TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_session_user ON session(user_id);
 CREATE TABLE IF NOT EXISTS note (
     id TEXT PRIMARY KEY,
     owner_id TEXT REFERENCES app_user(id) ON DELETE SET NULL,
