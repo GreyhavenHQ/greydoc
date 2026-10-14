@@ -1,6 +1,8 @@
 package collab
 
 import (
+	"errors"
+
 	"github.com/Deln0r/ygo"
 	"github.com/sergi/go-diff/diffmatchpatch"
 )
@@ -106,6 +108,43 @@ func editFrom(base []byte, clientID uint64, fn func(view *crdtDoc) (string, erro
 	txn.Commit()
 	update, err = ygo.EncodeDiff(tmp.d, baseSV)
 	return update, oldText, newText, err
+}
+
+// replaceFrom is editFrom for one exact range: fn returns byte offsets in the text and the replacement.
+// The whole replacement is new content from clientID, even where it repeats the old text.
+func replaceFrom(base []byte, clientID uint64, fn func(view *crdtDoc) (start, end int, repl string, err error)) ([]byte, error) {
+	tmp := &crdtDoc{d: ygo.NewDocWithOptions(ygo.Options{ClientID: clientID})}
+	if len(base) > 0 {
+		if err := ygo.ApplyUpdate(tmp.d, base); err != nil {
+			return nil, err
+		}
+	}
+	baseSV := tmp.stateVector()
+	old := tmp.text()
+	start, end, repl, err := fn(tmp)
+	if err != nil {
+		return nil, err
+	}
+	if start < 0 || end < start || end > len(old) {
+		return nil, errors.New("range out of bounds")
+	}
+	if old[start:end] == repl {
+		return nil, nil
+	}
+	t := ygo.NewText(tmp.d, textName)
+	a := uint64(utf16Offset(old, start))
+	txn := tmp.d.WriteTxn()
+	if n := uint64(utf16Len(old[start:end])); n > 0 {
+		err = t.Delete(txn, a, n)
+	}
+	if err == nil && repl != "" {
+		err = t.Insert(txn, a, repl)
+	}
+	txn.Commit()
+	if err != nil {
+		return nil, err
+	}
+	return ygo.EncodeDiff(tmp.d, baseSV)
 }
 
 // relPos encodes a Yjs relative position at a UTF-16 index, byte-compatible with Y.encodeRelativePosition.

@@ -237,3 +237,17 @@ func TestEditOnClosedNoteOpensAndSaves(t *testing.T) {
 	}
 	eventually(t, "saved", func() bool { return th.store.savedText("n1") == "ab" })
 }
+
+func TestReplaceAttributesTheWholeRange(t *testing.T) {
+	th := newTestHub(t, time.Minute)
+	th.addNote("n1", "the meeting was good")
+	text, err := th.hub.Replace(context.Background(), "n1", Author{UserID: "u", Source: "ai_assisted"},
+		func(v EditView) (int, int, string, error) { return 0, len(v.Text), "The meeting went well.", nil })
+	if err != nil || text != "The meeting went well." {
+		t.Fatalf("%q %v", text, err)
+	}
+	runs, _ := th.hub.Attribution(context.Background(), "n1")
+	if len(runs) != 1 || runs[0].Text != "The meeting went well." {
+		t.Fatalf("runs %+v", runs)
+	}
+}

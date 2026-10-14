@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/greyhavenhq/greydoc/internal/ai"
 	"github.com/greyhavenhq/greydoc/internal/collab"
 	"github.com/greyhavenhq/greydoc/internal/config"
 	"github.com/greyhavenhq/greydoc/internal/history"
@@ -35,6 +36,7 @@ type Server struct {
 	stop          chan struct{}
 	workers       sync.WaitGroup
 	noteLocks     sync.Map
+	ai            *ai.Client
 }
 
 type noteMirror interface {
@@ -84,6 +86,9 @@ func Open(cfg config.Config) (*Server, error) {
 		}
 	}
 	s.history = &history.Processor{Store: st}
+	if cfg.AIEnabled() {
+		s.ai = ai.New(cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.LLMModel)
+	}
 	s.stop = make(chan struct{})
 	s.hub = collab.NewHub(roomStore{st: st}, collab.Options{IdleGrace: cfg.RoomIdleGrace, SaveInterval: cfg.RoomSaveEvery,
 		OnSaved: s.afterSave, OnClosed: s.afterClose})
@@ -192,6 +197,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/notes/{alias}/comments/{thread}/reopen", s.handleThreadStatus)
 	s.mux.HandleFunc("DELETE /api/notes/{alias}/comments/{thread}", s.handleDeleteThread)
 	s.mux.HandleFunc("PATCH /api/notes/{alias}/comments/{thread}/{comment}", s.handleEditComment)
+	s.mux.HandleFunc("POST /api/notes/{alias}/ai", s.handleAI)
 	s.mux.HandleFunc("GET /api/notes/{alias}/suggestions", s.handleListSuggestions)
 	s.mux.HandleFunc("POST /api/notes/{alias}/suggestions", s.handleCreateSuggestion)
 	s.mux.HandleFunc("POST /api/notes/{alias}/suggestions/{id}/accept", func(w http.ResponseWriter, r *http.Request) { s.handleDecideSuggestion(w, r, true) })

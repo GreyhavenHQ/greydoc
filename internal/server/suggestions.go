@@ -174,17 +174,17 @@ func (s *Server) acceptSuggestion(ctx context.Context, id *Identity, n *store.No
 	if sg.Status != "pending" {
 		return &httpError{http.StatusConflict, "decided", errors.New("this suggestion was already " + sg.Status)}
 	}
-	_, err = s.hub.Edit(ctx, n.ID, collab.Author{UserID: sg.AuthorID, Name: sg.AuthorName, Source: string(sg.Source)},
-		func(v collab.EditView) (string, error) {
+	_, err = s.hub.Replace(ctx, n.ID, collab.Author{UserID: sg.AuthorID, Name: sg.AuthorName, Source: string(sg.Source)},
+		func(v collab.EditView) (int, int, string, error) {
 			a, okA := v.Resolve(sg.AnchorStart)
 			b, okB := v.Resolve(sg.AnchorEnd)
 			if !okA || !okB || a > b || (a == b && sg.Original != "") {
-				return "", &httpError{http.StatusConflict, "stale", errors.New("the suggested text was removed")}
+				return 0, 0, "", &httpError{http.StatusConflict, "stale", errors.New("the suggested text was removed")}
 			}
 			if v.Text[a:b] != sg.Original && !force {
-				return "", &httpError{http.StatusConflict, "stale", errStale}
+				return 0, 0, "", &httpError{http.StatusConflict, "stale", errStale}
 			}
-			return v.Text[:a] + sg.Proposed + v.Text[b:], nil
+			return a, b, sg.Proposed, nil
 		})
 	if err != nil {
 		return err

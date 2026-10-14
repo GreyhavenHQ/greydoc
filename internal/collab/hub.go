@@ -337,6 +337,16 @@ func (h *Hub) Edit(ctx context.Context, noteID string, a Author, fn func(EditVie
 	return r.edit(ctx, a, fn)
 }
 
+// Replace swaps one exact range as a server transaction. fn returns byte offsets into v.Text.
+func (h *Hub) Replace(ctx context.Context, noteID string, a Author, fn func(EditView) (start, end int, repl string, err error)) (string, error) {
+	r, release, err := h.acquire(ctx, noteID)
+	if err != nil {
+		return "", err
+	}
+	defer release()
+	return r.replace(a, fn)
+}
+
 // Anchor finds a range with fn and returns Yjs relative positions for its start and end.
 func (h *Hub) Anchor(ctx context.Context, noteID string, fn func(text string) (start, end int, err error)) (startRel, endRel []byte, quote string, err error) {
 	r, release, err := h.acquire(ctx, noteID)

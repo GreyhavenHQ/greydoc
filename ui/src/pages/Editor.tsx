@@ -35,6 +35,7 @@ import { ShareDialog } from '@/components/ShareDialog'
 import { Timeline } from '@/components/Timeline'
 import { CommentsPanel, type Draft, type Suggestion, type Thread } from '@/components/CommentsPanel'
 import { SuggestComposer, type SuggestDraft } from '@/components/SuggestComposer'
+import { AiMenu } from '@/components/AiMenu'
 import { captureEdits, setSuggestionRanges, suggestionDecorations, type SuggestionAction } from '@/editor/suggestions'
 import { anchorRange, resolvePoint, resolveRange } from '@/editor/anchors'
 import { setThreadRanges, threadDecorations } from '@/editor/threads'
@@ -602,6 +603,19 @@ export default function Editor() {
                   <Button size="sm" variant="ghost" className="h-7 gap-1 px-2" onClick={startSuggest}>
                     <FilePenLine className="size-3.5" /> Suggest
                   </Button>
+                  {me?.ai_enabled && (
+                    <AiMenu
+                      alias={note.alias}
+                      target={() => {
+                        const v = viewRef.current
+                        if (!v || !session) return null
+                        const sel = v.state.selection.main
+                        if (sel.empty) return null
+                        return { original: v.state.sliceDoc(sel.from, sel.to), ...anchorRange(session.text, sel.from, sel.to) }
+                      }}
+                      onCreated={loadSuggestions}
+                    />
+                  )}
                 </div>
               )}
               {suggestDraft && note && (

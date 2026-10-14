@@ -261,6 +261,26 @@ func (r *Room) edit(_ context.Context, a Author, fn func(EditView) (string, erro
 	return r.doc.text(), nil
 }
 
+func (r *Room) replace(a Author, fn func(EditView) (int, int, string, error)) (string, error) {
+	r.editMu.Lock()
+	defer r.editMu.Unlock()
+	cid := randomClientID()
+	update, err := replaceFrom(r.doc.state(), cid, func(d *crdtDoc) (int, int, string, error) {
+		return fn(EditView{Text: d.text(), doc: d})
+	})
+	if err != nil {
+		return "", err
+	}
+	if update == nil {
+		return r.doc.text(), nil
+	}
+	r.registerClient(Client{ClientID: cid, UserID: a.UserID, DisplayName: a.Name, Source: a.Source})
+	if err := r.doc.apply(update, &serverOrigin{author: a, clientID: cid}); err != nil {
+		return "", err
+	}
+	return r.doc.text(), nil
+}
+
 func (r *Room) broadcastApp(event map[string]any) {
 	b, _ := json.Marshal(event)
 	msg := encodeAppMessage(b)
