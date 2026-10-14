@@ -18,7 +18,7 @@ docker compose -f docker-compose.dev.yml up app                     # http://127
 
 ## Layout
 
-- `cmd/greydoc`: CLI (`serve`, `token`, `version`).
+- `cmd/greydoc`: CLI (`serve`, `token create`, `version`).
 - `internal/config`: `GREYDOC_*` variables. Empty `GREYDOC_OIDC_ISSUER` means local mode: no login, full access.
 - `internal/store`: all persistence. `schema.go` is the DDL for SQLite and Postgres.
 - `internal/collab`: Yjs sync hub. `crdt.go` is the only file that imports `ygo`.
@@ -26,11 +26,13 @@ docker compose -f docker-compose.dev.yml up app                     # http://127
 - `internal/notemeta`: front matter, tags, title.
 - `internal/history`: edit sessions into timeline revisions.
 - `internal/mirror`: write-only markdown mirror in the data directory.
-- `internal/mcp`, `internal/oauth`: MCP server and its OAuth authorization server.
-- `internal/server`: HTTP handlers and the embedded UI.
+- `internal/ai`: OpenAI-compatible client for in-editor actions. It returns text and never writes.
+- `internal/server`: HTTP handlers, the embedded UI, the MCP tools (`mcp.go`) and the OAuth server for MCP (`oauth.go`). MCP shares the access checks of the REST handlers.
 - `ui/`: React + Vite. It builds into `internal/server/uidist/`, which is committed. After a UI change, run `just ui` and commit `uidist/`.
 
 ## Rules
+
+- `just lint` MUST pass. Postgres changes MUST pass `just test-pg`.
 
 - The database is the source of truth. The data directory mirror is write-only.
 - Every text change is stored with its author and source (`human`, `ai_assisted`, `agent`, `restore`).

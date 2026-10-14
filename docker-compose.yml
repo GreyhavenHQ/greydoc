@@ -1,0 +1,28 @@
+# Run greydoc. Without GREYDOC_OIDC_ISSUER it starts in local mode: no login, everyone can edit.
+# Local mode is published on 127.0.0.1 only. Configure OIDC before you expose it to a network.
+services:
+  greydoc:
+    build: .
+    image: greydoc
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - greydoc-data:/data
+    environment:
+      GREYDOC_ALLOW_NONLOCAL: ${GREYDOC_ALLOW_NONLOCAL:-1}
+      GREYDOC_BASE_URL: ${GREYDOC_BASE_URL:-}
+      GREYDOC_DATABASE_URL: ${GREYDOC_DATABASE_URL:-/data/greydoc.db}
+      GREYDOC_OIDC_ISSUER: ${GREYDOC_OIDC_ISSUER:-}
+      GREYDOC_OIDC_CLIENT_ID: ${GREYDOC_OIDC_CLIENT_ID:-}
+      GREYDOC_OIDC_CLIENT_SECRET: ${GREYDOC_OIDC_CLIENT_SECRET:-}
+      GREYDOC_OIDC_GROUPS_CLAIM: ${GREYDOC_OIDC_GROUPS_CLAIM:-groups}
+      GREYDOC_GUEST_MAX: ${GREYDOC_GUEST_MAX:-read}
+      GREYDOC_DEFAULT_EVERYONE: ${GREYDOC_DEFAULT_EVERYONE:-deny}
+      GREYDOC_DEFAULT_SIGNED_IN: ${GREYDOC_DEFAULT_SIGNED_IN:-write}
+      LLM_API_BASEURL: ${LLM_API_BASEURL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+
+volumes:
+  greydoc-data:

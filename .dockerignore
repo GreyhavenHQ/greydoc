@@ -1,0 +1,11 @@
+.env
+.git
+.greydoc
+bin
+data
+ui/node_modules
+ui/test-results
+ui/playwright-report
+*.db
+*.db-wal
+*.db-shm

@@ -1,0 +1,49 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Every job runs the justfile recipes inside the dev image, as local development does.
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose -f docker-compose.dev.yml build dev
+      - run: docker compose -f docker-compose.dev.yml run --rm dev sh -c 'go vet ./... && just lint && just race && just build'
+
+  postgres:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose -f docker-compose.dev.yml build dev
+      - run: docker compose -f docker-compose.dev.yml --profile postgres up -d postgres
+      - run: sleep 5 && docker compose -f docker-compose.dev.yml run --rm dev just test-pg
+
+  ui-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose -f docker-compose.dev.yml build dev
+      - run: docker compose -f docker-compose.dev.yml run --rm dev sh -c 'just ui-test && just ui'
+      - name: committed uidist matches the UI source
+        run: git diff --exit-code -- internal/server/uidist
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose -f docker-compose.dev.yml build dev
+      - run: docker compose -f docker-compose.dev.yml run --rm dev sh -c 'cd ui && npm ci --no-fund --no-audit && cd .. && just e2e'
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t greydoc .
+      - run: |
+          docker run -d --name smoke -e GREYDOC_ALLOW_NONLOCAL=1 -p 127.0.0.1:3000:3000 greydoc
+          for i in $(seq 1 20); do curl -fs http://127.0.0.1:3000/healthz && exit 0; sleep 1; done
+          docker logs smoke; exit 1
