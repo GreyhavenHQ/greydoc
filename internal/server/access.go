@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"slices"
 
@@ -105,6 +106,10 @@ func (s *Server) noteFor(w http.ResponseWriter, r *http.Request, need permission
 		internalError(w, err)
 		return nil, 0, false
 	}
+	if n.DeletedAt != "" {
+		writeError(w, http.StatusGone, "in_trash", "this note is in the trash")
+		return nil, 0, false
+	}
 	id := identityFrom(r.Context())
 	l, err := s.noteLevel(r.Context(), id, n, shareToken(r))
 	if err != nil {
@@ -123,4 +128,27 @@ func (s *Server) noteFor(w http.ResponseWriter, r *http.Request, need permission
 		return nil, l, false
 	}
 	return n, l, true
+}
+
+var errNotOwner = errors.New("only the owner can move this note to the trash or restore it")
+
+// canTrash decides who may trash, restore or purge a note: its owner, or an admin. An agent also needs the edit policy.
+func (s *Server) canTrash(id *Identity, n *store.Note) error {
+	if id == nil {
+		return errNotOwner
+	}
+	owner := id.Local || (n.OwnerID != "" && n.OwnerID == id.UserID())
+	if id.isAgent() {
+		if !owner || n.AgentPolicy != store.AgentEdit {
+			return fmt.Errorf("agents can trash or restore a note only for its owner, with agent policy \"edit\" (this note: %q)", n.AgentPolicy)
+		}
+		if !id.canWriteScope() {
+			return errors.New("this token can only read")
+		}
+		return nil
+	}
+	if owner || id.Admin {
+		return nil
+	}
+	return errNotOwner
 }

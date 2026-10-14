@@ -150,25 +150,9 @@ func (s *Server) handleGetNoteContent(w http.ResponseWriter, r *http.Request) {
 	_, _ = io.WriteString(w, s.noteContent(n))
 }
 
-func (s *Server) handleDeleteNote(w http.ResponseWriter, r *http.Request) {
-	n, _, ok := s.noteFor(w, r, permission.Full)
-	if !ok {
-		return
-	}
-	id := identityFrom(r.Context())
-	media, _ := s.store.NoteMedia(r.Context(), n.ID)
-	if err := s.store.DeleteNote(r.Context(), n.ID); err != nil {
-		s.writeNoteError(w, err)
-		return
-	}
-	s.removeNoteMedia(media)
-	_ = s.store.AddEvent(r.Context(), id.event(n.ID, "note.delete", map[string]any{"alias": n.PrimaryAlias, "title": n.Title}))
-	s.notifyNoteDeleted(n)
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func (s *Server) notifyNoteDeleted(n *store.Note) {
-	s.hub.CloseNote(n.ID, "deleted")
+// notifyNoteGone closes the note's live room and removes its Markdown copy. reason is trashed or deleted.
+func (s *Server) notifyNoteGone(n *store.Note, reason string) {
+	s.hub.CloseNote(n.ID, reason)
 	s.mirror.Remove(n.ID)
 }
 

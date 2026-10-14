@@ -98,6 +98,7 @@ func (s *Server) handleCreateToken(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
+	_ = s.store.AddEvent(r.Context(), id.event("", "token.create", map[string]any{"label": t.Label, "scope": t.Scope}))
 	writeJSON(w, http.StatusCreated, map[string]any{"token": tok, "info": t})
 }
 
@@ -142,5 +143,6 @@ func (s *Server) handleDeleteToken(w http.ResponseWriter, r *http.Request) {
 		s.writeNoteError(w, err)
 		return
 	}
+	_ = s.store.AddEvent(r.Context(), id.event("", "token.revoke", map[string]any{"token": r.PathValue("id")}))
 	w.WriteHeader(http.StatusNoContent)
 }

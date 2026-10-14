@@ -7,7 +7,9 @@ import (
 
 // Viewer is who a list is for. Local sees everything.
 type Viewer struct {
-	Local  bool
+	Local bool
+	// Admin sees every note's trash and audit events.
+	Admin  bool
 	UserID string
 	Groups []string
 }
@@ -67,6 +69,7 @@ func (s *Store) ListNotes(ctx context.Context, f ListFilter) ([]NoteSummary, err
 		f.Limit = 200
 	}
 	where, args := s.visibleWhere(f.Viewer)
+	where = "n.deleted_at IS NULL AND " + where
 	join := "LEFT JOIN note_visit v ON v.note_id = n.id AND v.user_id = ?"
 	args = append([]any{f.Viewer.UserID}, args...)
 	order := "n.updated_at DESC"
@@ -160,7 +163,7 @@ type TagCount struct {
 func (s *Store) TagCounts(ctx context.Context, v Viewer) ([]TagCount, error) {
 	where, args := s.visibleWhere(v)
 	rows, err := s.db.QueryContext(ctx, s.q(`SELECT t.tag, COUNT(*) FROM note_tag t JOIN note n ON n.id = t.note_id
-		WHERE `+where+` GROUP BY t.tag ORDER BY COUNT(*) DESC, t.tag`), args...)
+		WHERE n.deleted_at IS NULL AND `+where+` GROUP BY t.tag ORDER BY COUNT(*) DESC, t.tag`), args...)
 	if err != nil {
 		return nil, err
 	}

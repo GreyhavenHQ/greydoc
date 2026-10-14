@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -20,6 +21,8 @@ type Identity struct {
 	Via string
 	// Client names the MCP or API client for token and oauth callers.
 	Client string
+	// Admin is set in local mode and for members of GREYDOC_ADMIN_GROUP.
+	Admin bool
 	// Scopes limit token callers. Nil means no limit.
 	Scopes      []string
 	tokenExpiry time.Time
@@ -57,6 +60,14 @@ func (s *Server) withIdentity(next http.Handler) http.Handler {
 var errInvalidToken = errors.New("the access token is invalid or expired")
 
 func (s *Server) identify(r *http.Request) (*Identity, error) {
+	id, err := s.identifyRaw(r)
+	if id != nil {
+		id.Admin = id.Local || (s.cfg.AdminGroup != "" && id.User != nil && slices.Contains(id.User.Groups, s.cfg.AdminGroup))
+	}
+	return id, err
+}
+
+func (s *Server) identifyRaw(r *http.Request) (*Identity, error) {
 	if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
 		id, err := s.identifyBearer(r.Context(), strings.TrimSpace(auth[len("Bearer "):]))
 		if err == nil && s.cfg.LocalMode() {
@@ -92,6 +103,7 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		view["username"] = id.User.Username
 		view["display_name"] = id.User.DisplayName
 		view["groups"] = id.User.Groups
+		view["admin"] = id.Admin
 	}
 	writeJSON(w, http.StatusOK, view)
 }

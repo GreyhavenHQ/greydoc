@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	"github.com/greyhavenhq/greydoc/internal/secrets"
 )
@@ -74,6 +75,88 @@ func (s *Store) Events(ctx context.Context, noteID string, limit int) ([]Event, 
 		ev.Source = Source(src)
 		_ = json.Unmarshal([]byte(data), &ev.Data)
 		out = append(out, ev)
+	}
+	return out, rows.Err()
+}
+
+const SourceSystem Source = "system"
+
+type AuditFilter struct {
+	Viewer Viewer
+	Kind   string
+	Actor  string
+	Source string
+	NoteID string
+	// Before pages backwards through time.
+	Before string
+	Limit  int
+}
+
+type AuditEntry struct {
+	Event
+	NoteAlias string `json:"note_alias,omitempty"`
+	NoteTitle string `json:"note_title,omitempty"`
+	// NoteState is live, trash, deleted, or empty for account events.
+	NoteState string `json:"note_state,omitempty"`
+}
+
+// Audit lists events across notes, newest first. Others see events on notes they can read and their own actions.
+func (s *Store) Audit(ctx context.Context, f AuditFilter) ([]AuditEntry, error) {
+	if f.Limit <= 0 || f.Limit > 500 {
+		f.Limit = 100
+	}
+	where, args := "1 = 1", []any{}
+	if !f.Viewer.Local && !f.Viewer.Admin {
+		vw, vargs := s.visibleWhere(f.Viewer)
+		where = "(e.actor_id = ? OR (n.id IS NOT NULL AND " + vw + "))"
+		args = append([]any{f.Viewer.UserID}, vargs...)
+	}
+	if f.Kind != "" {
+		where += " AND (e.kind = ? OR e.kind LIKE ?)"
+		args = append(args, f.Kind, f.Kind+".%")
+	}
+	if f.Actor != "" {
+		where += " AND (e.actor_id = ? OR LOWER(e.actor_name) LIKE ?)"
+		args = append(args, f.Actor, "%"+strings.ToLower(f.Actor)+"%")
+	}
+	if f.Source != "" {
+		where += " AND e.source = ?"
+		args = append(args, f.Source)
+	}
+	if f.NoteID != "" {
+		where += " AND e.note_id = ?"
+		args = append(args, f.NoteID)
+	}
+	if f.Before != "" {
+		where += " AND e.created_at < ?"
+		args = append(args, f.Before)
+	}
+	args = append(args, f.Limit)
+	rows, err := s.db.QueryContext(ctx, s.q(`SELECT e.id, e.note_id, COALESCE(e.actor_id, ''), e.actor_name, e.source, e.client, e.kind, e.data, e.created_at,
+		COALESCE(a.name, ''), COALESCE(n.title, ''), CASE WHEN e.note_id = '' THEN '' WHEN n.id IS NULL THEN 'deleted'
+		WHEN n.deleted_at IS NOT NULL THEN 'trash' ELSE 'live' END
+		FROM audit_event e LEFT JOIN note n ON n.id = e.note_id LEFT JOIN note_alias a ON a.note_id = n.id AND a.is_primary = 1
+		WHERE `+where+` ORDER BY e.created_at DESC LIMIT ?`), args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []AuditEntry{}
+	for rows.Next() {
+		var a AuditEntry
+		var src, data string
+		if err := rows.Scan(&a.ID, &a.NoteID, &a.ActorID, &a.ActorName, &src, &a.Client, &a.Kind, &data, &a.CreatedAt,
+			&a.NoteAlias, &a.NoteTitle, &a.NoteState); err != nil {
+			return nil, err
+		}
+		a.Source = Source(src)
+		_ = json.Unmarshal([]byte(data), &a.Data)
+		if a.NoteTitle == "" {
+			if t, ok := a.Data["title"].(string); ok {
+				a.NoteTitle = t
+			}
+		}
+		out = append(out, a)
 	}
 	return out, rows.Err()
 }

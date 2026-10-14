@@ -28,13 +28,13 @@ func TestLocalModeNeedsNoLogin(t *testing.T) {
 	}
 }
 
-func newOIDCEnv(t *testing.T) (*testEnv, *fakeIdP) {
+func newOIDCEnv(t *testing.T, mutate ...func(*config.Config)) (*testEnv, *fakeIdP) {
 	idp := newFakeIdP(t)
-	e := newTestEnv(t, func(c *config.Config) {
+	e := newTestEnv(t, append([]func(*config.Config){func(c *config.Config) {
 		c.OIDCIssuer = idp.ts.URL
 		c.OIDCClientID = "greydoc"
 		c.OIDCClientSecret = "secret"
-	})
+	}}, mutate...)...)
 	return e, idp
 }
 

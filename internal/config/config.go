@@ -32,6 +32,11 @@ type Config struct {
 	OIDCGroupsClaim  string
 	SessionTTL       time.Duration
 
+	// AdminGroup members see the whole audit log and every note's trash.
+	AdminGroup string
+	// TrashRetention is how long a note stays in the trash before it is deleted for good.
+	TrashRetention time.Duration
+
 	// GuestMax caps what a signed-out visitor can get in OIDC mode: deny, read, comment or write.
 	GuestMax string
 	// DefaultEveryone and DefaultSignedIn are the grants a new note starts with.
@@ -72,6 +77,8 @@ func FromEnv() Config {
 		OIDCScopes:       envStr("GREYDOC_OIDC_SCOPES", "openid profile email"),
 		OIDCGroupsClaim:  envStr("GREYDOC_OIDC_GROUPS_CLAIM", "groups"),
 		SessionTTL:       envDuration("GREYDOC_SESSION_TTL", 7*24*time.Hour),
+		AdminGroup:       envStr("GREYDOC_ADMIN_GROUP", ""),
+		TrashRetention:   envDuration("GREYDOC_TRASH_RETENTION", 30*24*time.Hour),
 		GuestMax:         envStr("GREYDOC_GUEST_MAX", "read"),
 		DefaultEveryone:  envStr("GREYDOC_DEFAULT_EVERYONE", "deny"),
 		DefaultSignedIn:  envStr("GREYDOC_DEFAULT_SIGNED_IN", "write"),

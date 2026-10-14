@@ -41,7 +41,7 @@ func (s *Store) SearchNoteIDs(ctx context.Context, q string, limit int) ([]strin
 	if s.dialect == "postgres" {
 		tsq := strings.Join(words, ":* & ") + ":*"
 		rows, err = s.db.QueryContext(ctx, `SELECT id FROM note
-			WHERE to_tsvector('simple', title || ' ' || search_tags || ' ' || content) @@ to_tsquery('simple', $1)
+			WHERE deleted_at IS NULL AND to_tsvector('simple', title || ' ' || search_tags || ' ' || content) @@ to_tsquery('simple', $1)
 			ORDER BY ts_rank(to_tsvector('simple', title || ' ' || search_tags || ' ' || content), to_tsquery('simple', $1)) DESC, updated_at DESC
 			LIMIT $2`, tsq, limit)
 	} else {
@@ -49,7 +49,8 @@ func (s *Store) SearchNoteIDs(ctx context.Context, q string, limit int) ([]strin
 		for i, w := range words {
 			parts[i] = `"` + w + `"*`
 		}
-		rows, err = s.db.QueryContext(ctx, `SELECT note_id FROM note_fts WHERE note_fts MATCH ? ORDER BY bm25(note_fts, 0, 10, 5, 1) LIMIT ?`,
+		rows, err = s.db.QueryContext(ctx, `SELECT f.note_id FROM note_fts f JOIN note n ON n.id = f.note_id
+			WHERE note_fts MATCH ? AND n.deleted_at IS NULL ORDER BY bm25(note_fts, 0, 10, 5, 1) LIMIT ?`,
 			strings.Join(parts, " AND "), limit)
 	}
 	if err != nil {

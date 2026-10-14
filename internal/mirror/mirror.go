@@ -102,7 +102,9 @@ func (m *Mirror) Rebuild(ctx context.Context) error {
 			return err
 		}
 		m.mu.Lock()
-		keep[m.paths[id]] = true
+		if p := m.paths[id]; p != "" {
+			keep[p] = true
+		}
 		m.mu.Unlock()
 	}
 	entries, err := os.ReadDir(m.dir)
@@ -123,7 +125,7 @@ func (m *Mirror) Rebuild(ctx context.Context) error {
 
 func (m *Mirror) write(ctx context.Context, noteID string) error {
 	n, err := m.st.NoteByID(ctx, noteID)
-	if errors.Is(err, store.ErrNotFound) {
+	if errors.Is(err, store.ErrNotFound) || (err == nil && n.DeletedAt != "") {
 		m.Remove(noteID)
 		return nil
 	}

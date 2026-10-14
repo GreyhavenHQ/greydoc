@@ -115,6 +115,9 @@ func (s *Server) mcpNote(ctx context.Context, id *Identity, ref string, need per
 	if err != nil {
 		return nil, 0, err
 	}
+	if n.DeletedAt != "" {
+		return nil, 0, fmt.Errorf("note %q is in the trash; restore_note brings it back", alias)
+	}
 	l, err := s.noteLevel(ctx, id, n, share)
 	if err != nil {
 		return nil, 0, err
@@ -414,6 +417,42 @@ func (s *Server) registerTools(srv *mcp.Server) {
 			}
 			return jsonResult(map[string]any{"applied": true, "length": len(text)})
 		})
+	trash := func(restore bool) func(ctx context.Context, req *mcp.CallToolRequest, in noteIn) (*mcp.CallToolResult, any, error) {
+		return func(ctx context.Context, req *mcp.CallToolRequest, in noteIn) (*mcp.CallToolResult, any, error) {
+			id, err := s.mcpIdentity(req)
+			if err != nil {
+				return nil, nil, err
+			}
+			alias, _ := noteRef(in.Note)
+			n, err := s.store.NoteByAlias(ctx, alias)
+			if err != nil {
+				return nil, nil, fmt.Errorf("no note %q", alias)
+			}
+			if err := s.canTrash(id, n); err != nil {
+				return nil, nil, err
+			}
+			switch {
+			case restore && n.DeletedAt == "":
+				return nil, nil, fmt.Errorf("note %q is not in the trash", alias)
+			case !restore && n.DeletedAt != "":
+				return nil, nil, fmt.Errorf("note %q is already in the trash", alias)
+			case restore:
+				err = s.restoreNote(ctx, id, n)
+			default:
+				err = s.trashNote(ctx, id, n)
+			}
+			if err != nil {
+				return nil, nil, err
+			}
+			if restore {
+				return textResult(fmt.Sprintf("restored %q", alias))
+			}
+			return textResult(fmt.Sprintf("moved %q to the trash; restore_note brings it back for %d days", alias, int(s.cfg.TrashRetention.Hours()/24)))
+		}
+	}
+	mcp.AddTool(srv, &mcp.Tool{Name: "trash_note", Description: "Move a note to the trash. Only for notes the user owns, with agent policy edit. " +
+		"It can be restored until the trash retention ends. Agents cannot delete notes for good."}, trash(false))
+	mcp.AddTool(srv, &mcp.Tool{Name: "restore_note", Description: "Bring a note back from the trash. Same rules as trash_note."}, trash(true))
 	mcp.AddTool(srv, &mcp.Tool{Name: "get_history", Description: "Timeline of a note: edit sessions with authors and sources, comments, suggestions and permission changes.", Annotations: ro},
 		func(ctx context.Context, req *mcp.CallToolRequest, in historyIn) (*mcp.CallToolResult, any, error) {
 			id, err := s.mcpIdentity(req)

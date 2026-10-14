@@ -320,6 +320,10 @@ func (s *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 			oauthError(w, http.StatusBadRequest, "invalid_grant", "PKCE verification failed")
 			return
 		}
+		if u, err := s.store.UserByID(r.Context(), code.UserID); err == nil {
+			_ = s.store.AddEvent(r.Context(), &store.Event{ActorID: u.ID, ActorName: u.DisplayName, Kind: "oauth.connect", Client: c.Name,
+				Data: map[string]any{"client": c.Name, "scope": code.Scope}})
+		}
 		s.issueTokens(w, r, c, code.UserID, code.Scope, "")
 	case "refresh_token":
 		old, err := s.store.ConsumeToken(r.Context(), store.TokenRefresh, secrets.Hash(s.secret, r.PostFormValue("refresh_token")))

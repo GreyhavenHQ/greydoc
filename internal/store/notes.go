@@ -39,6 +39,8 @@ type Note struct {
 	AgentPolicy  AgentPolicy `json:"agent_policy"`
 	CreatedAt    string      `json:"created_at"`
 	UpdatedAt    string      `json:"updated_at"`
+	DeletedAt    string      `json:"deleted_at,omitempty"`
+	DeletedBy    string      `json:"deleted_by,omitempty"`
 }
 
 type NewNote struct {
@@ -128,13 +130,14 @@ func (s *Store) insertAlias(ctx context.Context, tx execer, noteID, alias string
 	return err
 }
 
-const noteColumns = `n.id, a.name, COALESCE(n.owner_id, ''), n.title, n.description, n.content, n.ystate, n.agent_policy, n.created_at, n.updated_at`
+const noteColumns = `n.id, a.name, COALESCE(n.owner_id, ''), n.title, n.description, n.content, n.ystate, n.agent_policy, n.created_at, n.updated_at,
+	COALESCE(n.deleted_at, ''), n.deleted_by`
 
 func (s *Store) scanNote(ctx context.Context, row *sql.Row) (*Note, error) {
 	var n Note
 	var policy string
 	if err := row.Scan(&n.ID, &n.PrimaryAlias, &n.OwnerID, &n.Title, &n.Description, &n.Content, &n.YState,
-		&policy, &n.CreatedAt, &n.UpdatedAt); err != nil {
+		&policy, &n.CreatedAt, &n.UpdatedAt, &n.DeletedAt, &n.DeletedBy); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}

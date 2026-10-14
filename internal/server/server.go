@@ -100,8 +100,9 @@ func Open(cfg config.Config) (*Server, error) {
 	s.hub = collab.NewHub(roomStore{st: st}, collab.Options{IdleGrace: cfg.RoomIdleGrace, SaveInterval: cfg.RoomSaveEvery,
 		OnSaved: s.afterSave, OnClosed: s.afterClose})
 	s.routes()
-	s.workers.Add(1)
+	s.workers.Add(2)
 	go s.historyLoop()
+	go s.trashLoop()
 	return s, nil
 }
 
@@ -195,6 +196,9 @@ func (s *Server) routes() {
 
 	s.mux.HandleFunc("GET /api/notes", s.handleListNotes)
 	s.mux.HandleFunc("GET /api/tags", s.handleTags)
+	s.mux.HandleFunc("GET /api/trash", s.handleTrash)
+	s.mux.HandleFunc("GET /api/audit", s.handleAudit)
+	s.mux.HandleFunc("POST /api/notes/{alias}/restore", s.handleRestoreNote)
 	s.mux.HandleFunc("POST /api/notes", s.handleCreateNote)
 	s.mux.HandleFunc("PUT /api/notes/{alias}/pin", s.handlePin)
 	s.mux.HandleFunc("DELETE /api/notes/{alias}/pin", s.handlePin)
@@ -243,6 +247,10 @@ func (s *Server) routes() {
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
+	// Browsers may cache some statuses, such as 410, without headers. API answers change, so none are cached.
+	if w.Header().Get("Cache-Control") == "" {
+		w.Header().Set("Cache-Control", "no-store")
+	}
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
 }

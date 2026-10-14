@@ -67,7 +67,7 @@ func TestMCPLocalModeNeedsNoToken(t *testing.T) {
 		names[tl.Name] = true
 	}
 	for _, want := range []string{"list_notes", "search_notes", "read_note", "create_note", "list_comments", "add_comment",
-		"reply_comment", "resolve_comment", "suggest_edit", "edit_note", "get_history"} {
+		"reply_comment", "resolve_comment", "suggest_edit", "edit_note", "get_history", "trash_note", "restore_note"} {
 		if !names[want] {
 			t.Errorf("missing tool %s", want)
 		}

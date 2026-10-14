@@ -49,8 +49,8 @@ func TestDeleteNoteNeedsOwner(t *testing.T) {
 	if code, _ := e.do(owner, "DELETE", "/api/notes/"+alias, nil); code != 204 {
 		t.Fatalf("owner delete: %d", code)
 	}
-	if code, _ := e.do(owner, "GET", "/api/notes/"+alias, nil); code != 404 {
-		t.Fatalf("after delete: %d", code)
+	if code, _ := e.do(owner, "GET", "/api/notes/"+alias, nil); code != 410 {
+		t.Fatalf("after delete, the note is in the trash: %d", code)
 	}
 }
 

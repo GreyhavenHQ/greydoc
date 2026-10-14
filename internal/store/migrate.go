@@ -20,7 +20,34 @@ type migration struct {
 	apply   func(ctx context.Context, tx *sql.Tx, s *Store) error
 }
 
-var migrations = []migration{}
+// addColumn adds a column unless the table has it already, so it is a no-op on a fresh database.
+func addColumn(version, table, column, definition string) migration {
+	return migration{version: version, apply: func(ctx context.Context, tx *sql.Tx, s *Store) error {
+		exists, err := s.columnExists(ctx, tx, table, column)
+		if err != nil || exists {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, "ALTER TABLE "+table+" ADD COLUMN "+column+" "+definition)
+		return err
+	}}
+}
+
+var migrations = []migration{
+	addColumn("001_note_deleted_at", "note", "deleted_at", "TEXT"),
+	addColumn("002_note_deleted_by", "note", "deleted_by", "TEXT NOT NULL DEFAULT ''"),
+}
+
+// columnExists checks inside the migration transaction. table comes from a constant, never from input.
+func (s *Store) columnExists(ctx context.Context, tx *sql.Tx, table, column string) (bool, error) {
+	var n int
+	if s.dialect == "postgres" {
+		err := tx.QueryRowContext(ctx, `SELECT count(*) FROM information_schema.columns
+			WHERE table_schema = current_schema() AND table_name = $1 AND column_name = $2`, table, column).Scan(&n)
+		return n > 0, err
+	}
+	err := tx.QueryRowContext(ctx, `SELECT count(*) FROM pragma_table_info('`+table+`') WHERE name = ?`, column).Scan(&n)
+	return n > 0, err
+}
 
 func (s *Store) migrate(ctx context.Context) error {
 	if _, err := s.db.ExecContext(ctx, schemaMigrationDDL); err != nil {

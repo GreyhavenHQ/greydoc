@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/greyhavenhq/greydoc/internal/secrets"
+	"github.com/greyhavenhq/greydoc/internal/store"
 )
 
 // safeNext keeps post-login redirects on this site.
@@ -90,6 +91,8 @@ func (s *Server) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.clearCookie(w, r, stateCookieName)
+	_ = s.store.AddEvent(r.Context(), &store.Event{ActorID: user.ID, ActorName: user.DisplayName, Kind: "user.login",
+		Data: map[string]any{"username": user.Username, "groups": user.Groups}})
 	if err := s.issueSession(w, r, user.ID); err != nil {
 		writeError(w, http.StatusInternalServerError, "internal", "failed to create your session")
 		return

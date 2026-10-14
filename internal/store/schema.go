@@ -43,6 +43,9 @@ CREATE TABLE IF NOT EXISTS note (
     history_upto BIGINT NOT NULL DEFAULT 0,
     agent_policy TEXT NOT NULL DEFAULT 'suggest',
     search_tags TEXT NOT NULL DEFAULT '',
+    -- A note in the trash has deleted_at set. It is purged after the retention period.
+    deleted_at TEXT,
+    deleted_by TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
