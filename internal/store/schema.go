@@ -138,6 +138,32 @@ CREATE TABLE IF NOT EXISTS note_revision (
     ended_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_note_revision_note ON note_revision(note_id, id);
+-- Anchors are Yjs relative positions so threads follow the text while others edit.
+CREATE TABLE IF NOT EXISTS comment_thread (
+    id TEXT PRIMARY KEY,
+    note_id TEXT NOT NULL REFERENCES note(id) ON DELETE CASCADE,
+    anchor_start BLOB NOT NULL,
+    anchor_end BLOB NOT NULL,
+    quote TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'open',
+    created_by TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    resolved_by TEXT NOT NULL DEFAULT '',
+    resolved_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_comment_thread_note ON comment_thread(note_id);
+CREATE TABLE IF NOT EXISTS comment (
+    id TEXT PRIMARY KEY,
+    thread_id TEXT NOT NULL REFERENCES comment_thread(id) ON DELETE CASCADE,
+    author_id TEXT NOT NULL DEFAULT '',
+    author_name TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL DEFAULT 'human',
+    client TEXT NOT NULL DEFAULT '',
+    body TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    edited_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_comment_thread ON comment(thread_id, created_at);
 CREATE TABLE IF NOT EXISTS note_tag (
     note_id TEXT NOT NULL REFERENCES note(id) ON DELETE CASCADE,
     tag TEXT NOT NULL,

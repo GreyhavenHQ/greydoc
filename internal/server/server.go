@@ -184,6 +184,13 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/notes/{alias}/revisions/{id}", s.handleRevision)
 	s.mux.HandleFunc("POST /api/notes/{alias}/revisions/{id}/restore", s.handleRestore)
 	s.mux.HandleFunc("GET /api/notes/{alias}/clients", s.handleClients)
+	s.mux.HandleFunc("GET /api/notes/{alias}/comments", s.handleListComments)
+	s.mux.HandleFunc("POST /api/notes/{alias}/comments", s.handleCreateComment)
+	s.mux.HandleFunc("POST /api/notes/{alias}/comments/{thread}/replies", s.handleReply)
+	s.mux.HandleFunc("POST /api/notes/{alias}/comments/{thread}/resolve", s.handleThreadStatus)
+	s.mux.HandleFunc("POST /api/notes/{alias}/comments/{thread}/reopen", s.handleThreadStatus)
+	s.mux.HandleFunc("DELETE /api/notes/{alias}/comments/{thread}", s.handleDeleteThread)
+	s.mux.HandleFunc("PATCH /api/notes/{alias}/comments/{thread}/{comment}", s.handleEditComment)
 
 	s.mux.HandleFunc("GET /api/notes/{alias}/permissions", s.handleGetPermissions)
 	s.mux.HandleFunc("PUT /api/notes/{alias}/permissions/users/{username}", s.handleUserGrant)

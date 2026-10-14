@@ -7,6 +7,8 @@ import {
   Eye,
   FileCode,
   History,
+  MessageSquare,
+  MessageSquarePlus,
   Users,
   MoreHorizontal,
   Pencil,
@@ -30,6 +32,11 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Spinner } from '@/components/ui/spinner'
 import { ShareDialog } from '@/components/ShareDialog'
 import { Timeline } from '@/components/Timeline'
+import { CommentsPanel, type Draft, type Thread } from '@/components/CommentsPanel'
+import { anchorRange, resolveRange } from '@/editor/anchors'
+import { setThreadRanges, threadDecorations } from '@/editor/threads'
+import { selectionListener, type SelectionInfo } from '@/editor/selection'
+import { EditorView as CMView } from '@codemirror/view'
 import { attribution, setClients } from '@/editor/attribution'
 import { authorColor, sourceLabel, type NoteClient } from '@/lib/authors'
 import { CodeEditor } from '@/editor/CodeEditor'
@@ -104,6 +111,11 @@ export default function Editor() {
   const [timelineKey, setTimelineKey] = useState(0)
   const [showAuthors, setShowAuthors] = useState(false)
   const [clients, setClientsState] = useState<NoteClient[]>([])
+  const [rawThreads, setRawThreads] = useState<Thread[]>([])
+  const [commentsOpen, setCommentsOpen] = useState(false)
+  const [draft, setDraft] = useState<Draft | null>(null)
+  const [activeThread, setActiveThread] = useState<string | null>(null)
+  const [selection, setSelection] = useState<SelectionInfo | null>(null)
   const viewRef = useRef<EditorView | null>(null)
   const previewPane = useRef<HTMLElement | null>(null)
   const article = useRef<HTMLElement | null>(null)
@@ -144,6 +156,7 @@ export default function Editor() {
         if (ev.level === 'deny') toast.error('Your access to this note was removed.')
       }
       if (ev.type === 'timeline') setTimelineKey((k) => k + 1)
+      if (ev.type === 'comments') loadThreadsRef.current()
       if (ev.type === 'deleted') {
         toast.error('This note was deleted.')
         navigate('/')
@@ -189,6 +202,56 @@ export default function Editor() {
     const fraction = block.height ? (v.scrollDOM.scrollTop - block.top) / block.height : 0
     scrollToSourceLine(previewPane.current, article.current, line, Math.max(0, Math.min(1, fraction)))
   }, [])
+
+  const loadThreads = useCallback(() => {
+    if (!note) return
+    api.get<{ threads: Thread[] }>(withShare(`/api/notes/${note.alias}/comments`)).then((r) => setRawThreads(r.threads))
+  }, [note])
+  const loadThreadsRef = useRef(loadThreads)
+  loadThreadsRef.current = loadThreads
+  useEffect(loadThreads, [loadThreads])
+
+  const threads = useMemo(
+    () => (session ? rawThreads.map((t) => ({ ...t, range: resolveRange(session.doc, t.anchor_start, t.anchor_end) })) : rawThreads),
+    // text is a dependency so ranges follow edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rawThreads, session, text],
+  )
+
+  useEffect(() => {
+    viewRef.current?.dispatch({
+      effects: setThreadRanges.of(
+        threads
+          .filter((t) => t.status === 'open' && t.range)
+          .map((t) => ({ id: t.id, from: t.range!.from, to: t.range!.to, active: t.id === activeThread, kind: 'comment' as const })),
+      ),
+    })
+  }, [threads, activeThread])
+
+  const selectThread = useCallback((t: Thread) => {
+    setActiveThread(t.id)
+    const v = viewRef.current
+    if (v && t.range) {
+      v.dispatch({ selection: { anchor: t.range.from, head: t.range.to }, effects: CMView.scrollIntoView(t.range.from, { y: 'center' }) })
+    }
+  }, [])
+
+  const editorExtensions = useMemo(
+    () => [
+      threadDecorations((id) => {
+        setActiveThread(id)
+        setCommentsOpen(true)
+      }),
+      selectionListener(setSelection),
+    ],
+    [],
+  )
+
+  const startComment = () => {
+    if (!session || !selection) return
+    setDraft({ quote: selection.text.slice(0, 2000), ...anchorRange(session.text, selection.from, selection.to) })
+    setCommentsOpen(true)
+  }
 
   const loadClients = useCallback(() => {
     if (!note) return
@@ -330,6 +393,16 @@ export default function Editor() {
               <TooltipContent>Who wrote what</TooltipContent>
             </Tooltip>
           )}
+          <Button
+            variant={commentsOpen ? 'secondary' : 'ghost'}
+            size="sm"
+            aria-label="Comments"
+            onClick={() => setCommentsOpen(!commentsOpen)}
+            className="gap-1 px-2"
+          >
+            <MessageSquare className="size-4" />
+            <span className="text-xs tabular-nums">{threads.filter((t) => t.status === 'open').length}</span>
+          </Button>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button variant="ghost" size="icon" aria-label="Timeline" onClick={() => setTimelineOpen(true)}>
@@ -387,6 +460,18 @@ export default function Editor() {
         <main className="flex min-h-0 flex-1">
           {showEditor && (
             <section className={cn('relative min-w-0 border-r', showPreview ? 'w-1/2' : 'w-full')}>
+              {selection && atLeast(level, 'comment') && (
+                <div
+                  className="absolute z-20 flex items-center gap-1 rounded-md border bg-popover p-1 shadow-md"
+                  style={{ top: selection.top, left: Math.max(8, selection.left) }}
+                  data-testid="selection-toolbar"
+                  onMouseDown={(e) => e.preventDefault()}
+                >
+                  <Button size="sm" variant="ghost" className="h-7 gap-1 px-2" onClick={startComment}>
+                    <MessageSquarePlus className="size-3.5" /> Comment
+                  </Button>
+                </div>
+              )}
               {showAuthors && legend.length > 0 && (
                 <div className="absolute right-3 bottom-3 z-10 flex max-w-[80%] flex-wrap gap-2 rounded-md border bg-card/95 px-2.5 py-1.5 text-xs shadow-sm" data-testid="authors-legend">
                   {legend.map((a) => (
@@ -403,6 +488,7 @@ export default function Editor() {
                 awareness={session.provider.awareness}
                 readOnly={!canEdit}
                 overlay={authorsOverlay}
+                extensions={editorExtensions}
                 onView={onView}
                 autoFocus
               />
@@ -417,6 +503,21 @@ export default function Editor() {
                 <Preview source={text} ref={article} />
               </div>
             </section>
+          )}
+          {commentsOpen && (
+            <CommentsPanel
+              alias={note.alias}
+              threads={threads}
+              draft={draft}
+              activeId={activeThread}
+              canComment={atLeast(level, 'comment')}
+              canModerate={isOwner}
+              meId={me?.id}
+              onDraftDone={() => setDraft(null)}
+              onSelect={selectThread}
+              onChanged={loadThreads}
+              onClose={() => setCommentsOpen(false)}
+            />
           )}
         </main>
         <ShareDialog alias={note.alias} isOwner={isOwner} open={shareOpen} onOpenChange={setShareOpen} />
