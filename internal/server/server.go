@@ -5,11 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/greyhavenhq/greydoc/internal/collab"
 	"github.com/greyhavenhq/greydoc/internal/config"
+	"github.com/greyhavenhq/greydoc/internal/history"
 	"github.com/greyhavenhq/greydoc/internal/oidc"
 	"github.com/greyhavenhq/greydoc/internal/permission"
 	"github.com/greyhavenhq/greydoc/internal/secrets"
@@ -28,6 +31,9 @@ type Server struct {
 	defaultGroups map[string]permission.Level
 	hub           *collab.Hub
 	mirror        noteMirror
+	history       *history.Processor
+	stop          chan struct{}
+	workers       sync.WaitGroup
 }
 
 type noteMirror interface {
@@ -76,18 +82,69 @@ func Open(cfg config.Config) (*Server, error) {
 			return nil, err
 		}
 	}
-	s.hub = collab.NewHub(roomStore{st: st}, collab.Options{IdleGrace: cfg.RoomIdleGrace, SaveInterval: cfg.RoomSaveEvery, OnSaved: s.afterSave})
+	s.history = &history.Processor{Store: st}
+	s.stop = make(chan struct{})
+	s.hub = collab.NewHub(roomStore{st: st}, collab.Options{IdleGrace: cfg.RoomIdleGrace, SaveInterval: cfg.RoomSaveEvery,
+		OnSaved: s.afterSave, OnClosed: s.afterClose})
 	s.routes()
+	s.workers.Add(1)
+	go s.historyLoop()
 	return s, nil
 }
 
 func (s *Server) Store() *store.Store { return s.store }
 
 func (s *Server) Close() error {
+	close(s.stop)
+	s.workers.Wait()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	s.hub.Shutdown(ctx)
 	return s.store.Close()
+}
+
+// LiveText returns the text of a note open in the hub.
+func (s *Server) LiveText(noteID string) (string, bool) { return s.hub.LiveText(noteID) }
+
+func (s *Server) afterClose(noteID string) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	if err := s.history.Process(ctx, noteID, true); err != nil {
+		slog.Error("history processing failed", "note", noteID, "error", err)
+	}
+}
+
+func (s *Server) historyLoop() {
+	defer s.workers.Done()
+	t := time.NewTicker(30 * time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case <-s.stop:
+			return
+		case <-t.C:
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			if err := s.ProcessHistory(ctx, false); err != nil {
+				slog.Error("history processing failed", "error", err)
+			}
+			cancel()
+		}
+	}
+}
+
+// ProcessHistory turns logged updates of every note into revisions. force also closes open sessions.
+func (s *Server) ProcessHistory(ctx context.Context, force bool) error {
+	s.hub.Flush("")
+	ids, err := s.store.NotesWithPendingHistory(ctx)
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		if err := s.history.Process(ctx, id, force); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // afterSave runs when a room stored a snapshot.
@@ -123,6 +180,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("DELETE /api/notes/{alias}/aliases/{name}", s.handleAliases)
 
 	s.mux.HandleFunc("GET /ws/{alias}", s.handleWS)
+	s.mux.HandleFunc("GET /api/notes/{alias}/timeline", s.handleTimeline)
+	s.mux.HandleFunc("GET /api/notes/{alias}/revisions/{id}", s.handleRevision)
+	s.mux.HandleFunc("POST /api/notes/{alias}/revisions/{id}/restore", s.handleRestore)
+	s.mux.HandleFunc("GET /api/notes/{alias}/clients", s.handleClients)
 
 	s.mux.HandleFunc("GET /api/notes/{alias}/permissions", s.handleGetPermissions)
 	s.mux.HandleFunc("PUT /api/notes/{alias}/permissions/users/{username}", s.handleUserGrant)

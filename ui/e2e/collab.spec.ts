@@ -53,3 +53,15 @@ test('mermaid diagrams render with tools', async ({ page }) => {
   await expect(block.locator('.mermaid-toolbar button')).toHaveCount(4)
   await expect(block.locator('svg').first()).toContainText('Start')
 })
+
+test('timeline and author layer', async ({ page }) => {
+  await page.goto('/new')
+  await expect(page).toHaveURL(/\/n\//)
+  await page.keyboard.type('Written by me')
+  await page.getByRole('button', { name: 'Show authors' }).click()
+  await expect(page.locator('.cm-author')).toHaveCount(1)
+  await expect(page.getByTestId('authors-legend')).toContainText('Anonymous')
+  await page.getByRole('button', { name: 'Timeline' }).click()
+  await expect(page.getByTestId('timeline')).toContainText('created the note')
+  await expect(page.getByText(/Editing now/)).toBeVisible()
+})

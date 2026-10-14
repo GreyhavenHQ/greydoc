@@ -69,8 +69,10 @@ func (c *crdtDoc) editAs(clientID uint64, newText string) ([]byte, error) {
 // that moved on since base merges with the newer edits instead of reverting them.
 func editFrom(base []byte, clientID uint64, fn func(view *crdtDoc) (string, error)) (update []byte, oldText, newText string, err error) {
 	tmp := &crdtDoc{d: ygo.NewDocWithOptions(ygo.Options{ClientID: clientID})}
-	if err := ygo.ApplyUpdate(tmp.d, base); err != nil {
-		return nil, "", "", err
+	if len(base) > 0 {
+		if err := ygo.ApplyUpdate(tmp.d, base); err != nil {
+			return nil, "", "", err
+		}
 	}
 	baseSV := tmp.stateVector()
 	oldText = tmp.text()
@@ -188,4 +190,26 @@ func utf16Offset(s string, byteOff int) int {
 		byteOff = len(s)
 	}
 	return utf16Len(s[:byteOff])
+}
+
+// Replay applies updates on top of state and returns the new state and its text.
+func Replay(state []byte, updates [][]byte) ([]byte, string, error) {
+	d := newCRDT(0)
+	if len(state) > 0 {
+		if err := d.apply(state, nil); err != nil {
+			return nil, "", err
+		}
+	}
+	for _, u := range updates {
+		if err := d.apply(u, nil); err != nil {
+			return nil, "", err
+		}
+	}
+	return d.state(), d.text(), nil
+}
+
+// EditUpdate returns the update that turns the text of state into newText, authored by clientID.
+func EditUpdate(state []byte, clientID uint64, newText string) ([]byte, error) {
+	up, _, _, err := editFrom(state, clientID, func(*crdtDoc) (string, error) { return newText, nil })
+	return up, err
 }

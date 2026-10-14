@@ -38,6 +38,9 @@ CREATE TABLE IF NOT EXISTS note (
     ystate BLOB,
     -- ystate_upto is the last note_update id the snapshot includes.
     ystate_upto BIGINT NOT NULL DEFAULT 0,
+    -- history_state is the Yjs state after the last update turned into a revision.
+    history_state BLOB,
+    history_upto BIGINT NOT NULL DEFAULT 0,
     agent_policy TEXT NOT NULL DEFAULT 'suggest',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
@@ -119,6 +122,22 @@ CREATE TABLE IF NOT EXISTS note_visit (
     PRIMARY KEY (user_id, note_id)
 );
 CREATE INDEX IF NOT EXISTS idx_note_visit_user ON note_visit(user_id, visited_at);
+-- A revision is one edit session: the text after it, a unified diff, and who did it.
+CREATE TABLE IF NOT EXISTS note_revision (
+    id SERIALPK,
+    note_id TEXT NOT NULL REFERENCES note(id) ON DELETE CASCADE,
+    text TEXT NOT NULL,
+    patch TEXT NOT NULL,
+    authors TEXT NOT NULL,
+    sources TEXT NOT NULL,
+    added INTEGER NOT NULL,
+    removed INTEGER NOT NULL,
+    from_update BIGINT NOT NULL,
+    to_update BIGINT NOT NULL,
+    started_at TEXT NOT NULL,
+    ended_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_note_revision_note ON note_revision(note_id, id);
 CREATE TABLE IF NOT EXISTS note_tag (
     note_id TEXT NOT NULL REFERENCES note(id) ON DELETE CASCADE,
     tag TEXT NOT NULL,

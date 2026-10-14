@@ -10,6 +10,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/greyhavenhq/greydoc/internal/collab"
 	"github.com/greyhavenhq/greydoc/internal/notemeta"
 	"github.com/greyhavenhq/greydoc/internal/permission"
 	"github.com/greyhavenhq/greydoc/internal/store"
@@ -73,13 +74,17 @@ func (s *Server) createNote(r *http.Request, id *Identity, content, alias string
 		return nil, errMaxLength
 	}
 	n, err := s.store.CreateNote(r.Context(), store.NewNote{
-		OwnerID: id.UserID(), Alias: alias, Content: content, Groups: s.defaultGroups,
+		OwnerID: id.UserID(), Alias: alias, Groups: s.defaultGroups,
 		Event: id.event("", "note.create", nil),
 	})
 	if err != nil {
 		return nil, err
 	}
 	if content != "" {
+		if _, err := s.hub.Edit(r.Context(), n.ID, collab.Author{UserID: id.UserID(), Name: id.displayName(), Source: string(id.source())},
+			func(collab.EditView) (string, error) { return content, nil }); err != nil {
+			return nil, err
+		}
 		meta := notemeta.Extract(content)
 		if err := s.store.SaveNoteState(r.Context(), n.ID, store.NoteState{
 			Content: content, Title: meta.Title, Description: meta.Description, Tags: meta.Tags,

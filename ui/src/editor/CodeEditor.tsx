@@ -55,14 +55,17 @@ export interface CodeEditorProps {
   awareness: Awareness
   readOnly: boolean
   extensions?: Extension[]
+  // overlay is reconfigurable at runtime, for the attribution layer.
+  overlay?: Extension
   onView?: (view: EditorView | null) => void
   autoFocus?: boolean
 }
 
-export function CodeEditor({ ytext, awareness, readOnly, extensions = [], onView, autoFocus }: CodeEditorProps) {
+export function CodeEditor({ ytext, awareness, readOnly, extensions = [], overlay = [], onView, autoFocus }: CodeEditorProps) {
   const host = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const readOnlyCompartment = useRef(new Compartment())
+  const overlayCompartment = useRef(new Compartment())
 
   useEffect(() => {
     const undoManager = new Y.UndoManager(ytext)
@@ -98,6 +101,7 @@ export function CodeEditor({ ytext, awareness, readOnly, extensions = [], onView
         theme,
         readOnlyCompartment.current.of([EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)]),
         yCollab(ytext, awareness, { undoManager }),
+        overlayCompartment.current.of(overlay),
         ...extensions,
       ],
     })
@@ -123,6 +127,10 @@ export function CodeEditor({ ytext, awareness, readOnly, extensions = [], onView
       effects: readOnlyCompartment.current.reconfigure([EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)]),
     })
   }, [readOnly])
+
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: overlayCompartment.current.reconfigure(overlay) })
+  }, [overlay])
 
   return <div ref={host} className="h-full overflow-hidden" data-testid="editor" />
 }

@@ -55,6 +55,8 @@ type Options struct {
 	SaveInterval  time.Duration
 	// OnSaved runs after a snapshot is stored.
 	OnSaved func(noteID string)
+	// OnClosed runs after a room closed and saved.
+	OnClosed func(noteID string)
 }
 
 type Hub struct {
@@ -156,6 +158,9 @@ func (h *Hub) closeIdle(r *Room) {
 	delete(h.closing, r.noteID)
 	h.mu.Unlock()
 	close(done)
+	if h.opts.OnClosed != nil {
+		h.opts.OnClosed(r.noteID)
+	}
 }
 
 func (h *Hub) liveRoom(noteID string) *Room {
@@ -228,6 +233,24 @@ func (h *Hub) Broadcast(noteID string, event map[string]any) {
 	}
 }
 
+// Flush writes pending updates of one open note, or of every open note when noteID is empty.
+func (h *Hub) Flush(noteID string) {
+	h.mu.Lock()
+	var rooms []*Room
+	for id, r := range h.rooms {
+		if noteID == "" || id == noteID {
+			rooms = append(rooms, r)
+		}
+	}
+	h.mu.Unlock()
+	for _, r := range rooms {
+		<-r.ready
+		if r.loadErr == nil {
+			r.flush()
+		}
+	}
+}
+
 // Shutdown saves and closes every room.
 func (h *Hub) Shutdown(ctx context.Context) {
 	h.mu.Lock()
@@ -248,6 +271,9 @@ func (h *Hub) Shutdown(ctx context.Context) {
 		}
 		r.closeConns(websocket.StatusGoingAway, "server shutting down")
 		r.shutdown(true)
+		if h.opts.OnClosed != nil {
+			h.opts.OnClosed(r.noteID)
+		}
 	}
 }
 

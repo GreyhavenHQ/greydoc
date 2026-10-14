@@ -6,6 +6,8 @@ import {
   Download,
   Eye,
   FileCode,
+  History,
+  Users,
   MoreHorizontal,
   Pencil,
   Presentation,
@@ -27,6 +29,9 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Spinner } from '@/components/ui/spinner'
 import { ShareDialog } from '@/components/ShareDialog'
+import { Timeline } from '@/components/Timeline'
+import { attribution, setClients } from '@/editor/attribution'
+import { authorColor, sourceLabel, type NoteClient } from '@/lib/authors'
 import { CodeEditor } from '@/editor/CodeEditor'
 import { NoteSession, type AppEvent } from '@/editor/session'
 import { Preview, scrollToSourceLine } from '@/render/Preview'
@@ -95,6 +100,10 @@ export default function Editor() {
   const [synced, setSynced] = useState(false)
   const [connected, setConnected] = useState(true)
   const [shareOpen, setShareOpen] = useState(false)
+  const [timelineOpen, setTimelineOpen] = useState(false)
+  const [timelineKey, setTimelineKey] = useState(0)
+  const [showAuthors, setShowAuthors] = useState(false)
+  const [clients, setClientsState] = useState<NoteClient[]>([])
   const viewRef = useRef<EditorView | null>(null)
   const previewPane = useRef<HTMLElement | null>(null)
   const article = useRef<HTMLElement | null>(null)
@@ -134,6 +143,7 @@ export default function Editor() {
         setLevel(ev.level)
         if (ev.level === 'deny') toast.error('Your access to this note was removed.')
       }
+      if (ev.type === 'timeline') setTimelineKey((k) => k + 1)
       if (ev.type === 'deleted') {
         toast.error('This note was deleted.')
         navigate('/')
@@ -179,6 +189,43 @@ export default function Editor() {
     const fraction = block.height ? (v.scrollDOM.scrollTop - block.top) / block.height : 0
     scrollToSourceLine(previewPane.current, article.current, line, Math.max(0, Math.min(1, fraction)))
   }, [])
+
+  const loadClients = useCallback(() => {
+    if (!note) return
+    api.get<{ clients: NoteClient[] }>(withShare(`/api/notes/${note.alias}/clients`)).then((r) => {
+      setClientsState(r.clients)
+      viewRef.current?.dispatch({ effects: setClients.of(new Map(r.clients.map((c) => [c.client_id, c]))) })
+    })
+  }, [note])
+
+  const refreshClients = useMemo(() => {
+    let last = 0
+    return () => {
+      if (Date.now() - last < 3000) return
+      last = Date.now()
+      setTimeout(loadClients, 0)
+    }
+  }, [loadClients])
+
+  const authorsOverlay = useMemo(
+    () => (showAuthors && session ? attribution(session.text, refreshClients) : []),
+    [showAuthors, session, refreshClients],
+  )
+
+  useEffect(() => {
+    if (showAuthors) loadClients()
+  }, [showAuthors, loadClients])
+
+  const legend = useMemo(() => {
+    const seen = new Map<string, { name: string; color: string; sources: Set<string> }>()
+    for (const c of clients) {
+      const key = c.user_id || c.display_name
+      const e = seen.get(key) ?? { name: c.display_name || 'Unknown', color: authorColor(key), sources: new Set<string>() }
+      if (c.source !== 'human') e.sources.add(sourceLabel[c.source])
+      seen.set(key, e)
+    }
+    return [...seen.values()]
+  }, [clients])
 
   const onView = useCallback(
     (v: EditorView | null) => {
@@ -264,6 +311,33 @@ export default function Editor() {
               </ToggleGroupItem>
             </ToggleGroup>
           )}
+          {atLeast(level, 'comment') && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={showAuthors ? 'secondary' : 'ghost'}
+                  size="icon"
+                  aria-label="Show authors"
+                  aria-pressed={showAuthors}
+                  onClick={() => {
+                    setShowAuthors(!showAuthors)
+                    if (mode === 'view') setMode('both')
+                  }}
+                >
+                  <Users className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Who wrote what</TooltipContent>
+            </Tooltip>
+          )}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" aria-label="Timeline" onClick={() => setTimelineOpen(true)}>
+                <History className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Timeline</TooltipContent>
+          </Tooltip>
           {me?.authenticated && (
             <Button variant="outline" size="sm" onClick={() => setShareOpen(true)}>
               <Share2 className="size-4" /> Share
@@ -312,11 +386,23 @@ export default function Editor() {
         </header>
         <main className="flex min-h-0 flex-1">
           {showEditor && (
-            <section className={cn('min-w-0 border-r', showPreview ? 'w-1/2' : 'w-full')}>
+            <section className={cn('relative min-w-0 border-r', showPreview ? 'w-1/2' : 'w-full')}>
+              {showAuthors && legend.length > 0 && (
+                <div className="absolute right-3 bottom-3 z-10 flex max-w-[80%] flex-wrap gap-2 rounded-md border bg-card/95 px-2.5 py-1.5 text-xs shadow-sm" data-testid="authors-legend">
+                  {legend.map((a) => (
+                    <span key={a.name} className="flex items-center gap-1">
+                      <span className="size-2.5 rounded-sm" style={{ backgroundColor: a.color }} />
+                      {a.name}
+                      {a.sources.size > 0 && <span className="text-muted-foreground">({[...a.sources].join(', ')})</span>}
+                    </span>
+                  ))}
+                </div>
+              )}
               <CodeEditor
                 ytext={session.text}
                 awareness={session.provider.awareness}
                 readOnly={!canEdit}
+                overlay={authorsOverlay}
                 onView={onView}
                 autoFocus
               />
@@ -334,6 +420,7 @@ export default function Editor() {
           )}
         </main>
         <ShareDialog alias={note.alias} isOwner={isOwner} open={shareOpen} onOpenChange={setShareOpen} />
+        <Timeline alias={note.alias} open={timelineOpen} onOpenChange={setTimelineOpen} canRestore={canEdit} refreshKey={timelineKey} />
       </div>
     </TooltipProvider>
   )
