@@ -120,3 +120,45 @@ test('AI refine becomes an AI-assisted suggestion', async ({ page }) => {
   await expect.poll(async () => (await page.locator('.cm-author-ai').allTextContents()).join('')).toBe('The meeting went well.')
   await expect(page.getByTestId('authors-legend')).toContainText('AI-assisted')
 })
+
+async function noteWith(page: Page, text: string): Promise<string> {
+  const resp = await page.request.post('/api/notes', { data: { content: text } })
+  expect(resp.status()).toBe(201)
+  return (await resp.json()).alias
+}
+
+test('view-only page shows the note and nothing else', async ({ page }) => {
+  const alias = await noteWith(page, '# For the client\n\nResults are in.')
+  await page.goto('/s/' + alias)
+  await expect(page.getByTestId('view-page').locator('h1')).toHaveText('For the client')
+  await expect(page.locator('[data-testid=editor]')).toHaveCount(0)
+  await expect(page.getByRole('button')).toHaveCount(0)
+  await expect(page.locator('header')).toHaveCount(0)
+})
+
+test('slide mode splits on ---', async ({ page }) => {
+  const alias = await noteWith(page, '# One\n\n---\n\n# Two\n\n----\n\n## Two down\n')
+  await page.goto('/p/' + alias)
+  await expect(page.locator('.reveal .slides > section')).toHaveCount(2)
+  await expect(page.locator('.reveal .slides > section').first()).toContainText('One')
+})
+
+test('HTML download is standalone with rendered diagrams', async ({ page }) => {
+  const alias = await noteWith(page, '# Export\n\n```mermaid\ngraph LR\nA-->B\n```\n')
+  const downloading = page.waitForEvent('download')
+  await page.goto('/s/' + alias + '?export=html')
+  const file = await downloading
+  expect(file.suggestedFilename()).toBe('export.html')
+  const fs = await import('node:fs/promises')
+  const html = await fs.readFile((await file.path())!, 'utf8')
+  expect(html.slice(html.indexOf('<article'))).toContain('<svg')
+  expect(html).toContain('<h1')
+  expect(html).not.toMatch(/<script/i)
+  expect(html.slice(html.indexOf('<article'))).not.toContain('mermaid-toolbar')
+})
+
+test('markdown download', async ({ page }) => {
+  const alias = await noteWith(page, '# Plain\ntext')
+  const resp = await page.request.get(`/api/notes/${alias}/download.md`)
+  expect(await resp.text()).toBe('# Plain\ntext')
+})

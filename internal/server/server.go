@@ -15,6 +15,7 @@ import (
 	"github.com/greyhavenhq/greydoc/internal/collab"
 	"github.com/greyhavenhq/greydoc/internal/config"
 	"github.com/greyhavenhq/greydoc/internal/history"
+	"github.com/greyhavenhq/greydoc/internal/mirror"
 	"github.com/greyhavenhq/greydoc/internal/oidc"
 	"github.com/greyhavenhq/greydoc/internal/permission"
 	"github.com/greyhavenhq/greydoc/internal/secrets"
@@ -32,7 +33,7 @@ type Server struct {
 	guestMax      permission.Level
 	defaultGroups map[string]permission.Level
 	hub           *collab.Hub
-	mirror        noteMirror
+	mirror        *mirror.Mirror
 	history       *history.Processor
 	stop          chan struct{}
 	workers       sync.WaitGroup
@@ -41,10 +42,7 @@ type Server struct {
 	seenBase      atomic.Value
 }
 
-type noteMirror interface {
-	Touch(noteID string)
-	Remove(noteID string)
-}
+
 
 func Open(cfg config.Config) (*Server, error) {
 	secret, err := secrets.LoadOrCreate(cfg.Secret, cfg.SecretFile)
@@ -88,6 +86,11 @@ func Open(cfg config.Config) (*Server, error) {
 		}
 	}
 	s.history = &history.Processor{Store: st}
+	s.mirror = mirror.New(st, cfg.DataDir, cfg.MirrorDebounce)
+	if err := s.mirror.Rebuild(ctx); err != nil {
+		st.Close()
+		return nil, fmt.Errorf("rebuild the markdown mirror: %w", err)
+	}
 	if cfg.AIEnabled() {
 		s.ai = ai.New(cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.LLMModel)
 	}
@@ -108,6 +111,7 @@ func (s *Server) Close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	s.hub.Shutdown(ctx)
+	s.mirror.Close()
 	return s.store.Close()
 }
 
@@ -157,9 +161,7 @@ func (s *Server) ProcessHistory(ctx context.Context, force bool) error {
 
 // afterSave runs when a room stored a snapshot.
 func (s *Server) afterSave(noteID string) {
-	if s.mirror != nil {
-		s.mirror.Touch(noteID)
-	}
+	s.mirror.Touch(noteID)
 }
 
 func (s *Server) Handler() http.Handler { return s.checkOrigin(s.withIdentity(s.mux)) }
@@ -198,6 +200,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/notes/{alias}", s.handleGetNote)
 	s.mux.HandleFunc("DELETE /api/notes/{alias}", s.handleDeleteNote)
 	s.mux.HandleFunc("GET /api/notes/{alias}/content", s.handleGetNoteContent)
+	s.mux.HandleFunc("GET /api/notes/{alias}/download.md", s.handleDownloadMarkdown)
+	s.mux.HandleFunc("POST /api/notes/{alias}/media", s.handleUpload)
+	s.mux.HandleFunc("GET /uploads/{name}", s.handleServeUpload)
 	s.mux.HandleFunc("POST /api/notes/{alias}/aliases", s.handleAliases)
 	s.mux.HandleFunc("PUT /api/notes/{alias}/aliases", s.handleAliases)
 	s.mux.HandleFunc("DELETE /api/notes/{alias}/aliases/{name}", s.handleAliases)

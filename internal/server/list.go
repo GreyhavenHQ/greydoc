@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"sort"
 
 	"github.com/greyhavenhq/greydoc/internal/permission"
 	"github.com/greyhavenhq/greydoc/internal/store"
@@ -40,6 +41,22 @@ func (s *Server) handleListNotes(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		internalError(w, err)
 		return
+	}
+	if f.IDs != nil {
+		rank := map[string]int{}
+		for i, id := range f.IDs {
+			rank[id] = i
+		}
+		sort.SliceStable(notes, func(i, j int) bool { return rank[notes[i].ID] < rank[notes[j].ID] })
+		ids := make([]string, len(notes))
+		for i, n := range notes {
+			ids[i] = n.ID
+		}
+		if snips, err := s.store.SearchSnippets(r.Context(), q.Get("q"), ids); err == nil {
+			for i := range notes {
+				notes[i].Snippet = snips[notes[i].ID]
+			}
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"notes": notes})
 }

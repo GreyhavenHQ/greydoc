@@ -1,9 +1,13 @@
+import { Suspense, lazy } from 'react'
 import { Navigate, Route, Routes, useParams } from 'react-router-dom'
 import { MeProvider } from '@/lib/me'
 import Home from '@/pages/Home'
 import NewNote from '@/pages/NewNote'
 import Editor from '@/pages/Editor'
 import Settings from '@/pages/Settings'
+import View from '@/pages/View'
+
+const Slides = lazy(() => import('@/pages/Slides'))
 
 export default function App() {
   return (
@@ -13,6 +17,15 @@ export default function App() {
         <Route path="/new" element={<NewNote />} />
         <Route path="/n/:alias" element={<Editor />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/s/:alias" element={<View />} />
+        <Route
+          path="/p/:alias"
+          element={
+            <Suspense fallback={null}>
+              <Slides />
+            </Suspense>
+          }
+        />
         <Route path="/:alias" element={<ShortLink />} />
         <Route path="*" element={<Home />} />
       </Routes>

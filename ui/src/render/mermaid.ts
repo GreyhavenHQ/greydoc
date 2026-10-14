@@ -22,29 +22,42 @@ export function themeMode(): Mode {
   return document.documentElement.classList.contains('dark') ? 'dark' : 'light'
 }
 
+const inflight = new Map<string, Promise<string>>()
+// Mermaid keeps global state while rendering, so renders run one at a time.
+let queue: Promise<unknown> = Promise.resolve()
+
 // renderMermaid returns SVG markup, or an error box. Results are cached per theme and source.
-export async function renderMermaid(src: string, mode: Mode = themeMode()): Promise<string> {
+export function renderMermaid(src: string, mode: Mode = themeMode()): Promise<string> {
   const key = mode + '\n' + src
   const hit = cache.get(key)
-  if (hit) return hit
-  const m = await load()
-  if (initialized !== mode) {
-    m.initialize(mermaidConfig(mode))
-    initialized = mode
-  }
-  let out: string
-  try {
-    const { svg } = await m.render('mermaid-' + ++counter, src)
-    out = svg
-  } catch (e) {
-    const msg = (e instanceof Error ? e.message : String(e)).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' })[c]!)
-    out = `<div class="mermaid-error"><strong>Diagram error</strong><pre>${msg}</pre></div>`
-  } finally {
-    document.getElementById('dmermaid-' + counter)?.remove()
-  }
-  if (cache.size > 200) cache.delete(cache.keys().next().value!)
-  cache.set(key, out)
-  return out
+  if (hit) return Promise.resolve(hit)
+  const pending = inflight.get(key)
+  if (pending) return pending
+  const job = queue.then(async () => {
+    const m = await load()
+    if (initialized !== mode) {
+      m.initialize(mermaidConfig(mode))
+      initialized = mode
+    }
+    const id = 'mermaid-' + ++counter
+    let out: string
+    try {
+      const { svg } = await m.render(id, src)
+      out = svg
+    } catch (e) {
+      const msg = (e instanceof Error ? e.message : String(e)).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' })[c]!)
+      out = `<div class="mermaid-error"><strong>Diagram error</strong><pre>${msg}</pre></div>`
+    } finally {
+      document.getElementById('d' + id)?.remove()
+    }
+    if (cache.size > 200) cache.delete(cache.keys().next().value!)
+    cache.set(key, out)
+    inflight.delete(key)
+    return out
+  })
+  queue = job.catch(() => undefined)
+  inflight.set(key, job)
+  return job
 }
 
 function cached(src: string, mode: Mode): string | undefined {

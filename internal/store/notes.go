@@ -277,8 +277,8 @@ type NoteState struct {
 
 func (s *Store) SaveNoteState(ctx context.Context, id string, st NoteState) error {
 	return s.tx(ctx, func(tx *sql.Tx) error {
-		res, err := tx.ExecContext(ctx, s.q(`UPDATE note SET ystate = ?, content = ?, title = ?, description = ?, updated_at = ?
-			WHERE id = ?`), st.YState, st.Content, st.Title, st.Description, Now(), id)
+		res, err := tx.ExecContext(ctx, s.q(`UPDATE note SET ystate = ?, content = ?, title = ?, description = ?, search_tags = ?, updated_at = ?
+			WHERE id = ?`), st.YState, st.Content, st.Title, st.Description, strings.Join(st.Tags, " "), Now(), id)
 		if err != nil {
 			return err
 		}
@@ -286,6 +286,9 @@ func (s *Store) SaveNoteState(ctx context.Context, id string, st NoteState) erro
 			return ErrNotFound
 		}
 		if _, err := tx.ExecContext(ctx, s.q(`DELETE FROM note_tag WHERE note_id = ?`), id); err != nil {
+			return err
+		}
+		if err := s.indexNote(ctx, tx, id, st); err != nil {
 			return err
 		}
 		seen := map[string]bool{}
@@ -312,4 +315,21 @@ func nullStr(s string) any {
 		return nil
 	}
 	return s
+}
+
+func (s *Store) AllNoteIDs(ctx context.Context) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id FROM note`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }

@@ -40,6 +40,7 @@ type NoteSummary struct {
 	UpdatedAt    string   `json:"updated_at"`
 	VisitedAt    string   `json:"visited_at,omitempty"`
 	Pinned       bool     `json:"pinned"`
+	Snippet      string   `json:"snippet,omitempty"`
 }
 
 // visibleWhere matches notes the viewer can read through ownership or a grant.

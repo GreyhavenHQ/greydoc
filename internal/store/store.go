@@ -69,7 +69,7 @@ func (s *Store) Dialect() string { return s.dialect }
 
 func (s *Store) Init(ctx context.Context) error {
 	for _, stmt := range strings.Split(schemaFor(s.dialect), ";") {
-		stmt = strings.TrimSpace(stmt)
+		stmt = strings.ReplaceAll(strings.TrimSpace(stmt), triggerSemicolon, ";")
 		if stmt == "" {
 			continue
 		}

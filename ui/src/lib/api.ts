@@ -71,6 +71,7 @@ export interface NoteSummary {
   updated_at: string
   visited_at?: string
   pinned: boolean
+  snippet?: string
 }
 
 export interface Note {

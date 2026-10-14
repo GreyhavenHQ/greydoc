@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS note (
     history_state BLOB,
     history_upto BIGINT NOT NULL DEFAULT 0,
     agent_policy TEXT NOT NULL DEFAULT 'suggest',
+    search_tags TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -217,6 +218,17 @@ CREATE TABLE IF NOT EXISTS oauth_code (
     resource TEXT NOT NULL DEFAULT '',
     expires_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS media (
+    id TEXT PRIMARY KEY,
+    note_id TEXT NOT NULL REFERENCES note(id) ON DELETE CASCADE,
+    stored_name TEXT NOT NULL UNIQUE,
+    filename TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    size BIGINT NOT NULL,
+    uploaded_by TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_media_note ON media(note_id);
 CREATE TABLE IF NOT EXISTS note_tag (
     note_id TEXT NOT NULL REFERENCES note(id) ON DELETE CASCADE,
     tag TEXT NOT NULL,
@@ -230,9 +242,18 @@ func schemaFor(dialect string) string {
 		s := strings.ReplaceAll(Schema, " BLOB", " BYTEA")
 		return strings.ReplaceAll(s, "SERIALPK", "BIGSERIAL PRIMARY KEY") + postgresExtra
 	}
-	return strings.ReplaceAll(Schema, "SERIALPK", "INTEGER PRIMARY KEY AUTOINCREMENT") + sqliteExtra
+	// The trigger body needs a semicolon, which Init would split on. It is added back in Init.
+	return strings.ReplaceAll(Schema, "SERIALPK", "INTEGER PRIMARY KEY AUTOINCREMENT") + strings.Replace(sqliteExtra, "%s", triggerSemicolon, 1)
 }
 
-const sqliteExtra = ``
+const sqliteExtra = `;
+CREATE VIRTUAL TABLE IF NOT EXISTS note_fts USING fts5(note_id UNINDEXED, title, tags, content, tokenize = 'unicode61 remove_diacritics 2');
+CREATE TRIGGER IF NOT EXISTS note_fts_delete AFTER DELETE ON note BEGIN DELETE FROM note_fts WHERE note_id = old.id%s END
+`
 
-const postgresExtra = ``
+const postgresExtra = `;
+CREATE INDEX IF NOT EXISTS idx_note_search ON note USING GIN (to_tsvector('simple', title || ' ' || search_tags || ' ' || content))
+`
+
+// triggerSemicolon stands for the semicolon inside a trigger body until Init splits the DDL.
+const triggerSemicolon = "\x00"

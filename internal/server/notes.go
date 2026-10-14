@@ -93,6 +93,7 @@ func (s *Server) createNote(r *http.Request, id *Identity, content, alias string
 		}
 		n.Title, n.Description, n.Tags = meta.Title, meta.Description, meta.Tags
 	}
+	s.mirror.Touch(n.ID)
 	return n, nil
 }
 
@@ -115,10 +116,8 @@ func (s *Server) writeNoteError(w http.ResponseWriter, err error) {
 
 // noteContent returns the live text when the note is open in the hub, else the stored text.
 func (s *Server) noteContent(n *store.Note) string {
-	if s.hub != nil {
-		if text, ok := s.hub.LiveText(n.ID); ok {
-			return text
-		}
+	if text, ok := s.hub.LiveText(n.ID); ok {
+		return text
 	}
 	return n.Content
 }
@@ -157,22 +156,20 @@ func (s *Server) handleDeleteNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := identityFrom(r.Context())
+	media, _ := s.store.NoteMedia(r.Context(), n.ID)
 	if err := s.store.DeleteNote(r.Context(), n.ID); err != nil {
 		s.writeNoteError(w, err)
 		return
 	}
+	s.removeNoteMedia(media)
 	_ = s.store.AddEvent(r.Context(), id.event(n.ID, "note.delete", map[string]any{"alias": n.PrimaryAlias, "title": n.Title}))
 	s.notifyNoteDeleted(n)
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) notifyNoteDeleted(n *store.Note) {
-	if s.hub != nil {
-		s.hub.CloseNote(n.ID, "deleted")
-	}
-	if s.mirror != nil {
-		s.mirror.Remove(n.ID)
-	}
+	s.hub.CloseNote(n.ID, "deleted")
+	s.mirror.Remove(n.ID)
 }
 
 func (s *Server) handleAliases(w http.ResponseWriter, r *http.Request) {
@@ -222,9 +219,7 @@ func (s *Server) handleAliases(w http.ResponseWriter, r *http.Request) {
 		}
 		_ = s.store.AddEvent(r.Context(), id.event(n.ID, "alias.remove", map[string]any{"alias": strings.ToLower(name)}))
 	}
-	if s.mirror != nil {
-		s.mirror.Touch(n.ID)
-	}
+	s.mirror.Touch(n.ID)
 	aliases, _ := s.store.Aliases(r.Context(), n.ID)
 	writeJSON(w, http.StatusOK, map[string]any{"aliases": aliases})
 }

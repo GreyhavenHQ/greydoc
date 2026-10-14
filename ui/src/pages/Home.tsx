@@ -190,7 +190,7 @@ export default function Home() {
                   className="flex h-full flex-col gap-2 rounded-lg border bg-card p-4 transition-colors hover:border-primary/60"
                 >
                   <div className="pr-6 font-medium leading-snug">{noteTitle(n)}</div>
-                  {n.description && <p className="line-clamp-2 text-sm text-muted-foreground">{n.description}</p>}
+                  {(n.snippet || n.description) && <p className="line-clamp-3 text-sm text-muted-foreground">{n.snippet || n.description}</p>}
                   <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1 text-xs text-muted-foreground">
                     {n.tags.map((t) => (
                       <span

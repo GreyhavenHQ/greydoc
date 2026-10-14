@@ -127,7 +127,9 @@ func (s *Store) Thread(ctx context.Context, noteID, threadID string) (*Thread, e
 	return &ths[0], nil
 }
 
-func (s *Store) Threads(ctx context.Context, noteID string) ([]Thread, error) { return s.threads(ctx, noteID, "") }
+func (s *Store) Threads(ctx context.Context, noteID string) ([]Thread, error) {
+	return s.threads(ctx, noteID, "")
+}
 
 func (s *Store) threads(ctx context.Context, noteID, only string) ([]Thread, error) {
 	q := `SELECT id, anchor_start, anchor_end, quote, status, created_by, created_at, resolved_by, COALESCE(resolved_at, '')

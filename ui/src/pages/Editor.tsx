@@ -36,6 +36,7 @@ import { Timeline } from '@/components/Timeline'
 import { CommentsPanel, type Draft, type Suggestion, type Thread } from '@/components/CommentsPanel'
 import { SuggestComposer, type SuggestDraft } from '@/components/SuggestComposer'
 import { AiMenu } from '@/components/AiMenu'
+import { imageUpload } from '@/editor/upload'
 import { captureEdits, setSuggestionRanges, suggestionDecorations, type SuggestionAction } from '@/editor/suggestions'
 import { anchorRange, resolvePoint, resolveRange } from '@/editor/anchors'
 import { setThreadRanges, threadDecorations } from '@/editor/threads'
@@ -270,6 +271,11 @@ export default function Editor() {
   const suggestionsRef = useRef(suggestions)
   suggestionsRef.current = suggestions
 
+  const aliasRef = useRef(alias)
+  aliasRef.current = note?.alias ?? alias
+  const canEditRef = useRef(false)
+  canEditRef.current = atLeast(level, 'write') && !suggesting
+
   const isCommenter = level === 'comment'
   const suggestingRef = useRef(false)
   suggestingRef.current = isCommenter || suggesting
@@ -327,6 +333,10 @@ export default function Editor() {
         setCommentsOpen(true)
       }),
       selectionListener(setSelection),
+      imageUpload(
+        () => aliasRef.current,
+        () => canEditRef.current,
+      ),
       suggestionDecorations((id: string, a: SuggestionAction) => {
         const sg = suggestionsRef.current.find((x) => x.id === id)
         if (!sg) return
