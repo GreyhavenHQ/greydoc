@@ -7,7 +7,7 @@ export interface NoteHit {
   title: string
 }
 
-// noteLinkSource completes [[ with notes from search. Picking one writes [[alias]].
+// noteLinkSource completes [[ with notes from search. Picking one writes [[alias|Title]], so the source says which note it is.
 export function noteLinkSource(search: (query: string) => Promise<NoteHit[]>, self: () => string) {
   return async (ctx: CompletionContext): Promise<CompletionResult | null> => {
     const m = ctx.matchBefore(/\[\[[^\]|\n]{0,64}$/)
@@ -25,12 +25,18 @@ export function noteLinkSource(search: (query: string) => Promise<NoteHit[]>, se
           // Closing brackets may already follow, from bracket auto-closing.
           const after = view.state.sliceDoc(to, to + 2)
           const end = to + (after === ']]' ? 2 : after.startsWith(']') ? 1 : 0)
-          const insert = n.alias + ']]'
+          const insert = noteLink(n).slice(2)
           view.dispatch({ changes: { from, to: end, insert }, selection: { anchor: from + insert.length } })
         },
       })),
     }
   }
+}
+
+// noteLink is the [[alias|Title]] text for a note. ] and | would end the link, so the title drops them.
+export function noteLink(n: NoteHit): string {
+  const label = (n.title || '').replace(/[\]|\n]+/g, ' ').replace(/\s+/g, ' ').trim()
+  return label && label !== n.alias ? `[[${n.alias}|${label}]]` : `[[${n.alias}]]`
 }
 
 export function noteLinkCompletion(search: (query: string) => Promise<NoteHit[]>, self: () => string): Extension {

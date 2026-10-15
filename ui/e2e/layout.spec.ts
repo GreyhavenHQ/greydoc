@@ -88,6 +88,6 @@ test('[[alias]] links to another note and the editor completes it', async ({ pag
   const option = page.locator('.cm-tooltip-autocomplete li', { hasText: 'Target note for links' })
   await expect(option).toBeVisible()
   await page.keyboard.press('Enter')
-  await expect(page.getByTestId('editor').locator('.cm-content')).toContainText('Also [[link-target]]')
-  await expect(page.getByTestId('editor').locator('.cm-content')).not.toContainText('[[link-target]]]')
+  await expect(page.getByTestId('editor').locator('.cm-content')).toContainText('Also [[link-target|Target note for links]]')
+  await expect(page.getByTestId('editor').locator('.cm-content')).not.toContainText(']]]')
 })

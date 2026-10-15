@@ -52,7 +52,7 @@ The people button shows the authors view. Each part of the text gets the color o
 
 ### Links to other notes
 
-Write `[[` in the editor. A list of notes opens, and the search narrows it as you type. Pick a note to insert a link such as `[[q4-roadmap]]`. The link shows the current title of the note. If the title changes, the link shows the new title. To choose the text, write `[[q4-roadmap|the roadmap]]`. A link to an address with no note shows as a dashed link.
+Write `[[` in the editor. A list of notes opens, and the search narrows it as you type. Pick a note to insert a link such as `[[q4-roadmap|Q4 platform roadmap]]`. The part before `|` is the address of the note, and the part after it is the text of the link. Edit the text as you like. If someone renames the note, the address stays the same, and the link keeps working. A link without text, such as `[[q4-roadmap]]`, shows the current title of the note. A link to an address with no note shows as a dashed link.
 
 ### Images
 
