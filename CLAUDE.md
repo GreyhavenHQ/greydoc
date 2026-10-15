@@ -33,6 +33,7 @@ docker compose -f docker-compose.dev.yml up app                     # http://127
 
 - `docker-compose.dev.yml` is the project `greydoc-dev`. Its Postgres is a throwaway test database. Never point tests at the database of `docker-compose.yml`.
 - `just lint` MUST pass. Postgres changes MUST pass `just test-pg`.
+- Commits MUST follow Conventional Commits: `type(scope): subject`, imperative, lowercase. Types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `style`, `perf`. Scopes are packages or `ui`. One logical change per commit.
 
 - The database is the source of truth. The data directory holds uploads and the secret only.
 - Every text change is stored with its author and source (`human`, `ai_assisted`, `agent`, `restore`).
