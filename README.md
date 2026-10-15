@@ -43,6 +43,66 @@ To use it as a team, configure OIDC. See [docs/configuration.md](docs/configurat
 | Delete | Menu, "Move to trash". The trash (account menu) restores notes for 30 days. "Delete for good" removes a note at once. |
 | Audit | Account menu, "Audit log": every action on notes and accounts, with filters, and Restore for trashed notes. |
 
+## Compatibility with HedgeDoc 1
+
+"Same" means it works as in HedgeDoc 1. "Different" means it works, in another way. "Missing" means greydoc does not have it yet.
+
+### Addresses and API
+
+| HedgeDoc 1 | greydoc | Notes |
+|---|---|---|
+| `/new` | Same | `/new?alias=<name>` picks the address. |
+| `/<id>` (alias, note ID or short ID) | Same | IDs are case-insensitive. Import notes with all their IDs, see [import](docs/import-hedgedoc.md). |
+| `?edit`, `?view`, `?both` | Same | greydoc adds a live mode and remembers the last mode. |
+| `/<id>/publish`, `/s/<shortid>` | Same | |
+| `/<id>/slide`, `/p/<shortid>` | Same | |
+| `/<id>/download` | Same | |
+| `/<id>/info` | Same | `viewcount` counts people who opened the note. |
+| `POST /new`, `POST /new/<alias>` | Same | Needs sign-in in OIDC mode. |
+| Free URL: opening an unknown `/<name>` creates it | Missing | Use `/new?alias=<name>`. |
+| `/<id>/revision`, `/history`, `/me`, `/status` | Different | greydoc has its own JSON API under `/api`. |
+| LZString note IDs from early versions | Missing | |
+
+### Notes and permissions
+
+| HedgeDoc 1 | greydoc | Notes |
+|---|---|---|
+| Permission modes (freely, editable, limited, locked, protected, private) | Different | Grants per person, group, signed-in users and anyone with the address, at view, comment or edit level. Each mode maps to grants, see [import](docs/import-hedgedoc.md). |
+| Owner | Same | The owner manages access and the trash. |
+| Guest editing | Different | Off by default. `GREYDOC_GUEST_MAX=write` allows it. |
+| Real-time collaboration and cursors | Same | Yjs instead of OT. |
+| Revision history and revert | Same | Timeline with diffs, authors and restore. |
+| Recent notes and pins | Same | Home page, "Recent". |
+| Delete | Different | Notes go to a trash for 30 days. |
+| Sign-in: GitHub, GitLab, LDAP, SAML, email | Missing | OIDC only, or local mode with no sign-in. Most of these providers can sit behind an OIDC server. |
+| Image upload | Different | Stored in the data directory. S3, imgur and similar backends are missing. |
+| Export to Gist or Dropbox, import from them | Missing | |
+| PDF export | Missing | Disabled by default in HedgeDoc 1. |
+
+### Markdown
+
+| HedgeDoc 1 | greydoc | Notes |
+|---|---|---|
+| CommonMark, tables, strikethrough, task lists, links | Same | |
+| `[toc]`, emoji, footnotes, `==mark==`, `^sup^`, `~sub~`, `++ins++`, abbreviations, definition lists | Same | |
+| Front matter `title`, `description`, `tags`; `###### tags:` line | Same | |
+| `:::success`, `:::info`, `:::warning`, `:::danger`, `:::spoiler` | Same | GitHub `> [!NOTE]` alerts work too. |
+| Image size `![](url =200x100)` | Same | |
+| Math with `$…$` and `$$…$$` | Same | KaTeX. |
+| Code highlighting | Same | |
+| Code line numbers with ` ```js= ` | Different | The language works, line numbers do not show. |
+| `csvpreview` | Same | |
+| Mermaid | Same | Greyhaven theme, zoom, full screen, copy as SVG or PNG. |
+| Graphviz, PlantUML, flowchart.js, js-sequence, abc, Vega-Lite, fretboard | Missing | |
+| Embeds: `{%youtube %}`, Vimeo, Gist, SlideShare, Speaker Deck, PDF | Missing | |
+| Front matter `type: slide` | Missing | Use slide mode from the menu. |
+| `slideOptions` | Different | `transition` and `slideNumber` only. Themes are missing. |
+| `breaks: false`, `lang`, `dir`, `robots`, `GA`, `disqus`, `opengraph` | Missing | Line breaks are always on. `opengraph.title` sets the title. |
+
+### Not in HedgeDoc 1
+
+Comments, suggestions, AI actions, live mode, authorship marks, the agent policy, MCP, the audit log and the trash are new in greydoc.
+
 ## Connect an agent
 
 Claude Code:
