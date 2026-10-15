@@ -4,28 +4,42 @@ greydoc serves the Model Context Protocol at `/mcp` (Streamable HTTP). An agent 
 
 ## Connect
 
-Claude Code:
+The settings page shows these steps with your server's URL. In local mode, skip the sign-in step.
 
-```bash
-claude mcp add --transport http greydoc https://notes.example.com/mcp
-```
+### opencode
 
-opencode: add the server to `opencode.json` (in the project) or `~/.config/opencode/opencode.json` (for all projects):
+1. Add the server to `opencode.json`, in the project or in `~/.config/opencode/opencode.json` for all projects:
 
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "mcp": {
-    "greydoc": {
-      "type": "remote",
-      "url": "https://notes.example.com/mcp",
-      "enabled": true
-    }
-  }
-}
-```
+   ```json
+   {
+     "$schema": "https://opencode.ai/config.json",
+     "mcp": {
+       "greydoc": {
+         "type": "remote",
+         "url": "https://notes.example.com/mcp",
+         "enabled": true
+       }
+     }
+   }
+   ```
 
-opencode asks you to sign in the first time it uses the server. To sign in before that, run `opencode mcp auth greydoc`. `opencode mcp list` shows the status, and `opencode mcp logout greydoc` removes the stored tokens.
+2. Sign in. Run `opencode mcp auth` and pick `greydoc` in the list. A browser window opens. Press "Allow".
+3. Start opencode and ask about your notes.
+
+If opencode reports that greydoc needs a sign-in, do step 2 again. `opencode mcp list` shows the status, and `opencode mcp logout greydoc` removes the stored tokens.
+
+### Claude Code
+
+1. Add the server:
+
+   ```bash
+   claude mcp add --transport http greydoc https://notes.example.com/mcp
+   ```
+
+2. Sign in. In Claude Code, run `/mcp`, pick `greydoc`, then "Authenticate". A browser window opens. Press "Allow".
+3. Ask Claude about your notes.
+
+### Personal access token in opencode
 
 To use a personal access token in opencode instead of OAuth, turn OAuth off and send the token as a header:
 
@@ -88,7 +102,7 @@ The policy only lowers access. An agent never gets more than the person it acts 
 
 `old_text` and `quote` must match the note exactly. If the text appears more than once, quote more context or pass `occurrence` (1 is the first match).
 
-A note can be given as its alias, as `/n/<alias>`, or as its full URL. A view-only link works too and gives read access.
+A note can be given as its alias, as `/n/<alias>`, or as its full URL. A view-only link, such as `https://notes.example.com/v/<token>`, works too and gives read access.
 
 ## Import from HedgeDoc
 

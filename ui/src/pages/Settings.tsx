@@ -4,8 +4,8 @@ import { toast } from 'sonner'
 import { AppHeader } from '@/components/AppHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { api } from '@/lib/api'
 import { loginHref, useMe } from '@/lib/me'
 import { relativeTime } from '@/lib/time'
@@ -18,6 +18,23 @@ interface Token {
   scope: string
   created_at: string
   last_used_at?: string
+}
+
+// Steps numbers its Step children, one action each.
+function Steps({ children }: { children: React.ReactNode }) {
+  return <ol className="mt-4 flex flex-col gap-5 [counter-reset:step]">{children}</ol>
+}
+
+function Step({ title, children }: { title: string; children?: React.ReactNode }) {
+  return (
+    <li className="flex gap-3 [counter-increment:step]">
+      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground before:content-[counter(step)]" />
+      <div className="flex min-w-0 flex-1 flex-col gap-2 pt-0.5">
+        <div className="font-medium">{title}</div>
+        {children}
+      </div>
+    </li>
+  )
 }
 
 function CopyLine({ value }: { value: string }) {
@@ -101,31 +118,64 @@ export default function Settings() {
               Agents read, comment, suggest and edit with your rights. Each note's owner decides how far agents may go.
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col gap-3 text-sm">
-            <Label>Server URL</Label>
-            <CopyLine value={mcpURL} />
-            <Label className="mt-2">Claude Code</Label>
-            <CopyLine value={`claude mcp add --transport http greydoc ${mcpURL}`} />
-            <Label className="mt-2">opencode</Label>
-            <CopyBlock
-              value={JSON.stringify(
-                {
-                  $schema: 'https://opencode.ai/config.json',
-                  mcp: { greydoc: { type: 'remote', url: mcpURL, enabled: true } },
-                },
-                null,
-                2,
-              )}
-            />
-            <p className="text-muted-foreground">
-              Add this to <code className="font-mono text-xs">opencode.json</code>
-              {me?.local_mode ? '.' : <>, then run <code className="font-mono text-xs">opencode mcp auth greydoc</code> to sign in.</>}
-            </p>
-            <p className="text-muted-foreground">
-              {me?.local_mode
-                ? 'Local mode: no sign-in is needed.'
-                : 'The client opens a browser window to sign you in. Clients without OAuth can send a personal token as “Authorization: Bearer …”.'}
-            </p>
+          <CardContent className="text-sm">
+            <Tabs defaultValue="opencode" data-testid="mcp-setup">
+              <TabsList>
+                <TabsTrigger value="opencode">opencode</TabsTrigger>
+                <TabsTrigger value="claude">Claude Code</TabsTrigger>
+                <TabsTrigger value="other">Other clients</TabsTrigger>
+              </TabsList>
+              <TabsContent value="opencode">
+                <Steps>
+                  <Step title="Add greydoc to opencode.json, in your project or in ~/.config/opencode/">
+                    <CopyBlock
+                      value={JSON.stringify({ $schema: 'https://opencode.ai/config.json', mcp: { greydoc: { type: 'remote', url: mcpURL, enabled: true } } }, null, 2)}
+                    />
+                  </Step>
+                  {!me?.local_mode && (
+                    <Step title="Sign in: run this command and pick greydoc in the list">
+                      <CopyLine value="opencode mcp auth" />
+                      <p className="text-muted-foreground">A browser window opens. Choose Allow. Run the command again when opencode reports that greydoc needs a sign-in.</p>
+                    </Step>
+                  )}
+                  <Step title="Start opencode and ask about your notes">
+                    <p className="text-muted-foreground">For example: “List my greydoc notes about the roadmap.”</p>
+                  </Step>
+                </Steps>
+              </TabsContent>
+              <TabsContent value="claude">
+                <Steps>
+                  <Step title="Add greydoc to Claude Code">
+                    <CopyLine value={`claude mcp add --transport http greydoc ${mcpURL}`} />
+                  </Step>
+                  {!me?.local_mode && (
+                    <Step title="Sign in: in Claude Code, run /mcp, pick greydoc, then Authenticate">
+                      <CopyLine value="/mcp" />
+                      <p className="text-muted-foreground">A browser window opens. Choose Allow. Do it again when Claude Code reports that greydoc needs a sign-in.</p>
+                    </Step>
+                  )}
+                  <Step title="Ask Claude about your notes">
+                    <p className="text-muted-foreground">For example: “List my greydoc notes about the roadmap.”</p>
+                  </Step>
+                </Steps>
+              </TabsContent>
+              <TabsContent value="other">
+                <Steps>
+                  <Step title="Add a remote MCP server (Streamable HTTP) with this URL">
+                    <CopyLine value={mcpURL} />
+                  </Step>
+                  {!me?.local_mode && (
+                    <Step title="Sign in">
+                      <p className="text-muted-foreground">
+                        Clients with OAuth sign in through the browser. Other clients send a personal access token, created below, as{' '}
+                        <code className="font-mono text-xs">Authorization: Bearer …</code>
+                      </p>
+                    </Step>
+                  )}
+                </Steps>
+              </TabsContent>
+            </Tabs>
+            {me?.local_mode && <p className="mt-3 text-muted-foreground">Local mode: agents need no sign-in.</p>}
           </CardContent>
         </Card>
 
