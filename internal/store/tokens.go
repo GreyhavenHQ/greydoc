@@ -124,7 +124,8 @@ func (s *Store) RotateRefreshToken(ctx context.Context, hash string) (*Token, er
 	if err != nil {
 		return nil, err
 	}
-	res, err := s.db.ExecContext(ctx, s.q(`UPDATE api_token SET expires_at = ? WHERE id = ? AND expires_at > ?`), Now(), t.ID, Now())
+	now := Now()
+	res, err := s.db.ExecContext(ctx, s.q(`UPDATE api_token SET expires_at = ?, rotated_at = ? WHERE id = ? AND expires_at > ?`), now, now, t.ID, now)
 	if err != nil {
 		return nil, err
 	}
@@ -132,6 +133,16 @@ func (s *Store) RotateRefreshToken(ctx context.Context, hash string) (*Token, er
 		return nil, ErrNotFound
 	}
 	return t, nil
+}
+
+// RotatedRefreshToken returns a refresh token that was rotated after since, or ErrNotFound.
+func (s *Store) RotatedRefreshToken(ctx context.Context, hash string, since time.Time) (*Token, error) {
+	t, err := scanToken(s.db.QueryRowContext(ctx, s.q(`SELECT `+tokenColumns+` FROM api_token t LEFT JOIN oauth_client c ON c.id = t.client_id
+		WHERE t.token_hash = ? AND t.kind = ? AND t.rotated_at <> '' AND t.rotated_at > ?`), hash, TokenRefresh, FormatTime(since)))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return t, err
 }
 
 // RevokeFamilyByHash deletes every token of the family a refresh token belongs to, live or expired.
@@ -150,9 +161,10 @@ func (s *Store) RevokeFamilyByHash(ctx context.Context, hash string) (bool, erro
 }
 
 // PurgeExpiredTokens deletes tokens and codes that expired more than a day ago. Rotated refresh tokens
-// stay for that day so that a reuse is still detected.
+// stay for a week, so that a reuse after the reuse grace is still recognized as a leak.
 func (s *Store) PurgeExpiredTokens(ctx context.Context) error {
-	_, err := s.db.ExecContext(ctx, s.q(`DELETE FROM api_token WHERE expires_at IS NOT NULL AND expires_at < ?`), FormatTime(time.Now().Add(-24*time.Hour)))
+	_, err := s.db.ExecContext(ctx, s.q(`DELETE FROM api_token WHERE expires_at IS NOT NULL AND expires_at < ? AND rotated_at < ?`),
+		FormatTime(time.Now().Add(-24*time.Hour)), FormatTime(time.Now().Add(-7*24*time.Hour)))
 	if err == nil {
 		_, err = s.db.ExecContext(ctx, s.q(`DELETE FROM oauth_code WHERE expires_at < ?`), Now())
 	}

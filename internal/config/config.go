@@ -51,6 +51,9 @@ type Config struct {
 	LLMBaseURL string
 	LLMAPIKey  string
 	LLMModel   string
+	// RefreshReuseGrace is how long a rotated OAuth refresh token still works. MCP clients that share
+	// stored tokens across sessions present the old token after another session rotated it.
+	RefreshReuseGrace time.Duration
 	// AIRatePerMinute caps AI requests per user.
 	AIRatePerMinute int
 
@@ -63,35 +66,36 @@ func (c Config) AIEnabled() bool { return c.LLMBaseURL != "" }
 
 func FromEnv() Config {
 	return Config{
-		DatabaseURL:      envStr("GREYDOC_DATABASE_URL", "greydoc.db"),
-		DataDir:          envStr("GREYDOC_DATA_DIR", "data"),
-		SecretFile:       envStr("GREYDOC_SECRET_FILE", ".greydoc/secret"),
-		Secret:           envStr("GREYDOC_SECRET", ""),
-		Host:             envStr("GREYDOC_HOST", "127.0.0.1"),
-		Port:             envInt("GREYDOC_PORT", 3000),
-		AllowNonlocal:    envBool("GREYDOC_ALLOW_NONLOCAL", false),
-		BaseURL:          strings.TrimRight(envStr("GREYDOC_BASE_URL", ""), "/"),
-		OIDCIssuer:       envStr("GREYDOC_OIDC_ISSUER", ""),
-		OIDCClientID:     envStr("GREYDOC_OIDC_CLIENT_ID", ""),
-		OIDCClientSecret: envStr("GREYDOC_OIDC_CLIENT_SECRET", ""),
-		OIDCRedirectURL:  envStr("GREYDOC_OIDC_REDIRECT_URL", ""),
-		OIDCScopes:       envStr("GREYDOC_OIDC_SCOPES", "openid profile email"),
-		OIDCGroupsClaim:  envStr("GREYDOC_OIDC_GROUPS_CLAIM", "groups"),
-		SessionTTL:       envDuration("GREYDOC_SESSION_TTL", 7*24*time.Hour),
-		AdminGroup:       envStr("GREYDOC_ADMIN_GROUP", ""),
-		TrashRetention:   envDuration("GREYDOC_TRASH_RETENTION", 30*24*time.Hour),
-		GuestMax:         envStr("GREYDOC_GUEST_MAX", "read"),
-		DefaultEveryone:  envStr("GREYDOC_DEFAULT_EVERYONE", "deny"),
-		DefaultSignedIn:  envStr("GREYDOC_DEFAULT_SIGNED_IN", "write"),
-		MaxNoteLength:    envInt("GREYDOC_MAX_NOTE_LENGTH", 1_000_000),
-		MaxUploadBytes:   envInt64("GREYDOC_MAX_UPLOAD_BYTES", 10<<20),
-		RoomIdleGrace:    envDuration("GREYDOC_ROOM_IDLE_GRACE", 10*time.Second),
-		RoomSaveEvery:    envDuration("GREYDOC_ROOM_SAVE_INTERVAL", 5*time.Second),
-		LLMBaseURL:       strings.TrimRight(envStr("LLM_API_BASEURL", ""), "/"),
-		LLMAPIKey:        envStr("LLM_API_KEY", ""),
-		LLMModel:         envStr("LLM_MODEL", ""),
-		AIRatePerMinute:  envInt("GREYDOC_AI_RATE_PER_MINUTE", 20),
-		LogLevel:         envStr("GREYDOC_LOG_LEVEL", "info"),
+		DatabaseURL:       envStr("GREYDOC_DATABASE_URL", "greydoc.db"),
+		DataDir:           envStr("GREYDOC_DATA_DIR", "data"),
+		SecretFile:        envStr("GREYDOC_SECRET_FILE", ".greydoc/secret"),
+		Secret:            envStr("GREYDOC_SECRET", ""),
+		Host:              envStr("GREYDOC_HOST", "127.0.0.1"),
+		Port:              envInt("GREYDOC_PORT", 3000),
+		AllowNonlocal:     envBool("GREYDOC_ALLOW_NONLOCAL", false),
+		BaseURL:           strings.TrimRight(envStr("GREYDOC_BASE_URL", ""), "/"),
+		OIDCIssuer:        envStr("GREYDOC_OIDC_ISSUER", ""),
+		OIDCClientID:      envStr("GREYDOC_OIDC_CLIENT_ID", ""),
+		OIDCClientSecret:  envStr("GREYDOC_OIDC_CLIENT_SECRET", ""),
+		OIDCRedirectURL:   envStr("GREYDOC_OIDC_REDIRECT_URL", ""),
+		OIDCScopes:        envStr("GREYDOC_OIDC_SCOPES", "openid profile email"),
+		OIDCGroupsClaim:   envStr("GREYDOC_OIDC_GROUPS_CLAIM", "groups"),
+		SessionTTL:        envDuration("GREYDOC_SESSION_TTL", 7*24*time.Hour),
+		AdminGroup:        envStr("GREYDOC_ADMIN_GROUP", ""),
+		TrashRetention:    envDuration("GREYDOC_TRASH_RETENTION", 30*24*time.Hour),
+		GuestMax:          envStr("GREYDOC_GUEST_MAX", "read"),
+		DefaultEveryone:   envStr("GREYDOC_DEFAULT_EVERYONE", "deny"),
+		DefaultSignedIn:   envStr("GREYDOC_DEFAULT_SIGNED_IN", "write"),
+		MaxNoteLength:     envInt("GREYDOC_MAX_NOTE_LENGTH", 1_000_000),
+		MaxUploadBytes:    envInt64("GREYDOC_MAX_UPLOAD_BYTES", 10<<20),
+		RoomIdleGrace:     envDuration("GREYDOC_ROOM_IDLE_GRACE", 10*time.Second),
+		RoomSaveEvery:     envDuration("GREYDOC_ROOM_SAVE_INTERVAL", 5*time.Second),
+		LLMBaseURL:        strings.TrimRight(envStr("LLM_API_BASEURL", ""), "/"),
+		LLMAPIKey:         envStr("LLM_API_KEY", ""),
+		LLMModel:          envStr("LLM_MODEL", ""),
+		AIRatePerMinute:   envInt("GREYDOC_AI_RATE_PER_MINUTE", 20),
+		RefreshReuseGrace: envDuration("GREYDOC_REFRESH_REUSE_GRACE", 24*time.Hour),
+		LogLevel:          envStr("GREYDOC_LOG_LEVEL", "info"),
 	}
 }
 

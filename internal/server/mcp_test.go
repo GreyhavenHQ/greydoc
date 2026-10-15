@@ -12,6 +12,8 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/greyhavenhq/greydoc/internal/config"
 )
 
 type bearer struct {
@@ -208,7 +210,8 @@ func pkce() (verifier, challenge string) {
 }
 
 func TestOAuthFlow(t *testing.T) {
-	e, idp := newOIDCEnv(t)
+	// No reuse window, so that a reuse of a rotated refresh token is treated as a leak at once.
+	e, idp := newOIDCEnv(t, func(c *config.Config) { c.RefreshReuseGrace = 0 })
 
 	_, body := e.get("/.well-known/oauth-protected-resource/mcp")
 	if !strings.Contains(body, `"resource":"`+e.ts.URL+`/mcp"`) || !strings.Contains(body, `"authorization_servers":["`+e.ts.URL+`"]`) {

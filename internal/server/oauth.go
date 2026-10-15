@@ -327,6 +327,13 @@ func (s *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 	case "refresh_token":
 		hash := secrets.Hash(s.secret, r.PostFormValue("refresh_token"))
 		old, err := s.store.TokenByHash(r.Context(), store.TokenRefresh, hash)
+		if errors.Is(err, store.ErrNotFound) && s.cfg.RefreshReuseGrace > 0 {
+			// Another session of the client rotated this token moments ago. Give this session its own new pair.
+			if rotated, rerr := s.store.RotatedRefreshToken(r.Context(), hash, time.Now().Add(-s.cfg.RefreshReuseGrace)); rerr == nil && rotated.ClientID == c.ID {
+				s.issueTokens(w, r, c, rotated.UserID, rotated.Scope, rotated.Family)
+				return
+			}
+		}
 		if errors.Is(err, store.ErrNotFound) {
 			// A rotated token presented again means it leaked. Every token of the family goes.
 			if known, err := s.store.RevokeFamilyByHash(r.Context(), hash); err == nil && known {

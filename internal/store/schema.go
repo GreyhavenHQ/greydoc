@@ -201,7 +201,8 @@ CREATE TABLE IF NOT EXISTS api_token (
     family TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL,
     expires_at TEXT,
-    last_used_at TEXT
+    last_used_at TEXT,
+    rotated_at TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_api_token_user ON api_token(user_id, kind);
 CREATE INDEX IF NOT EXISTS idx_api_token_family ON api_token(family);

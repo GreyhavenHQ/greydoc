@@ -26,7 +26,7 @@ The settings page shows these steps with your server's URL. In local mode, skip 
 2. Sign in. Run `opencode mcp auth` and pick `greydoc` in the list. A browser window opens. Press "Allow".
 3. Start opencode and ask about your notes.
 
-If opencode reports that greydoc needs a sign-in, do step 2 again. `opencode mcp list` shows the status, and `opencode mcp logout greydoc` removes the stored tokens.
+Several opencode sessions can share one sign-in. If opencode reports that greydoc needs a sign-in, do step 2 again. `opencode mcp list` shows the status, and `opencode mcp logout greydoc` removes the stored tokens.
 
 ### Claude Code
 
