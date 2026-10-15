@@ -122,8 +122,13 @@
 .columns > div > :first-child { margin-top: 0; }
 .columns img { border: 1px solid rgb(0 0 0 / 0.12); border-radius: 6px; }
 @media (max-width: 640px) { .markdown-body .columns { grid-template-columns: 1fr; } }
-.greydoc-deck .columns ul { margin-left: 1em; font-size: 0.8em; }
-.greydoc-deck .columns p { font-size: 0.85em; }
-.greydoc-deck .columns img { margin: 0; max-height: 78vh; box-shadow: 0 4px 24px rgb(0 0 0 / 0.08); }
+.columns.even { grid-template-columns: 1fr 1fr; align-items: start; }
+.reveal.greydoc-deck .columns { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 1.2em; }
+.reveal.greydoc-deck .columns.even { grid-template-columns: 1fr 1fr; }
+.reveal.greydoc-deck .columns h2 { font-size: 1.25em; }
+.reveal.greydoc-deck .columns ul { margin-left: 1em; font-size: 0.7em; }
+.reveal.greydoc-deck .columns li { margin-bottom: 0.35em; }
+.reveal.greydoc-deck .columns p { font-size: 0.75em; }
+.reveal.greydoc-deck .columns img { margin: 0; max-height: 80vh; box-shadow: 0 4px 24px rgb(0 0 0 / 0.08); }
 .greydoc-deck h1, .greydoc-deck h2 { letter-spacing: -0.01em; }
-.greydoc-deck em { color: #d95e2a; font-style: normal; }
+.reveal.greydoc-deck em { color: #d95e2a; font-style: normal; }
