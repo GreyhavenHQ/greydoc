@@ -649,14 +649,6 @@ export default function Editor() {
             <MessageSquare className="size-4" />
             <span className="text-xs tabular-nums">{threads.filter((t) => t.status === 'open').length + suggestions.length}</span>
           </Button>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" aria-label="Timeline" onClick={() => setTimelineOpen(true)}>
-                <History className="size-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Timeline</TooltipContent>
-          </Tooltip>
           {me?.authenticated && (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -674,6 +666,9 @@ export default function Editor() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuItem onSelect={() => setTimelineOpen(true)}>
+                <History className="size-4" /> Timeline
+              </DropdownMenuItem>
               {atLeast(level, 'comment') && (
                 <>
                   <DropdownMenuCheckboxItem

@@ -34,11 +34,11 @@ Live mode renders headings, lists, tables, math and diagrams in place. The line 
 
 ### Night mode
 
-The moon button in the top bar switches between light and dark. greydoc remembers your choice.
+The account menu switches between light and dark. greydoc remembers your choice.
 
 ### Markdown help
 
-The **?** button in the top bar opens a short guide to the Markdown syntax, with each example rendered next to its source.
+**Markdown help** in the account menu opens a short guide to the Markdown syntax, with each example rendered next to its source.
 
 ## Writing together
 
@@ -48,7 +48,7 @@ Everyone who opens a note edits the same text. You see the cursors and the names
 
 ### Who wrote what
 
-The people button shows the authors view. Each part of the text gets the color of the person who wrote it. Text that came from an AI suggestion is marked as AI-assisted. Text that an agent wrote is marked as agent text.
+**Who wrote what** in the **...** menu shows the authors view. Each part of the text gets the color of the person who wrote it. Text that came from an AI suggestion is marked as AI-assisted. Text that an agent wrote is marked as agent text.
 
 ### Links to other notes
 
@@ -102,7 +102,7 @@ An agent can add images and PDF files to a note. It asks greydoc for a one-time 
 
 ### Timeline
 
-The clock button opens the timeline of the note. It lists edit sessions, comments, suggestions and permission changes, with the person and the source of each. Open an entry to see the diff, or restore an older version. For an AI suggestion, the entry shows the action that you picked, your own words, and the model. **Show the full prompt** shows the exact text sent to the model.
+**Timeline** in the **...** menu opens the history of the note. It lists edit sessions, comments, suggestions and permission changes, with the person and the source of each. Open an entry to see the diff, or restore an older version. For an AI suggestion, the entry shows the action that you picked, your own words, and the model. **Show the full prompt** shows the exact text sent to the model.
 
 ### Audit log
 
