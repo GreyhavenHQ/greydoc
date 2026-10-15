@@ -201,6 +201,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/audit/mcp", s.handleMCPUsage)
 	s.mux.HandleFunc("POST /api/notes/{alias}/restore", s.handleRestoreNote)
 	s.mux.HandleFunc("POST /api/notes", s.handleCreateNote)
+	s.mux.HandleFunc("POST /new", s.handleHedgeDocNew)
+	s.mux.HandleFunc("POST /new/{alias}", s.handleHedgeDocNew)
 	s.mux.HandleFunc("PUT /api/notes/{alias}/pin", s.handlePin)
 	s.mux.HandleFunc("DELETE /api/notes/{alias}/pin", s.handlePin)
 	s.mux.HandleFunc("DELETE /api/notes/{alias}/visit", s.handleForgetVisit)

@@ -23,6 +23,9 @@ func (s *Server) uiHandler() http.Handler {
 			writeError(w, http.StatusNotFound, "not_found", "no such endpoint")
 			return
 		}
+		if s.hedgedocPath(w, r) {
+			return
+		}
 		path := strings.TrimPrefix(r.URL.Path, "/")
 		if path != "" {
 			if f, err := dist.Open(path); err == nil {

@@ -178,3 +178,10 @@ func (s *Store) TagCounts(ctx context.Context, v Viewer) ([]TagCount, error) {
 	}
 	return out, rows.Err()
 }
+
+// VisitCount is how many people opened the note, for HedgeDoc's view count.
+func (s *Store) VisitCount(ctx context.Context, noteID string) (int, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, s.q(`SELECT COUNT(*) FROM note_visit WHERE note_id = ?`), noteID).Scan(&n)
+	return n, err
+}
