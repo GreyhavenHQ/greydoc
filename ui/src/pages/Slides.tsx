@@ -58,13 +58,16 @@ export default function Slides() {
     const slides = splitSlides(text)
     el.innerHTML = slides
       .map((s) => {
-        const one = (b: string, n: string) => `<section>${slideHTML(b)}${n.trim() ? `<aside class="notes">${slideHTML(n)}</aside>` : ''}</section>`
+        // One wrapper per slide, so CSS can center it and its margins still collapse.
+        const one = (b: string, n: string) => `<section><div class="slide-body">${slideHTML(b)}</div>${n.trim() ? `<aside class="notes">${slideHTML(n)}</aside>` : ''}</section>`
         return s.vertical.length ? `<section>${s.vertical.map((v) => one(v.body, v.notes)).join('')}</section>` : one(s.body, s.notes)
       })
       .join('')
     void hydrateMermaid(el, { interactive: false, mode: modeRef.current })
     void hydrateNoteLinks(el)
     const opts = (splitFrontMatter(text).data?.slideOptions ?? {}) as Record<string, unknown>
+    // CSS centers the slides. reveal.js centers with a top offset, measured before images load and reset in the overview.
+    host.current!.classList.toggle('greydoc-center', opts.center !== false)
     if (!deck.current) {
       deck.current = new Reveal(host.current!, {
         hash: true,
@@ -72,7 +75,8 @@ export default function Slides() {
         transition: (opts.transition as 'slide') ?? 'slide',
         // HedgeDoc accepts true or a format such as c/t.
         slideNumber: slideNumberFormats.includes(opts.slideNumber as string) ? (opts.slideNumber as 'c/t') : Boolean(opts.slideNumber),
-        ...pick(opts, ['width', 'height', 'margin', 'center', 'controls', 'progress', 'backgroundTransition']),
+        ...pick(opts, ['width', 'height', 'margin', 'controls', 'progress', 'backgroundTransition']),
+        center: false,
         plugins: [RevealNotes],
         // D switches between the light and the dark deck.
         keyboard: { 68: () => setToggled((t) => !t) },

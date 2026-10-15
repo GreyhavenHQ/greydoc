@@ -136,10 +136,17 @@
 /* Tailwind's base layer hides [hidden] with !important. reveal.js marks slides it still places as hidden. */
 @layer base {
   .reveal .slides section[hidden]:not([style*="display: none"]) { display: block !important; }
+  /* Same layout on a slide and in the overview, so only the zoom moves. */
+  .reveal.greydoc-center .slides section:not(.stack):not([style*="display: none"]) {
+    display: flex !important; flex-direction: column; justify-content: safe center;
+  }
 }
+.reveal.greydoc-deck .slides section:not(.stack) { height: 100%; box-sizing: border-box; padding: 40px 56px; }
+.reveal.greydoc-deck .slide-body { width: 100%; }
 /* Zoom between a slide and the overview. reveal.js turns these transitions off. */
 .reveal.greydoc-deck.overview .slides, .reveal.greydoc-deck.overview-deactivating .slides,
-.reveal.greydoc-deck.overview .slides section, .reveal.greydoc-deck.overview-deactivating .slides section {
+.reveal.greydoc-deck.overview .slides section, .reveal.greydoc-deck.overview-deactivating .slides section,
+.reveal.greydoc-deck.overview .backgrounds .slide-background, .reveal.greydoc-deck.overview-deactivating .backgrounds .slide-background {
   transition: transform 0.5s cubic-bezier(0.26, 0.86, 0.44, 0.985), opacity 0.5s;
 }
 
