@@ -27,7 +27,8 @@ test('the features page renders the guide with live examples', async ({ page }) 
   await page.goto('/features')
   const doc = page.getByTestId('features-page')
   await expect(doc.locator('h1').first()).toHaveText('Features')
-  await expect(doc.locator('nav.toc')).toBeVisible()
+  await expect(doc.locator('nav.toc')).toHaveCount(0)
+  await expect(page.getByTestId('toc-sidebar').getByRole('link', { name: 'Introduction' })).toBeVisible()
   await expect(doc.locator('.mermaid-block svg').first()).toBeVisible({ timeout: 15_000 })
   await expect(doc.locator('.katex').first()).toBeVisible()
 })
@@ -42,18 +43,21 @@ test('the Markdown help shows example images at their own size', async ({ page }
   await expect.poll(async () => (await imgs.nth(1).boundingBox())?.width).toBe(64)
 })
 
-test('the view page has a table of contents that follows the reading position', async ({ page }) => {
+test('the table of contents opens the section being read, like HedgeDoc', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 800 })
-  const filler = Array.from({ length: 40 }, (_, i) => `Line ${i} of the section.`).join('\n\n')
-  const content = `# Guide\n\n${filler}\n\n## Setup\n\n${filler}\n\n## Usage\n\n${filler}`
+  const filler = Array.from({ length: 30 }, (_, i) => `Line ${i} of the section.`).join('\n\n')
+  const content = `# Setup\n\n${filler}\n\n## Install\n\n${filler}\n\n# Usage\n\n${filler}\n\n## Daily work\n\n${filler}`
   const alias = (await (await page.request.post('/api/notes', { data: { content } })).json()).alias
   await page.goto('/s/' + alias)
   const toc = page.getByTestId('toc-sidebar')
-  await expect(toc.getByRole('link')).toHaveText(['Guide', 'Setup', 'Usage'])
-  await expect(toc.getByRole('link', { name: 'Guide' })).toHaveAttribute('aria-current', 'location')
+  await expect(toc.getByRole('link')).toHaveText(['Setup', 'Install', 'Usage'])
+  await expect(toc.getByRole('link', { name: 'Setup' })).toHaveAttribute('aria-current', 'location')
   await toc.getByRole('link', { name: 'Usage' }).click()
   await expect(toc.getByRole('link', { name: 'Usage' })).toHaveAttribute('aria-current', 'location')
+  await expect(toc.getByRole('link')).toHaveText(['Setup', 'Usage', 'Daily work'])
   await expect(page).toHaveURL(/#usage$/)
+  await toc.getByRole('button', { name: 'Expand all' }).click()
+  await expect(toc.getByRole('link')).toHaveText(['Setup', 'Install', 'Usage', 'Daily work'])
 })
 
 test('the editor shows the table of contents in preview-only mode', async ({ page }) => {

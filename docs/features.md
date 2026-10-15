@@ -5,8 +5,6 @@ tags: [greydoc, help]
 
 # Features
 
-[toc]
-
 ## Introduction
 
 greydoc is a collaborative Markdown editor. Several people edit the same note at the same time. Every change keeps its author and how it was made: by hand, with AI help, or by an AI agent.
@@ -15,7 +13,7 @@ greydoc keeps the addresses and the Markdown of HedgeDoc 1, so old links and old
 
 ## Workspace
 
-On wide screens, a table of contents shows to the right of the note. You find it on the view page and in the preview-only mode of the editor. It marks the section that you read.
+On wide screens, a table of contents shows to the right of the note. You find it on the view page and in the preview-only mode of the editor. It shows the top-level headings and opens the sub-headings of the section that you read. **Expand all** shows every heading.
 
 ### Modes
 
@@ -101,7 +99,7 @@ A note that a person creates starts at Suggest. A note that an agent creates sta
 
 ### Timeline
 
-The clock button opens the timeline of the note. It lists edit sessions, comments, suggestions and permission changes, with the person and the source of each. Open an entry to see the diff, or restore an older version.
+The clock button opens the timeline of the note. It lists edit sessions, comments, suggestions and permission changes, with the person and the source of each. Open an entry to see the diff, or restore an older version. For an AI suggestion, the entry shows the action that you picked, your own words, and the model. **Show the full prompt** shows the exact text sent to the model.
 
 ### Audit log
 

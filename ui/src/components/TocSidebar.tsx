@@ -1,19 +1,52 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowUp } from 'lucide-react'
+import { ArrowDown, ArrowUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
-
-interface Heading {
-  id: string
-  text: string
-  level: number
-}
+import { activePath, buildTree, type Heading, type TocNode as Node } from '@/lib/toc'
 
 function collect(root: HTMLElement): Heading[] {
-  return Array.from(root.querySelectorAll<HTMLElement>('h1[id], h2[id], h3[id]')).map((h) => ({
+  return Array.from(root.querySelectorAll<HTMLElement>('h1[id], h2[id], h3[id], h4[id]')).map((h) => ({
     id: h.id,
     text: h.textContent ?? '',
     level: Number(h.tagName[1]),
   }))
+}
+
+// TocList shows the top level always. Sub-headings show under the section being read, or all with expandAll.
+function TocList({ nodes, active, onPath, expandAll, go, depth = 0 }: {
+  nodes: Node[]
+  active: string
+  onPath: Set<string>
+  expandAll: boolean
+  go: (id: string) => void
+  depth?: number
+}) {
+  return (
+    <ul className={depth === 0 ? 'space-y-0.5 border-l' : 'space-y-0.5'}>
+      {nodes.map((n) => (
+        <li key={n.id}>
+          <a
+            href={'#' + n.id}
+            onClick={(e) => {
+              e.preventDefault()
+              go(n.id)
+            }}
+            aria-current={active === n.id ? 'location' : undefined}
+            className={cn(
+              '-ml-px block truncate border-l py-0.5 pr-2 hover:text-foreground',
+              active === n.id ? 'border-primary font-medium text-foreground' : 'border-transparent',
+              onPath.has(n.id) && active !== n.id ? 'text-foreground' : active !== n.id && 'text-muted-foreground',
+            )}
+            style={{ paddingLeft: `${0.75 + depth * 0.75}rem` }}
+          >
+            {n.text}
+          </a>
+          {n.children.length > 0 && (expandAll || onPath.has(n.id)) && (
+            <TocList nodes={n.children} active={active} onPath={onPath} expandAll={expandAll} go={go} depth={depth + 1} />
+          )}
+        </li>
+      ))}
+    </ul>
+  )
 }
 
 // WithToc centers its content and puts a table of contents in the right margin, like HedgeDoc's view mode.
@@ -22,6 +55,7 @@ export function WithToc({ show, scroller, children }: { show: boolean; scroller?
   const main = useRef<HTMLDivElement>(null)
   const [headings, setHeadings] = useState<Heading[]>([])
   const [active, setActive] = useState('')
+  const [expandAll, setExpandAll] = useState(false)
 
   useEffect(() => {
     const el = main.current
@@ -64,8 +98,12 @@ export function WithToc({ show, scroller, children }: { show: boolean; scroller?
     main.current?.querySelector(`[id="${CSS.escape(id)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     history.replaceState(null, '', '#' + id)
   }
-  const toTop = () => (scroller ?? window).scrollTo({ top: 0, behavior: 'smooth' })
-  const min = Math.min(...headings.map((h) => h.level))
+  const scrollTo = (bottom: boolean) => {
+    const target = scroller ?? document.documentElement
+    ;(scroller ?? window).scrollTo({ top: bottom ? target.scrollHeight : 0, behavior: 'smooth' })
+  }
+  const tree = buildTree(headings)
+  const onPath = activePath(tree, active)
   const visible = show && headings.length >= 2
 
   return (
@@ -78,30 +116,18 @@ export function WithToc({ show, scroller, children }: { show: boolean; scroller?
         {visible && (
           <nav className="sticky top-6 hidden max-h-[calc(100vh-6rem)] w-60 overflow-y-auto py-8 pl-8 text-sm xl:block" aria-label="Table of contents" data-testid="toc-sidebar">
             <div className="mb-2 text-xs font-medium text-muted-foreground">On this page</div>
-            <ul className="space-y-1 border-l">
-              {headings.map((h) => (
-                <li key={h.id}>
-                  <a
-                    href={'#' + h.id}
-                    onClick={(e) => {
-                      e.preventDefault()
-                      go(h.id)
-                    }}
-                    aria-current={active === h.id ? 'location' : undefined}
-                    className={cn(
-                      '-ml-px block truncate border-l py-0.5 pr-2 text-muted-foreground hover:text-foreground',
-                      active === h.id ? 'border-primary font-medium text-foreground' : 'border-transparent',
-                    )}
-                    style={{ paddingLeft: `${0.75 + (h.level - min) * 0.75}rem` }}
-                  >
-                    {h.text}
-                  </a>
-                </li>
-              ))}
-            </ul>
-            <button onClick={toTop} className="mt-3 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-              <ArrowUp className="size-3" /> Back to top
-            </button>
+            <TocList nodes={tree} active={active} onPath={onPath} expandAll={expandAll} go={go} />
+            <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              <button onClick={() => setExpandAll(!expandAll)} className="hover:text-foreground">
+                {expandAll ? 'Collapse all' : 'Expand all'}
+              </button>
+              <button onClick={() => scrollTo(false)} className="flex items-center gap-0.5 hover:text-foreground">
+                <ArrowUp className="size-3" /> Top
+              </button>
+              <button onClick={() => scrollTo(true)} className="flex items-center gap-0.5 hover:text-foreground">
+                <ArrowDown className="size-3" /> Bottom
+              </button>
+            </div>
           </nav>
         )}
       </div>
