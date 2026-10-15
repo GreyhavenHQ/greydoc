@@ -217,28 +217,31 @@ export default function Home() {
                     <span className="shrink-0">{relativeTime(n.visited_at && scope === 'recent' ? n.visited_at : n.updated_at)}</span>
                   </div>
                 </Link>
-                {n.slides && (
-                  <a
-                    href={'/p/' + n.alias}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="absolute top-3 right-9 text-muted-foreground hover:text-primary"
-                    aria-label="Present"
-                    title="Present the slides"
+                {/* Aligned with the first line of the title: p-4 and the title's leading-snug line height. */}
+                <div className="absolute top-4 right-4 flex h-[1.375rem] items-center gap-2">
+                  <button
+                    className={cn(
+                      'text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-primary focus-visible:opacity-100',
+                      n.pinned && 'text-primary opacity-100',
+                    )}
+                    aria-label={n.pinned ? 'Unpin' : 'Pin'}
+                    onClick={() => togglePin(n)}
                   >
-                    <Presentation className="size-4" />
-                  </a>
-                )}
-                <button
-                  className={cn(
-                    'absolute top-3 right-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-primary',
-                    n.pinned && 'text-primary opacity-100',
+                    {n.pinned ? <Pin className="size-4" /> : <PinOff className="size-4" />}
+                  </button>
+                  {n.slides && (
+                    <a
+                      href={'/p/' + n.alias}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-muted-foreground hover:text-primary"
+                      aria-label="Present"
+                      title="Present the slides"
+                    >
+                      <Presentation className="size-4" />
+                    </a>
                   )}
-                  aria-label={n.pinned ? 'Unpin' : 'Pin'}
-                  onClick={() => togglePin(n)}
-                >
-                  {n.pinned ? <Pin className="size-4" /> : <PinOff className="size-4" />}
-                </button>
+                </div>
               </li>
             ))}
           </ul>
