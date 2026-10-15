@@ -90,33 +90,7 @@ A note can be given as its alias, as `/n/<alias>`, or as its full URL. A view-on
 
 ## Import from HedgeDoc
 
-`create_note` (and `POST /api/notes`, same fields) keeps what an imported note had:
-
-| Field | Meaning |
-|---|---|
-| `alias` | The note's address. Use the HedgeDoc note ID, for example `s3BkeGgqTH-gU5UXqMZdag`, so old links keep working. Letters, digits, `-` and `_`. Lookups ignore case. |
-| `extra_aliases` | More addresses. Put the HedgeDoc 1 short ID here, so `/s/<shortid>` links work. |
-| `created_at` | Original creation date, RFC 3339. It is also the last update, unless `updated_at` is given. The date stays until someone edits the text. |
-| `updated_at` | Original last update. |
-| `permissions` | `hedgedoc_mode`, and or explicit `everyone`, `signed_in`, `users` (username to level) and `groups` (group to level). Explicit values win over the mode. Unset values keep the server defaults. |
-| `agent_policy` | `none`, `read`, `suggest` or `edit`. |
-
-Levels are `deny`, `read`, `comment` and `write`. HedgeDoc 2 words work too: `view` is read and `edit` is write. The note belongs to the user the agent acts for.
-
-HedgeDoc 1 modes:
-
-| Mode | Anyone with the address | Signed-in users |
-|---|---|---|
-| `freely` | write | write |
-| `editable` | read | write |
-| `limited` | none | write |
-| `locked` | read | read |
-| `protected` | none | read |
-| `private` | none | none |
-
-The owner always edits. "Anyone with the address" is capped by `GREYDOC_GUEST_MAX` (default read), so `freely` gives guests write only if the server allows it. For HedgeDoc 2, a grant with `canEdit: true` is `write` and with `false` is `read`. `_EVERYONE` maps to `everyone` and `_LOGGED_IN` to `signed_in`.
-
-Links: HedgeDoc 2 paths are the same (`/n/<id>`, `/s/<id>`, `/p/<id>`). HedgeDoc 1 paths also work: `/<id>`, `/<id>/publish`, `/<id>/slide`, `/<id>/download`, and `/s/<shortid>` when the short ID is in `extra_aliases`. Users and groups named in `permissions` must have signed in to greydoc once.
+`create_note` takes the fields an import needs: `alias` (the old note ID), `extra_aliases` (the other IDs), `created_at`, `updated_at`, `permissions` (a HedgeDoc 1 `hedgedoc_mode`, or explicit `everyone`, `signed_in`, `users` and `groups` levels) and `agent_policy`. `POST /api/notes` takes the same fields. [Import from HedgeDoc 1](import-hedgedoc.md) explains the IDs, the permission mapping and the links that keep working.
 
 ## Audit
 

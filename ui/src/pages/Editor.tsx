@@ -62,7 +62,10 @@ const toolbarButton = 'h-7 gap-1 px-2 text-background hover:bg-background/15 hov
 const MODE_KEY = 'greydoc-mode'
 const defaultEditMode: Mode = 'live'
 
+// savedMode reads HedgeDoc 1's ?view, ?edit and ?both first, then the last mode used in this browser.
 function savedMode(): Mode {
+  const q = new URLSearchParams(location.search)
+  for (const m of ['view', 'edit', 'both'] as const) if (q.has(m)) return m
   const m = localStorage.getItem(MODE_KEY)
   return m === 'live' || m === 'edit' || m === 'both' || m === 'view' ? m : defaultEditMode
 }

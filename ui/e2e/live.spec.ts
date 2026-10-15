@@ -103,3 +103,17 @@ test('HedgeDoc links keep working for an imported note', async ({ page }) => {
   const md = await page.request.get('/api/notes/s3BkeGgqTH-gU5UXqMZdag/download.md')
   expect(await md.text()).toContain('old text')
 })
+
+test('HedgeDoc 1 mode parameters choose the view', async ({ page }) => {
+  const resp = await page.request.post('/api/notes', { data: { content: '# Modes\n\ntext' } })
+  const alias = (await resp.json()).alias
+  await page.goto(`/${alias}?view`)
+  await expect(page.getByTestId('preview').locator('h1')).toHaveText('Modes')
+  await expect(page.getByTestId('editor')).toHaveCount(0)
+  await page.goto(`/n/${alias}?both`)
+  await expect(page.getByTestId('preview')).toHaveCount(1)
+  await expect(page.getByTestId('editor')).toHaveCount(1)
+  await page.goto(`/n/${alias}?edit`)
+  await expect(page.getByTestId('preview')).toHaveCount(0)
+  await expect(page.getByTestId('editor').locator('.cm-gutters')).toHaveCount(1)
+})
