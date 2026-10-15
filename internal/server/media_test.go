@@ -113,3 +113,15 @@ func TestStoredContentFollowsEditsNotSuggestions(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 	waitContent("second")
 }
+
+func TestMissingUploadIsNotCached(t *testing.T) {
+	e := newTestEnv(t)
+	resp, err := http.Get(e.ts.URL + "/uploads/0123456789abcdef0123456789abcdef.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 404 || strings.Contains(resp.Header.Get("Cache-Control"), "immutable") {
+		t.Fatalf("%d, Cache-Control %q", resp.StatusCode, resp.Header.Get("Cache-Control"))
+	}
+}

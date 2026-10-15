@@ -101,12 +101,14 @@ func (s *Server) handleServeUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox")
-	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 	f, err := os.Open(filepath.Join(s.uploadsDir(), name))
 	if err != nil {
+		// A missing file may be restored later, so its 404 is not cached.
+		w.Header().Set("Cache-Control", "no-store")
 		writeError(w, http.StatusNotFound, "not_found", "no such file")
 		return
 	}
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 	defer f.Close()
 	st, err := f.Stat()
 	if err != nil {
