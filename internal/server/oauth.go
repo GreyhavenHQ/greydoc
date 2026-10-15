@@ -198,11 +198,10 @@ func (s *Server) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Frame-Options", "DENY")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' "+formTarget(redirect))
-	u, _ := url.Parse(redirect)
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; font-src 'self'; form-action 'self' "+formTarget(redirect))
 	_ = consentPage.Execute(w, map[string]any{
 		"Client": client.Name, "User": id.displayName(), "Consent": s.makeToken(string(b), 10*time.Minute),
-		"Write": strings.Contains(req.Scope, scopeWrite), "Host": u.Host, "Local": id.Local,
+		"Write": strings.Contains(req.Scope, scopeWrite), "Local": id.Local, "Logo": template.HTML(logoSVG),
 	})
 }
 
@@ -372,21 +371,28 @@ func (s *Server) handleRevoke(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// logoSVG is the Greyhaven symbol of the sign-in card, drawn in the text color.
+const logoSVG = `<svg class="logo" viewBox="0 0 151.08 184" aria-hidden="true" fill="currentColor"><path d="M131.08,52.32l-18.67-10.96h-1.01l-16.68,9.79v-20.19s-18.67-10.96-18.67-10.96h-1.01l-18.67,10.96v20.19s-16.68-9.79-16.68-9.79h-1.01l-18.67,10.96v.72s0,78.5,0,78.5l18.67,11.12h1.02l16.67-9.92v20.16s18.67,11.12,18.67,11.12h1.02l18.67-11.12v-20.16s16.67,9.92,16.67,9.92h1.02l18.67-11.12V52.32ZM39.18,43.38l16.7,9.81-16.7,9.94-16.7-9.94,16.7-9.81ZM22,55.23l16.18,9.63v54.28l-16.18,9.5V55.23ZM38.18,121.46v18.57l-15.7-9.35,15.7-9.22ZM40.18,140.03v-18.57l15.7,9.22-15.7,9.35ZM56.36,128.64l-16.18-9.5v-54.28l16.18-9.63v73.41ZM92.72,53.04v19.46l-16.18-9.5v-19.49l16.18-9.63v19.16ZM75.54,84.48l-16.7-9.94,16.7-9.81,16.7,9.81-16.7,9.94ZM76.54,41.18v-18.57l15.7,9.22-15.7,9.35ZM74.54,22.61v18.57l-15.7-9.35,15.7-9.22ZM58.36,33.87l16.18,9.63v19.49l-16.18,9.5v-38.63ZM58.36,76.58l16.18,9.63v54.28l-16.18,9.5v-73.41ZM74.54,142.81v18.57l-15.7-9.35,15.7-9.22ZM76.54,161.38v-18.57l15.7,9.22-15.7,9.35ZM92.72,149.99l-16.18-9.5v-54.28l16.18-9.63v73.41ZM112.9,43.97l15.7,9.22-15.7,9.35v-18.57ZM110.9,43.97v18.57l-15.7-9.35,15.7-9.22ZM94.72,55.23l16.18,9.63v54.28l-16.18,9.5V55.23ZM111.9,140.63l-16.7-9.95,16.7-9.81,16.7,9.81-16.7,9.95ZM129.08,128.64l-16.18-9.5v-54.28l16.18-9.63v73.41Z"/></svg>`
+
 var consentPage = template.Must(template.New("consent").Parse(`<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Connect {{.Client}} to greydoc</title>
 <style>
+@font-face{font-family:Aspekta;font-weight:400;src:url(/fonts/Aspekta-400.woff2) format("woff2")}
+@font-face{font-family:Aspekta;font-weight:600;src:url(/fonts/Aspekta-600.woff2) format("woff2")}
 body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f0f0ec;color:#161614;
 font:15px/1.5 Aspekta,ui-sans-serif,system-ui,sans-serif}
-@media (prefers-color-scheme:dark){body{background:#161614;color:#f9f9f7}.card{background:#2f2f2c!important;border-color:#575753!important}.muted{color:#c4c4bd!important}}
-.card{max-width:420px;margin:24px;padding:28px;background:#f9f9f7;border:1px solid #c4c4bd;border-radius:8px}
-h1{font-size:20px;margin:0 0 8px}.muted{color:#575753}ul{padding-left:20px}li{margin:4px 0}
-.row{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
-button{font:inherit;padding:8px 16px;border-radius:6px;border:1px solid #c4c4bd;background:transparent;color:inherit;cursor:pointer}
-button.primary{background:#d95e2a;border-color:#d95e2a;color:#f9f9f7}
+@media (prefers-color-scheme:dark){body{background:#161614;color:#f9f9f7}.card{background:#2f2f2c!important;border-color:#575753!important}.muted{color:#c4c4bd!important}button{border-color:#575753!important}}
+.card{width:100%;max-width:384px;margin:16px;padding:32px 24px 24px;background:#f9f9f7;border:1px solid #c4c4bd;border-radius:12px;box-sizing:border-box}
+.head{text-align:center;margin-bottom:20px}.logo{height:40px;width:auto;display:block;margin:0 auto 8px}
+.name{font:600 24px/1.2 "Source Serif 4","Source Serif Pro",Georgia,serif}
+.muted{color:#575753}ul{padding-left:20px;margin:12px 0}li{margin:4px 0}p{margin:0}
+.row{display:flex;gap:8px;margin-top:20px}.row button{flex:1}
+button{font:inherit;font-weight:600;padding:9px 16px;border-radius:6px;border:1px solid #c4c4bd;background:transparent;color:inherit;cursor:pointer}
+button.primary{background:#d95e2a;border-color:#d95e2a!important;color:#f9f9f7}
 </style></head><body><form class="card" method="post" action="/oauth/authorize">
-<h1>Connect {{.Client}}</h1>
-<p class="muted">{{.Client}} wants to use greydoc as <strong>{{.User}}</strong>. It will return to {{.Host}}.</p>
+<div class="head">{{.Logo}}<div class="name">greydoc</div></div>
+<p><strong>{{.Client}}</strong> wants to use greydoc as <strong>{{.User}}</strong>.</p>
 <ul>
 <li>Read notes you can read</li>
 {{if .Write}}<li>Comment, suggest changes, and edit notes whose agent policy allows it</li>{{end}}
