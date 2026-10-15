@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -85,6 +86,51 @@ func TestMCPLocalModeNeedsNoToken(t *testing.T) {
 	out, _ = call(t, s, "search_notes", map[string]any{"query": "hello"})
 	if !strings.Contains(out, "agent-note") {
 		t.Fatalf("search: %s", out)
+	}
+}
+
+func TestMCPListAndSearchPages(t *testing.T) {
+	e := newTestEnv(t)
+	for i := 0; i < 5; i++ {
+		e.createNote(nil, fmt.Sprintf("# Page note %d\nquokka", i))
+	}
+	s := e.mcp("")
+	type page struct {
+		Notes []struct {
+			Alias   string `json:"alias"`
+			Snippet string `json:"snippet"`
+		} `json:"notes"`
+		NextOffset *int `json:"next_offset"`
+	}
+	for _, tool := range []string{"list_notes", "search_notes"} {
+		seen := map[string]bool{}
+		args := map[string]any{"limit": 2}
+		if tool == "search_notes" {
+			args["query"] = "quokka"
+		}
+		for pages := 0; ; pages++ {
+			out, isErr := call(t, s, tool, args)
+			var p page
+			if isErr || json.Unmarshal([]byte(out), &p) != nil || pages > 3 {
+				t.Fatalf("%s: %s", tool, out)
+			}
+			for _, n := range p.Notes {
+				if seen[n.Alias] {
+					t.Fatalf("%s: %s twice", tool, n.Alias)
+				}
+				seen[n.Alias] = true
+				if tool == "search_notes" && !strings.Contains(n.Snippet, "quokka") {
+					t.Fatalf("snippet: %s", out)
+				}
+			}
+			if p.NextOffset == nil {
+				break
+			}
+			args["offset"] = *p.NextOffset
+		}
+		if len(seen) != 5 {
+			t.Fatalf("%s: %d notes over all pages", tool, len(seen))
+		}
 	}
 }
 

@@ -166,14 +166,18 @@ func textResult(s string) (*mcp.CallToolResult, any, error) {
 }
 
 type listNotesIn struct {
-	Scope string `json:"scope,omitempty" jsonschema:"recent, mine, shared or all (default all)"`
-	Tag   string `json:"tag,omitempty" jsonschema:"only notes with this tag"`
-	Limit int    `json:"limit,omitempty" jsonschema:"maximum number of notes (default 50)"`
+	Scope  string `json:"scope,omitempty" jsonschema:"recent, mine, shared or all (default all)"`
+	Tag    string `json:"tag,omitempty" jsonschema:"only notes with this tag"`
+	Limit  int    `json:"limit,omitempty" jsonschema:"notes per page, 1 to 200 (default 50)"`
+	Offset int    `json:"offset,omitempty" jsonschema:"notes to skip: the next_offset of the previous page"`
 }
 
 type searchIn struct {
-	Query string `json:"query" jsonschema:"words to find in titles, tags and text"`
-	Limit int    `json:"limit,omitempty" jsonschema:"maximum number of notes (default 20)"`
+	Query  string `json:"query" jsonschema:"words to find in titles, tags and text"`
+	Scope  string `json:"scope,omitempty" jsonschema:"recent, mine, shared or all (default all)"`
+	Tag    string `json:"tag,omitempty" jsonschema:"only notes with this tag"`
+	Limit  int    `json:"limit,omitempty" jsonschema:"notes per page, 1 to 200 (default 20)"`
+	Offset int    `json:"offset,omitempty" jsonschema:"notes to skip: the next_offset of the previous page"`
 }
 
 type noteIn struct {
@@ -239,29 +243,27 @@ type historyIn struct {
 
 func (s *Server) registerTools(srv *mcp.Server) {
 	ro := &mcp.ToolAnnotations{ReadOnlyHint: true}
-	mcp.AddTool(srv, &mcp.Tool{Name: "list_notes", Description: "List notes you can read, newest first.", Annotations: ro},
+	mcp.AddTool(srv, &mcp.Tool{Name: "list_notes", Description: "List notes you can read, last updated first. A full page returns next_offset: pass it as offset to get the next page.", Annotations: ro},
 		func(ctx context.Context, req *mcp.CallToolRequest, in listNotesIn) (*mcp.CallToolResult, any, error) {
 			id, err := s.mcpIdentity(req)
 			if err != nil {
 				return nil, nil, err
 			}
-			scope := store.Scope(in.Scope)
-			if scope == "" {
-				scope = store.ScopeAll
-			}
-			return s.mcpList(ctx, id, store.ListFilter{Viewer: s.viewer(id), Scope: scope, Tag: in.Tag, Limit: defaultLimit(in.Limit, 50)})
+			return s.mcpList(ctx, id, store.ListFilter{Viewer: s.viewer(id), Scope: mcpScope(in.Scope), Tag: in.Tag,
+				Limit: defaultLimit(in.Limit, 50), Offset: in.Offset}, "")
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "search_notes", Description: "Search notes by words in title, tags and text.", Annotations: ro},
+	mcp.AddTool(srv, &mcp.Tool{Name: "search_notes", Description: "Search notes by words in title, tags and text, best match first, with an excerpt around the match. A full page returns next_offset: pass it as offset to get the next page.", Annotations: ro},
 		func(ctx context.Context, req *mcp.CallToolRequest, in searchIn) (*mcp.CallToolResult, any, error) {
 			id, err := s.mcpIdentity(req)
 			if err != nil {
 				return nil, nil, err
 			}
-			ids, err := s.store.SearchNoteIDs(ctx, in.Query, 200)
+			ids, err := s.store.SearchNoteIDs(ctx, in.Query, searchCap)
 			if err != nil {
 				return nil, nil, err
 			}
-			return s.mcpList(ctx, id, store.ListFilter{Viewer: s.viewer(id), Scope: store.ScopeAll, IDs: ids, Limit: defaultLimit(in.Limit, 20)})
+			return s.mcpList(ctx, id, store.ListFilter{Viewer: s.viewer(id), Scope: mcpScope(in.Scope), Tag: in.Tag, IDs: ids,
+				Limit: defaultLimit(in.Limit, 20), Offset: in.Offset}, in.Query)
 		})
 	mcp.AddTool(srv, &mcp.Tool{Name: "read_note", Description: "Read a note: Markdown text, title, tags, your access level and the agent policy.", Annotations: ro},
 		func(ctx context.Context, req *mcp.CallToolRequest, in noteIn) (*mcp.CallToolResult, any, error) {
@@ -535,22 +537,50 @@ func defaultLimit(n, def int) int {
 	return n
 }
 
-func (s *Server) mcpList(ctx context.Context, id *Identity, f store.ListFilter) (*mcp.CallToolResult, any, error) {
+func mcpScope(scope string) store.Scope {
+	if scope == "" {
+		return store.ScopeAll
+	}
+	return store.Scope(scope)
+}
+
+// mcpList returns one page of notes. One extra row tells whether a next page exists.
+func (s *Server) mcpList(ctx context.Context, id *Identity, f store.ListFilter, query string) (*mcp.CallToolResult, any, error) {
+	f.Offset = max(f.Offset, 0)
+	page := f.Limit
+	f.Limit++
 	notes, err := s.store.ListNotes(ctx, f)
 	if err != nil {
 		return nil, nil, err
+	}
+	more := len(notes) > page
+	notes = notes[:min(len(notes), page)]
+	snippets := map[string]string{}
+	if query != "" && len(notes) > 0 {
+		ids := make([]string, len(notes))
+		for i, n := range notes {
+			ids[i] = n.ID
+		}
+		if snippets, err = s.store.SearchSnippets(ctx, query, ids); err != nil {
+			return nil, nil, err
+		}
 	}
 	type item struct {
 		Alias     string   `json:"alias"`
 		Title     string   `json:"title"`
 		Tags      []string `json:"tags"`
 		UpdatedAt string   `json:"updated_at"`
+		Snippet   string   `json:"snippet,omitempty"`
 	}
 	out := []item{}
 	for _, n := range notes {
-		out = append(out, item{n.PrimaryAlias, n.Title, n.Tags, n.UpdatedAt})
+		out = append(out, item{n.PrimaryAlias, n.Title, n.Tags, n.UpdatedAt, snippets[n.ID]})
 	}
-	return jsonResult(map[string]any{"notes": out})
+	res := map[string]any{"notes": out, "offset": f.Offset}
+	if more {
+		res["next_offset"] = f.Offset + page
+	}
+	return jsonResult(res)
 }
 
 func (s *Server) mcpSuggest(ctx context.Context, id *Identity, n *store.Note, in editIn) (*mcp.CallToolResult, any, error) {

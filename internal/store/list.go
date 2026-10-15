@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"strings"
 )
 
@@ -27,9 +28,10 @@ type ListFilter struct {
 	Viewer Viewer
 	Scope  Scope
 	Tag    string
-	// IDs restricts the list, for search results.
-	IDs   []string
-	Limit int
+	// IDs restricts the list, for search results, and keeps their order.
+	IDs    []string
+	Limit  int
+	Offset int
 }
 
 type NoteSummary struct {
@@ -106,13 +108,19 @@ func (s *Store) ListNotes(ctx context.Context, f ListFilter) ([]NoteSummary, err
 		for _, id := range f.IDs {
 			args = append(args, id)
 		}
+		var rank strings.Builder
+		for i, id := range f.IDs {
+			fmt.Fprintf(&rank, " WHEN ? THEN %d", i)
+			args = append(args, id)
+		}
+		order = "CASE n.id" + rank.String() + " END"
 	}
-	args = append(args, f.Limit)
+	args = append(args, f.Limit, max(f.Offset, 0))
 	rows, err := s.db.QueryContext(ctx, s.q(`SELECT n.id, a.name, n.title, n.description, COALESCE(u.display_name, ''), n.updated_at,
 		COALESCE(v.visited_at, ''), COALESCE(v.pinned, 0), n.view_count
 		FROM note n JOIN note_alias a ON a.note_id = n.id AND a.is_primary = 1
 		LEFT JOIN app_user u ON u.id = n.owner_id `+join+`
-		WHERE `+where+` ORDER BY `+order+` LIMIT ?`), args...)
+		WHERE `+where+` ORDER BY `+order+` LIMIT ? OFFSET ?`), args...)
 	if err != nil {
 		return nil, err
 	}

@@ -1,6 +1,7 @@
 package store
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/greyhavenhq/greydoc/internal/permission"
@@ -55,6 +56,38 @@ func TestListNotesVisibility(t *testing.T) {
 		local, _ := st.ListNotes(ctx, ListFilter{Scope: ScopeAll, Viewer: Viewer{Local: true}})
 		if len(local) != 5 {
 			t.Fatalf("local sees %d", len(local))
+		}
+	})
+}
+
+func TestListNotesPagesInIDOrder(t *testing.T) {
+	eachDialect(t, func(t *testing.T, st *Store) {
+		var ids []string
+		for i := 0; i < 12; i++ {
+			n, _ := st.CreateNote(ctx, NewNote{})
+			ids = append([]string{n.ID}, ids...)
+		}
+		page := func(f ListFilter) []string {
+			f.Viewer, f.Scope = Viewer{Local: true}, ScopeAll
+			ns, err := st.ListNotes(ctx, f)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var out []string
+			for _, n := range ns {
+				out = append(out, n.ID)
+			}
+			return out
+		}
+		if got := page(ListFilter{IDs: ids, Limit: 5, Offset: 0}); !slices.Equal(got, ids[:5]) {
+			t.Fatalf("first page %v, want %v", got, ids[:5])
+		}
+		if got := page(ListFilter{IDs: ids, Limit: 5, Offset: 10}); !slices.Equal(got, ids[10:]) {
+			t.Fatalf("last page %v, want %v", got, ids[10:])
+		}
+		all := append(page(ListFilter{Limit: 7}), page(ListFilter{Limit: 7, Offset: 7})...)
+		if len(all) != 12 || len(slices.Compact(slices.Sorted(slices.Values(all)))) != 12 {
+			t.Fatalf("pages overlap or miss notes: %v", all)
 		}
 	})
 }

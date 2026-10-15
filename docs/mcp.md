@@ -86,8 +86,8 @@ The policy only lowers access. An agent never gets more than the person it acts 
 
 | Tool | What it does |
 |---|---|
-| `list_notes` | Notes you can read, newest first. Filter by scope (`recent`, `mine`, `shared`, `all`) or tag. |
-| `search_notes` | Full-text search on title, tags and text. |
+| `list_notes` | Notes you can read, last updated first. Filter by scope (`recent`, `mine`, `shared`, `all`) or tag. Pages with `limit` and `offset`. |
+| `search_notes` | Full-text search on title, tags and text, best match first, with an excerpt. Same filters and pages as `list_notes`. |
 | `read_note` | The Markdown text, title, tags, your access level, the agent policy, and counts of open comments and suggestions. |
 | `create_note` | Create a note owned by you. |
 | `list_comments` | Comment threads with the quoted text. `detached` means the quoted text was deleted. |
@@ -100,6 +100,8 @@ The policy only lowers access. An agent never gets more than the person it acts 
 | `restore_note` | Bring a note back from the trash. Same rules as `trash_note`. |
 | `get_history` | Edit sessions with authors and sources, and comment, suggestion and permission events. Pass `revision_id` for the full text and diff. |
 | `create_upload` | A one-time URL to upload an image or a PDF file to a note, and the `curl` command that uses it. Needs agent policy `suggest` or `edit`. |
+
+A page of `list_notes` or `search_notes` holds up to `limit` notes (default 50 and 20, maximum 200). If more notes exist, the result has `next_offset`. Pass it as `offset` to get the next page. Search ranks the first 500 matches.
 
 `old_text` and `quote` must match the note exactly. If the text appears more than once, quote more context or pass `occurrence` (1 is the first match).
 

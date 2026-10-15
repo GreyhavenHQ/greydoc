@@ -2,12 +2,14 @@ package server
 
 import (
 	"net/http"
-	"sort"
 	"strconv"
 
 	"github.com/greyhavenhq/greydoc/internal/permission"
 	"github.com/greyhavenhq/greydoc/internal/store"
 )
+
+// searchCap is how many matches a search ranks before access checks and paging.
+const searchCap = 500
 
 func (s *Server) viewer(id *Identity) store.Viewer {
 	if id == nil {
@@ -31,8 +33,9 @@ func (s *Server) handleListNotes(w http.ResponseWriter, r *http.Request) {
 		f.Scope = store.ScopeAll
 	}
 	f.Limit, _ = strconv.Atoi(q.Get("limit"))
+	f.Offset, _ = strconv.Atoi(q.Get("offset"))
 	if text := q.Get("q"); text != "" {
-		ids, err := s.store.SearchNoteIDs(r.Context(), text, 200)
+		ids, err := s.store.SearchNoteIDs(r.Context(), text, searchCap)
 		if err != nil {
 			internalError(w, err)
 			return
@@ -45,11 +48,6 @@ func (s *Server) handleListNotes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if f.IDs != nil {
-		rank := map[string]int{}
-		for i, id := range f.IDs {
-			rank[id] = i
-		}
-		sort.SliceStable(notes, func(i, j int) bool { return rank[notes[i].ID] < rank[notes[j].ID] })
 		ids := make([]string, len(notes))
 		for i, n := range notes {
 			ids[i] = n.ID
