@@ -56,6 +56,8 @@ func main() {
 		err = cmdServe(os.Args[2:])
 	case "token":
 		err = cmdToken(os.Args[2:])
+	case "copy-db":
+		err = cmdCopyDB(os.Args[2:])
 	case "version", "--version":
 		fmt.Println(versionString(version, gitCommit, buildTime))
 	default:
@@ -74,6 +76,8 @@ func usage() {
 commands:
   serve                  run the server
   token create --user U  mint a personal access token for the API and MCP
+  copy-db --from A --to B
+                         copy all data from one database to an empty one, for example SQLite to Postgres
   version                print the version`)
 }
 
@@ -160,5 +164,46 @@ func cmdToken(args []string) error {
 		return err
 	}
 	fmt.Println(tok)
+	return nil
+}
+
+func cmdCopyDB(args []string) error {
+	fs := flag.NewFlagSet("copy-db", flag.ExitOnError)
+	from := fs.String("from", "", "source database: SQLite path or postgres:// URL")
+	to := fs.String("to", "", "destination database, empty: SQLite path or postgres:// URL")
+	_ = fs.Parse(args)
+	if *from == "" || *to == "" {
+		return errors.New("usage: greydoc copy-db --from greydoc.db --to postgres://user:pass@host/greydoc")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
+	defer cancel()
+	open := func(url string) (*store.Store, error) {
+		st, err := store.Open(url)
+		if err != nil {
+			return nil, err
+		}
+		if err := st.Init(ctx); err != nil {
+			st.Close()
+			return nil, err
+		}
+		return st, nil
+	}
+	src, err := open(*from)
+	if err != nil {
+		return fmt.Errorf("source: %w", err)
+	}
+	defer src.Close()
+	dst, err := open(*to)
+	if err != nil {
+		return fmt.Errorf("destination: %w", err)
+	}
+	defer dst.Close()
+	if err := dst.LockInstance(ctx); err != nil {
+		return fmt.Errorf("destination: %w", err)
+	}
+	if err := dst.CopyFrom(ctx, src); err != nil {
+		return err
+	}
+	fmt.Fprintln(os.Stderr, "copied; the source was not changed")
 	return nil
 }
