@@ -13,9 +13,9 @@ export default function NewNote() {
     if (started.current) return
     started.current = true
     const alias = new URLSearchParams(location.search).get('alias') ?? undefined
-    api
-      .post<Note>('/api/notes', { content: '', alias })
-      .then((n) => navigate('/n/' + n.alias, { replace: true, state: { fresh: true } }))
+    // The editor code loads while the note is created, so the editor shows at once.
+    Promise.all([api.post<Note>('/api/notes', { content: '', alias }), import('@/pages/Editor')])
+      .then(([n]) => navigate('/n/' + n.alias, { replace: true, state: { fresh: true } }))
       .catch((e: unknown) => {
         if (e instanceof ApiError && e.status === 401) {
           location.href = loginHref('/new')
