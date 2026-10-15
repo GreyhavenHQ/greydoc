@@ -152,7 +152,7 @@ export default function Editor() {
   const [synced, setSynced] = useState(false)
   // The editor mounts after the first sync, so it opens on the real text and not on an empty document.
   const [loaded, setLoaded] = useState(false)
-  const [connected, setConnected] = useState(true)
+  const [connected, setConnected] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
   const [timelineOpen, setTimelineOpen] = useState(false)
   const [timelineKey, setTimelineKey] = useState(0)
@@ -253,12 +253,10 @@ export default function Editor() {
     })
     setSession(s)
     sessionRef.current = s
-    const fallback = setTimeout(() => setLoaded(true), 4000)
     return () => {
       off()
       s.provider.off('sync', onSync)
       s.provider.off('status', onStatus)
-      clearTimeout(fallback)
       s.destroy()
       setSession(null)
       setSynced(false)
@@ -564,10 +562,34 @@ export default function Editor() {
       </div>
     )
   }
-  if (!note || !session || !loaded) {
+  if (!note) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Spinner />
+      </div>
+    )
+  }
+  if (!session || !loaded) {
+    // Until the live copy arrives, the note shows as a page to read. The editor mounts once synced.
+    return (
+      <div className="flex h-screen flex-col" data-testid="connecting-view">
+        <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
+          <Link to="/" className="flex items-center" aria-label="All notes">
+            <Logo className="h-5 text-foreground" />
+          </Link>
+          <h1 className="min-w-0 truncate px-1 text-sm font-medium">{title}</h1>
+          <span className="size-2 shrink-0 animate-pulse rounded-full bg-amber-500" />
+          <span className="text-xs text-muted-foreground">{connected ? 'Loading the live copy…' : 'Connecting…'} You can read while it loads.</span>
+          <div className="flex-1" />
+          <UserMenu />
+        </header>
+        <main className="min-h-0 flex-1 overflow-y-auto">
+          <WithToc show={false}>
+            <div className="px-8 py-8">
+              <Preview source={note.content ?? ''} />
+            </div>
+          </WithToc>
+        </main>
       </div>
     )
   }

@@ -295,3 +295,16 @@ test('a refused connection stops the retries and says why', async ({ page }) => 
   await page.waitForTimeout(3000)
   expect(attempts).toBe(1)
 })
+
+test('the note shows as a page to read while the live copy connects', async ({ page }) => {
+  const alias = await noteWith(page, '# Read me first\n\nThe body.')
+  // The mocked socket opens but never syncs, like a slow connection.
+  await page.routeWebSocket(/\/ws\//, () => {})
+  await page.goto('/n/' + alias)
+  const view = page.getByTestId('connecting-view')
+  await expect(view.locator('h1').last()).toHaveText('Read me first')
+  await expect(view).toContainText('The body.')
+  await expect(page.getByTestId('editor')).toHaveCount(0)
+  await page.waitForTimeout(4500)
+  await expect(page.getByTestId('connecting-view')).toBeVisible()
+})
