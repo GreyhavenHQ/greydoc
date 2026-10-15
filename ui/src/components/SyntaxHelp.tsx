@@ -93,7 +93,13 @@ export function SyntaxHelp({ open, onOpenChange }: { open: boolean; onOpenChange
       <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-4xl" data-testid="syntax-help">
         <DialogHeader>
           <DialogTitle>Markdown help</DialogTitle>
-          <DialogDescription>Write the text on the left. The preview shows the result on the right.</DialogDescription>
+          <DialogDescription>
+            Write the text on the left. The preview shows the result on the right. The{' '}
+            <a href="/features" target="_blank" rel="noreferrer" className="text-primary underline underline-offset-2">
+              features page
+            </a>{' '}
+            explains everything greydoc does.
+          </DialogDescription>
         </DialogHeader>
         <Tabs value={tab} onValueChange={setTab} className="min-h-0 flex-1">
           <TabsList>

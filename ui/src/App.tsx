@@ -11,6 +11,7 @@ import Audit from '@/pages/Audit'
 import Login from '@/pages/Login'
 
 const Slides = lazy(() => import('@/pages/Slides'))
+const Features = lazy(() => import('@/pages/Features'))
 
 export default function App() {
   return (
@@ -24,6 +25,14 @@ export default function App() {
         <Route path="/trash" element={<Trash />} />
         <Route path="/audit" element={<Audit />} />
         <Route path="/s/:alias" element={<View />} />
+        <Route
+          path="/features"
+          element={
+            <Suspense fallback={null}>
+              <Features />
+            </Suspense>
+          }
+        />
         <Route
           path="/p/:alias"
           element={

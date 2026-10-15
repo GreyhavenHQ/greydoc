@@ -69,6 +69,7 @@ docker compose up -d greydoc
 | `/<id>/slide`, `/p/<shortid>` | Same | |
 | `/<id>/download` | Same | |
 | `/<id>/info` | Same | `viewcount` counts people who opened the note. |
+| `/features` | Same | greydoc's own guide. The source is [docs/features.md](docs/features.md). |
 | `POST /new`, `POST /new/<alias>` | Same | Needs sign-in in OIDC mode. |
 | Free URL: opening an unknown `/<name>` creates it | Missing | Use `/new?alias=<name>`. |
 | `/<id>/revision`, `/history`, `/me`, `/status` | Different | greydoc has its own JSON API under `/api`. |

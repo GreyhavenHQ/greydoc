@@ -22,3 +22,12 @@ test('a wide suggestion stays inside the editor in split view', async ({ page })
   const box = (await card.boundingBox())!
   expect(box.x + box.width).toBeLessThanOrEqual(editor.x + editor.width + 1)
 })
+
+test('the features page renders the guide with live examples', async ({ page }) => {
+  await page.goto('/features')
+  const doc = page.getByTestId('features-page')
+  await expect(doc.locator('h1').first()).toHaveText('Features')
+  await expect(doc.locator('nav.toc')).toBeVisible()
+  await expect(doc.locator('.mermaid-block svg').first()).toBeVisible({ timeout: 15_000 })
+  await expect(doc.locator('.katex').first()).toBeVisible()
+})

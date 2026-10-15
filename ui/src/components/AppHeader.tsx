@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { LogIn, LogOut, Moon, Plus, ScrollText, Settings, Sun, Trash2 } from 'lucide-react'
+import { BookOpen, LogIn, LogOut, Moon, Plus, ScrollText, Settings, Sun, Trash2 } from 'lucide-react'
 import { Logo } from '@/components/Logo'
 import { Button } from '@/components/ui/button'
 import {
@@ -75,6 +75,11 @@ export function UserMenu() {
         <DropdownMenuItem asChild>
           <Link to="/trash">
             <Trash2 className="size-4" /> Trash
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link to="/features">
+            <BookOpen className="size-4" /> Features
           </Link>
         </DropdownMenuItem>
         {me.local_mode ? (

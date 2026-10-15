@@ -57,7 +57,7 @@ func TestAddAlias(t *testing.T) {
 			}
 		})
 		t.Run("forbidden alias", func(t *testing.T) {
-			for _, a := range []string{"new", "api", "s", "p", "n", "mcp", "bad alias", ""} {
+			for _, a := range []string{"new", "api", "s", "p", "n", "mcp", "trash", "audit", "features", "bad alias", ""} {
 				if err := st.AddAlias(ctx, n.ID, a); !errors.Is(err, ErrAliasForbidden) {
 					t.Fatalf("%q: want ErrAliasForbidden, got %v", a, err)
 				}
