@@ -52,6 +52,8 @@ docker compose up -d greydoc
 | Who wrote what | The people button colors text by author. Dashed underline means AI-assisted. Dotted means agent. |
 | Slides | Menu, "Slide mode". `---` starts a slide, `----` a vertical slide, `note:` starts speaker notes. Escape shows all slides, D switches between light and dark. |
 | Download | Menu, "Download Markdown" or "Download HTML". The HTML file has no scripts and includes the diagrams. |
+| Move a note | Menu, "Download with uploads (.zip)": the Markdown at the root, its files in `uploads/`, and `note.json`. Drop the zip on the note list of another greydoc to import it. `POST /api/notes/import` takes the same zip. |
+| Import Markdown | Drop `.md` files on the note list. |
 | Images | Paste or drop an image in the editor. |
 | Delete | Menu, "Move to trash". The trash (account menu) restores notes for 30 days. "Delete for good" removes a note at once. |
 | Audit | Account menu, "Audit log": every action on notes and accounts, with filters, and Restore for trashed notes. |

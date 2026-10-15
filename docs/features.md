@@ -167,9 +167,19 @@ slideOptions:
 ---
 ```
 
-## Export
+## Export and import
 
 The **...** menu downloads the note as Markdown or as one HTML file with its styles. The view page is at `/s/<address>`, and the slides are at `/p/<address>`.
+
+**Download with uploads (.zip)** saves the note with its images and files, to move it to another greydoc server. The zip holds:
+
+- the note as a Markdown file at the root, with links such as `uploads/diagram.png`
+- an `uploads/` folder with the files that the note shows
+- a `note.json` file with the addresses, dates, agent policy and, for the owner, the access settings
+
+The unpacked folder opens in any Markdown editor, and the images show.
+
+To import, drop the zip on the note list. A dropped Markdown file becomes a new note too. An imported note keeps its address and its dates. If another note already has the address, the imported note gets a new address, and a message shows it. Access settings for people who have no account on the new server are left out. History, comments and suggestions stay on the old server.
 
 ## Extra syntax
 

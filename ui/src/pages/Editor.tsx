@@ -7,6 +7,7 @@ import {
   Download,
   Eye,
   FilePenLine,
+  FileArchive,
   FileCode,
   History,
   MessageSquare,
@@ -686,6 +687,11 @@ export default function Editor() {
               <DropdownMenuItem asChild>
                 <a href={withShare(`/s/${note.alias}?export=html`)}>
                   <FileCode className="size-4" /> Download HTML
+                </a>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <a href={withShare(`/api/notes/${note.alias}/export.zip`)}>
+                  <FileArchive className="size-4" /> Download with uploads (.zip)
                 </a>
               </DropdownMenuItem>
               <DropdownMenuSeparator />

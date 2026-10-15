@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
-import { ChevronDown, Eye, FileText, Pin, PinOff, Search, Tag, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { toast } from 'sonner'
+import { ChevronDown, Eye, FileText, FileUp, Pin, PinOff, Search, Tag, X } from 'lucide-react'
 import { AppHeader, NewNoteButton } from '@/components/AppHeader'
 import { SignInCard } from '@/pages/Login'
 import { Input } from '@/components/ui/input'
@@ -11,6 +12,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api, noteTitle, type NoteSummary, type TagCount } from '@/lib/api'
 import { useMe } from '@/lib/me'
+import { importFiles, isImportable } from '@/lib/importNotes'
 import { relativeTime } from '@/lib/time'
 import { authorColor } from '@/lib/authors'
 import { cn } from '@/lib/utils'
@@ -25,6 +27,9 @@ export default function Home() {
   const [query, setQuery] = useState(params.get('q') ?? '')
   const [notes, setNotes] = useState<NoteSummary[] | null>(null)
   const [tags, setTags] = useState<TagCount[]>([])
+  const [reload, setReload] = useState(0)
+  const navigate = useNavigate()
+  const drop = useDropImport(() => setReload((n) => n + 1), (alias) => navigate('/n/' + alias))
 
   const update = (patch: Record<string, string>) => {
     const next = new URLSearchParams(params)
@@ -44,12 +49,12 @@ export default function Home() {
     if (q) sp.set('q', q)
     setNotes(null)
     api.get<{ notes: NoteSummary[] }>('/api/notes?' + sp).then((r) => setNotes(r.notes))
-  }, [me, scope, tag, q])
+  }, [me, scope, tag, q, reload])
 
   useEffect(() => {
     if (!me?.authenticated) return
     api.get<{ tags: TagCount[] }>('/api/tags').then((r) => setTags(r.tags))
-  }, [me])
+  }, [me, reload])
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -84,7 +89,16 @@ export default function Home() {
   if (me && !me.authenticated) return <SignInCard next="/" />
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen" {...drop.handlers}>
+      {drop.over && (
+        <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm" data-testid="drop-overlay">
+          <div className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-primary/60 bg-card px-16 py-12 text-center shadow-lg">
+            <FileUp className="size-8 text-primary" />
+            <div className="font-medium">Drop to import</div>
+            <div className="text-sm text-muted-foreground">A greydoc .zip with its uploads, or a Markdown file</div>
+          </div>
+        </div>
+      )}
       <AppHeader>
         <div className="relative ml-4 hidden max-w-md flex-1 sm:block">
           <Search className="pointer-events-none absolute top-2.5 left-2.5 size-4 text-muted-foreground" />
@@ -295,4 +309,59 @@ function TagChip({ tag, selected, onClick }: { tag: TagCount; selected: boolean;
       <span className={cn('ml-1.5 tabular-nums', selected ? 'opacity-70' : 'text-muted-foreground')}>{tag.count}</span>
     </button>
   )
+}
+
+// useDropImport turns files dropped on the page into notes. Only drags that carry files count.
+function useDropImport(onDone: () => void, open: (alias: string) => void) {
+  const [over, setOver] = useState(false)
+  const depth = useRef(0)
+  const hasFiles = (e: React.DragEvent) => Array.from(e.dataTransfer.types).includes('Files')
+  const run = async (files: File[]) => {
+    const ok = files.filter((f) => isImportable(f.name))
+    if (ok.length === 0) {
+      toast.error('Drop a greydoc .zip or a Markdown file.')
+      return
+    }
+    const t = toast.loading(ok.length === 1 ? `Importing ${ok[0].name}…` : `Importing ${ok.length} files…`)
+    const results = await importFiles(ok)
+    toast.dismiss(t)
+    for (const r of results) {
+      if (r.error || !r.note) {
+        toast.error(`${r.file}: ${r.error}`)
+        continue
+      }
+      const n = r.note
+      const action = { label: 'Open', onClick: () => open(n.alias) }
+      if (n.renamed) toast.warning(`Imported “${n.title || r.file}” at /${n.alias}. Its old address is taken here.`, { action })
+      else toast.success(`Imported “${n.title || r.file}”`, { action })
+    }
+    onDone()
+  }
+  return {
+    over,
+    handlers: {
+      onDragEnter: (e: React.DragEvent) => {
+        if (!hasFiles(e)) return
+        depth.current++
+        setOver(true)
+      },
+      onDragLeave: (e: React.DragEvent) => {
+        if (!hasFiles(e)) return
+        depth.current = Math.max(0, depth.current - 1)
+        if (depth.current === 0) setOver(false)
+      },
+      onDragOver: (e: React.DragEvent) => {
+        if (!hasFiles(e)) return
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'copy'
+      },
+      onDrop: (e: React.DragEvent) => {
+        if (!hasFiles(e)) return
+        e.preventDefault()
+        depth.current = 0
+        setOver(false)
+        void run(Array.from(e.dataTransfer.files))
+      },
+    },
+  }
 }

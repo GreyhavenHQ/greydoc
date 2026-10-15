@@ -16,6 +16,16 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     body: body !== undefined ? JSON.stringify(body) : undefined,
     credentials: 'same-origin',
   })
+  return parse<T>(resp)
+}
+
+// send posts a raw body: FormData sets its own content type, a string or Blob takes the one given.
+export async function send<T>(path: string, body: FormData | Blob | string, contentType?: string): Promise<T> {
+  const resp = await fetch(path, { method: 'POST', headers: contentType ? { 'Content-Type': contentType } : undefined, body, credentials: 'same-origin' })
+  return parse<T>(resp)
+}
+
+async function parse<T>(resp: Response): Promise<T> {
   const text = await resp.text()
   let data: unknown = null
   try {
