@@ -41,3 +41,27 @@ test('the Markdown help shows example images at their own size', async ({ page }
   await expect.poll(async () => (await imgs.nth(0).boundingBox())?.width).toBe(32)
   await expect.poll(async () => (await imgs.nth(1).boundingBox())?.width).toBe(64)
 })
+
+test('the view page has a table of contents that follows the reading position', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 800 })
+  const filler = Array.from({ length: 40 }, (_, i) => `Line ${i} of the section.`).join('\n\n')
+  const content = `# Guide\n\n${filler}\n\n## Setup\n\n${filler}\n\n## Usage\n\n${filler}`
+  const alias = (await (await page.request.post('/api/notes', { data: { content } })).json()).alias
+  await page.goto('/s/' + alias)
+  const toc = page.getByTestId('toc-sidebar')
+  await expect(toc.getByRole('link')).toHaveText(['Guide', 'Setup', 'Usage'])
+  await expect(toc.getByRole('link', { name: 'Guide' })).toHaveAttribute('aria-current', 'location')
+  await toc.getByRole('link', { name: 'Usage' }).click()
+  await expect(toc.getByRole('link', { name: 'Usage' })).toHaveAttribute('aria-current', 'location')
+  await expect(page).toHaveURL(/#usage$/)
+})
+
+test('the editor shows the table of contents in preview-only mode', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 800 })
+  const alias = (await (await page.request.post('/api/notes', { data: { content: '# One\n\ntext\n\n## Two\n\ntext' } })).json()).alias
+  await page.goto('/n/' + alias + '?view')
+  await expect(page.getByTestId('toc-sidebar').getByRole('link')).toHaveText(['One', 'Two'])
+  await page.goto('/n/' + alias + '?both')
+  await expect(page.getByTestId('preview').locator('h2')).toHaveText('Two')
+  await expect(page.getByTestId('toc-sidebar')).toHaveCount(0)
+})

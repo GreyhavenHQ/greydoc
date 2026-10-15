@@ -8,6 +8,7 @@ import { download, fileName, standaloneHTML } from '@/export/html'
 import { hydrateMermaid } from '@/render/mermaid'
 import { renderMarkdown } from '@/render/markdown'
 import { Spinner } from '@/components/ui/spinner'
+import { WithToc } from '@/components/TocSidebar'
 
 // View is the read-only page for clients: the rendered note and nothing else.
 export default function View() {
@@ -54,9 +55,13 @@ export default function View() {
     )
   }
   return (
-    <main className="mx-auto max-w-3xl px-6 py-12" data-testid="view-page">
-      {exporting && <div className="mb-4 text-sm text-muted-foreground">Preparing the HTML file…</div>}
-      <Preview source={text} />
+    <main data-testid="view-page">
+      <WithToc show>
+        <div className="px-6 py-12">
+          {exporting && <div className="mb-4 text-sm text-muted-foreground">Preparing the HTML file…</div>}
+          <Preview source={text} />
+        </div>
+      </WithToc>
     </main>
   )
 }
