@@ -181,7 +181,9 @@ const suggestionTheme = EditorView.baseTheme({
     border: '1px solid rgb(var(--border))', borderRadius: '3px', backgroundColor: 'rgb(var(--card))', cursor: 'pointer', color: 'rgb(var(--foreground))',
   },
   '.cm-sugg-accept:hover': { borderColor: 'rgb(42 168 118)', color: 'rgb(42 168 118)' },
+  // contain: wide content scrolls inside the card instead of widening the editor.
   '.cm-sugg-card': {
+    contain: 'inline-size',
     margin: '6px 0 10px', border: '1px solid rgb(42 168 118 / 0.5)', borderLeftWidth: '3px', borderRadius: 'var(--radius)',
     backgroundColor: 'rgb(var(--card))', fontFamily: 'var(--font-sans)', whiteSpace: 'normal', overflow: 'hidden',
   },

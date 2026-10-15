@@ -489,7 +489,7 @@ const liveTheme = EditorView.theme({
   '.cm-lp-check:disabled': { cursor: 'default' },
   '.cm-lp-hr': { display: 'inline-block', width: '100%', borderTop: '1px solid rgb(var(--border))', verticalAlign: 'middle' },
   '.cm-lp-img': { maxWidth: '100%', borderRadius: 'var(--radius)', verticalAlign: 'top' },
-  '.cm-lp-block': { cursor: 'pointer', margin: '0.4em 0', whiteSpace: 'normal' },
+  '.cm-lp-block': { cursor: 'pointer', margin: '0.4em 0', whiteSpace: 'normal', contain: 'inline-size' },
   '.cm-lp-mark': { backgroundColor: 'rgb(var(--primary) / 0.22)', borderRadius: '2px' },
   '.cm-lp-alert': { fontStyle: 'normal', color: 'rgb(var(--foreground))', borderLeftWidth: '4px !important' },
   '.cm-lp-alert-note': { borderLeftColor: 'rgb(42 127 217 / 0.7) !important', backgroundColor: 'rgb(42 127 217 / 0.07)' },

@@ -109,6 +109,16 @@ DOMPurify.addHook('uponSanitizeElement', (node, data) => {
   }
 })
 
+// Base CSS sets img height to auto, which beats the width and height attributes. Inline styles keep them.
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  if (node.nodeName !== 'IMG') return
+  const el = node as HTMLImageElement
+  for (const dim of ['width', 'height'] as const) {
+    const m = /^\s*(\d+(?:\.\d+)?)(px|%)?\s*$/.exec(el.getAttribute(dim) ?? '')
+    if (m) el.style[dim] = m[1] + (m[2] ?? 'px')
+  }
+})
+
 export interface Rendered {
   html: string
   frontMatter: FrontMatter | null

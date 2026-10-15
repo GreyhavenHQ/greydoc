@@ -5,6 +5,12 @@ import { diagramUsesElk, mermaidConfig } from '@/render/mermaidTheme'
 const html = (src: string) => renderMarkdown(src).html
 
 describe('markdown extensions', () => {
+  it('keeps image width and height, which base CSS would override', () => {
+    expect(html('<img src="/a.png" height="80px">')).toMatch(/style="height: ?80px;?"/)
+    expect(html('<img src="/a.png" width="120" height="50%">')).toMatch(/style="width: ?120px; ?height: ?50%;?"/)
+    expect(html('![logo](/a.png =40x30)')).toMatch(/style="width: ?40px; ?height: ?30px;?"/)
+    expect(html('<img src="/a.png" height="1;background:red">')).not.toContain('style=')
+  })
   it('renders GFM tables and strikethrough', () => {
     const out = html('| a | b |\n|---|---|\n| 1 | 2 |\n\n~~gone~~')
     expect(out).toContain('<table data-line="0">')
