@@ -207,11 +207,26 @@ export default function Editor() {
     if (!note || !me) return
     const s = new NoteSession(note.alias, { name: me.local_mode ? localName() : undefined, share: shareParam() })
     s.setUser({ name: me.local_mode ? localName() : me.display_name || me.username || 'guest', color: presenceColor() })
+    // Timings from page load, reported when a note is slow to arrive.
+    const created = performance.now()
+    let connectedAt = 0
+    let reported = false
     const onSync = (v: boolean) => {
       setSynced(v)
       if (v) setLoaded(true)
+      const now = performance.now()
+      if (v && !reported && now > 3000) {
+        reported = true
+        console.warn(
+          `greydoc: "${note.alias}" took ${(now / 1000).toFixed(1)} s to arrive. WebSocket created at ${(created / 1000).toFixed(1)} s, ` +
+            `connected at ${(connectedAt / 1000).toFixed(1)} s, text at ${(now / 1000).toFixed(1)} s.`,
+        )
+      }
     }
-    const onStatus = (e: { status: string }) => setConnected(e.status === 'connected')
+    const onStatus = (e: { status: string }) => {
+      if (e.status === 'connected' && !connectedAt) connectedAt = performance.now()
+      setConnected(e.status === 'connected')
+    }
     s.provider.on('sync', onSync)
     s.provider.on('status', onStatus)
     const off = s.onEvent((ev: AppEvent) => {

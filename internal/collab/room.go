@@ -194,7 +194,12 @@ func (r *Room) save() {
 	r.mu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if err := r.hub.store.SaveRoom(ctx, r.noteID, r.doc.state(), r.doc.text()); err != nil {
+	start := time.Now()
+	err := r.hub.store.SaveRoom(ctx, r.noteID, r.doc.state(), r.doc.text())
+	if d := time.Since(start); d > slowRoom {
+		slog.Warn("slow note save", "note", r.noteID, "took", d, "error", err)
+	}
+	if err != nil {
 		slog.Error("save room failed", "note", r.noteID, "error", err)
 		r.mu.Lock()
 		r.dirty = true

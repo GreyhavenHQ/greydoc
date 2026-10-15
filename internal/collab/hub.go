@@ -79,13 +79,20 @@ func NewHub(st Store, opts Options) *Hub {
 }
 
 // acquire returns the note's room, loading it once. release MUST be called when done.
+// slowRoom is how long opening or saving a note may take before it is logged.
+const slowRoom = 2 * time.Second
+
 func (h *Hub) acquire(ctx context.Context, noteID string) (*Room, func(), error) {
+	start := time.Now()
 	for {
 		h.mu.Lock()
 		if ch := h.closing[noteID]; ch != nil {
 			h.mu.Unlock()
 			select {
 			case <-ch:
+				if d := time.Since(start); d > slowRoom {
+					slog.Warn("slow note open: waited for the room to close", "note", noteID, "waited", d)
+				}
 				continue
 			case <-ctx.Done():
 				return nil, nil, ctx.Err()
@@ -97,7 +104,11 @@ func (h *Hub) acquire(ctx context.Context, noteID string) (*Room, func(), error)
 			h.rooms[noteID] = r
 			r.refs++
 			h.mu.Unlock()
+			loadStart := time.Now()
 			err := r.load(ctx)
+			if d := time.Since(loadStart); d > slowRoom {
+				slog.Warn("slow note open: loading the room", "note", noteID, "took", d, "error", err)
+			}
 			close(r.ready)
 			if err != nil {
 				h.mu.Lock()
@@ -116,7 +127,11 @@ func (h *Hub) acquire(ctx context.Context, noteID string) (*Room, func(), error)
 			r.idleTimer = nil
 		}
 		h.mu.Unlock()
+		waitStart := time.Now()
 		<-r.ready
+		if d := time.Since(waitStart); d > slowRoom {
+			slog.Warn("slow note open: waited for another request to load the room", "note", noteID, "waited", d)
+		}
 		if r.loadErr != nil {
 			return nil, nil, r.loadErr
 		}
