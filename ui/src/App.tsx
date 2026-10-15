@@ -31,13 +31,21 @@ export default function App() {
           }
         />
         <Route path="/:alias" element={<ShortLink />} />
+        <Route path="/:alias/publish" element={<ShortLink to="/s/" />} />
+        <Route path="/:alias/slide" element={<ShortLink to="/p/" />} />
+        <Route path="/:alias/download" element={<ShortLink to="download" />} />
         <Route path="*" element={<Home />} />
       </Routes>
     </MeProvider>
   )
 }
 
-function ShortLink() {
-  const { alias } = useParams()
-  return <Navigate to={'/n/' + alias + location.search} replace />
+// ShortLink keeps HedgeDoc links working: /<id>, /<id>/publish, /<id>/slide and /<id>/download.
+function ShortLink({ to = '/n/' }: { to?: string }) {
+  const { alias = '' } = useParams()
+  if (to === 'download') {
+    location.replace(`/api/notes/${encodeURIComponent(alias)}/download.md`)
+    return null
+  }
+  return <Navigate to={to + alias + location.search + location.hash} replace />
 }

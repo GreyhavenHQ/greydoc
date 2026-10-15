@@ -78,3 +78,28 @@ test('an AI diagram shows as a rendered card under the text and can be revised',
   await expect(page.getByTestId('suggestion-card')).toHaveCount(0)
   await expect(page.getByTestId('editor').locator('.cm-lp-mermaid svg').first()).toBeVisible({ timeout: 15_000 })
 })
+
+test('HedgeDoc links keep working for an imported note', async ({ page }) => {
+  const resp = await page.request.post('/api/notes', {
+    data: {
+      content: '# From HedgeDoc\n\nold text',
+      alias: 's3BkeGgqTH-gU5UXqMZdag',
+      extra_aliases: ['SyJdkz5Jx'],
+      created_at: '2021-03-04T10:00:00Z',
+      permissions: { hedgedoc_mode: 'editable' },
+    },
+  })
+  expect(resp.status()).toBe(201)
+  await page.goto('/s3BkeGgqTH-gU5UXqMZdag')
+  await expect(page).toHaveURL(/\/n\/s3BkeGgqTH-gU5UXqMZdag$/)
+  await expect(page.getByTestId('editor').locator('.cm-lp-h1')).toHaveText('From HedgeDoc')
+  await page.goto('/s3BkeGgqTH-gU5UXqMZdag/publish')
+  await expect(page).toHaveURL(/\/s\/s3BkeGgqTH-gU5UXqMZdag$/)
+  await expect(page.getByTestId('view-page').locator('h1')).toHaveText('From HedgeDoc')
+  await page.goto('/s/SyJdkz5Jx')
+  await expect(page.getByTestId('view-page').locator('h1')).toHaveText('From HedgeDoc')
+  await page.goto('/s3BkeGgqTH-gU5UXqMZdag/slide')
+  await expect(page).toHaveURL(/\/p\/s3BkeGgqTH-gU5UXqMZdag/)
+  const md = await page.request.get('/api/notes/s3BkeGgqTH-gU5UXqMZdag/download.md')
+  expect(await md.text()).toContain('old text')
+})

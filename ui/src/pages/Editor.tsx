@@ -160,7 +160,7 @@ export default function Editor() {
         setNote(n)
         setLevel(n.level)
         if (!atLeast(n.level, 'comment')) setModeState('view')
-        if (n.alias !== alias) navigate('/n/' + n.alias + location.search, { replace: true })
+        if (n.alias !== alias.toLowerCase()) navigate('/n/' + n.alias + location.search, { replace: true })
       })
       .catch((e: unknown) => {
         if (e instanceof ApiError && e.status === 401) {
