@@ -6,6 +6,8 @@ type Meta struct {
 	Title       string
 	Description string
 	Tags        []string
+	// Slides is true for a presentation: front matter type: slide, as in HedgeDoc.
+	Slides      bool
 	Frontmatter *Frontmatter
 	// BodyLine is the zero-based index of the first line after the front matter.
 	BodyLine int
@@ -23,6 +25,8 @@ func Extract(content string) Meta {
 	if m.Frontmatter != nil {
 		m.Description = strings.TrimSpace(m.Frontmatter.Description)
 		m.Tags = m.Frontmatter.Tags
+		t := strings.ToLower(strings.TrimSpace(m.Frontmatter.Type))
+		m.Slides = t == "slide" || t == "slides"
 	}
 	if len(m.Tags) == 0 {
 		if legacy := legacyTags(body); len(legacy) > 0 {

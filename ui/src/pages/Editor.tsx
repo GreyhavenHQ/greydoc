@@ -57,7 +57,7 @@ import { Preview, scrollToSourceLine } from '@/render/Preview'
 import { api, ApiError, atLeast, shareParam, withShare, type Level, type Note } from '@/lib/api'
 import { loginHref, useMe } from '@/lib/me'
 import { localName, presenceColor } from '@/lib/presence'
-import { extractTitle } from '@/lib/meta'
+import { extractTitle, isSlides } from '@/lib/meta'
 import { cn } from '@/lib/utils'
 import { shortDateTime } from '@/lib/time'
 
@@ -649,6 +649,18 @@ export default function Editor() {
             <MessageSquare className="size-4" />
             <span className="text-xs tabular-nums">{threads.filter((t) => t.status === 'open').length + suggestions.length}</span>
           </Button>
+          {isSlides(shown) && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label="Present" asChild>
+                  <a href={withShare(`/p/${note.alias}`)} target="_blank" rel="noreferrer">
+                    <Presentation className="size-4" />
+                  </a>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Present the slides</TooltipContent>
+            </Tooltip>
+          )}
           {me?.authenticated && (
             <Tooltip>
               <TooltipTrigger asChild>

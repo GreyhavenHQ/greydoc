@@ -47,6 +47,8 @@ CREATE TABLE IF NOT EXISTS note (
     deleted_at TEXT,
     deleted_by TEXT NOT NULL DEFAULT '',
     view_count BIGINT NOT NULL DEFAULT 0,
+    -- slides is 1 when the front matter says type: slide.
+    slides INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );

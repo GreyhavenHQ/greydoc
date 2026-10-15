@@ -40,6 +40,7 @@ type Note struct {
 	CreatedAt    string      `json:"created_at"`
 	UpdatedAt    string      `json:"updated_at"`
 	ViewCount    int64       `json:"view_count"`
+	Slides       bool        `json:"slides"`
 	DeletedAt    string      `json:"deleted_at,omitempty"`
 	DeletedBy    string      `json:"deleted_by,omitempty"`
 }
@@ -175,19 +176,21 @@ func (s *Store) insertAlias(ctx context.Context, tx execer, noteID, alias string
 }
 
 const noteColumns = `n.id, a.name, COALESCE(n.owner_id, ''), n.title, n.description, n.content, n.ystate, n.agent_policy, n.created_at, n.updated_at,
-	COALESCE(n.deleted_at, ''), n.deleted_by, n.view_count`
+	COALESCE(n.deleted_at, ''), n.deleted_by, n.view_count, n.slides`
 
 func (s *Store) scanNote(ctx context.Context, row *sql.Row) (*Note, error) {
 	var n Note
 	var policy string
+	var slides int
 	if err := row.Scan(&n.ID, &n.PrimaryAlias, &n.OwnerID, &n.Title, &n.Description, &n.Content, &n.YState,
-		&policy, &n.CreatedAt, &n.UpdatedAt, &n.DeletedAt, &n.DeletedBy, &n.ViewCount); err != nil {
+		&policy, &n.CreatedAt, &n.UpdatedAt, &n.DeletedAt, &n.DeletedBy, &n.ViewCount, &slides); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
 		return nil, err
 	}
 	n.AgentPolicy = AgentPolicy(policy)
+	n.Slides = slides == 1
 	tags, err := s.noteTags(ctx, n.ID)
 	if err != nil {
 		return nil, err
@@ -320,6 +323,7 @@ type NoteState struct {
 	Title       string
 	Description string
 	Tags        []string
+	Slides      bool
 }
 
 func (s *Store) SaveNoteState(ctx context.Context, id string, st NoteState) error {
@@ -331,8 +335,8 @@ func (s *Store) saveNoteState(ctx context.Context, id string, st NoteState, from
 	return s.tx(ctx, func(tx *sql.Tx) error {
 		// updated_at follows text changes only, so opening a note, or an imported date, does not move it.
 		q := `UPDATE note SET updated_at = CASE WHEN content <> ? THEN ? ELSE updated_at END,
-			ystate = ?, content = ?, title = ?, description = ?, search_tags = ?`
-		args := []any{st.Content, Now(), st.YState, st.Content, st.Title, st.Description, strings.Join(st.Tags, " ")}
+			ystate = ?, content = ?, title = ?, description = ?, search_tags = ?, slides = ?`
+		args := []any{st.Content, Now(), st.YState, st.Content, st.Title, st.Description, strings.Join(st.Tags, " "), boolInt(st.Slides)}
 		if fromUpto >= 0 {
 			q += `, ystate_upto = ? WHERE id = ? AND ystate_upto = ?`
 			args = append(args, toUpto, id, fromUpto)

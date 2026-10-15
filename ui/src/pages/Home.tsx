@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ChevronDown, Eye, FileText, FileUp, Pin, PinOff, Search, Tag, X } from 'lucide-react'
+import { ChevronDown, Eye, FileText, FileUp, Pin, PinOff, Presentation, Search, Tag, X } from 'lucide-react'
 import { AppHeader, NewNoteButton } from '@/components/AppHeader'
 import { SignInCard } from '@/pages/Login'
 import { Input } from '@/components/ui/input'
@@ -178,7 +178,7 @@ export default function Home() {
                   to={'/n/' + n.alias}
                   className="flex h-full flex-col gap-2 rounded-lg border bg-card p-4 transition-colors hover:border-primary/60"
                 >
-                  <div className="pr-6 font-medium leading-snug">{noteTitle(n)}</div>
+                  <div className={cn('font-medium leading-snug', n.slides ? 'pr-12' : 'pr-6')}>{noteTitle(n)}</div>
                   {(n.snippet || n.description) && <p className="line-clamp-3 text-sm text-muted-foreground">{n.snippet || n.description}</p>}
                   <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1 text-xs text-muted-foreground">
                     {n.tags.length === 0 && <span className="h-5" />}
@@ -217,6 +217,18 @@ export default function Home() {
                     <span className="shrink-0">{relativeTime(n.visited_at && scope === 'recent' ? n.visited_at : n.updated_at)}</span>
                   </div>
                 </Link>
+                {n.slides && (
+                  <a
+                    href={'/p/' + n.alias}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="absolute top-3 right-9 text-muted-foreground hover:text-primary"
+                    aria-label="Present"
+                    title="Present the slides"
+                  >
+                    <Presentation className="size-4" />
+                  </a>
+                )}
                 <button
                   className={cn(
                     'absolute top-3 right-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-primary',

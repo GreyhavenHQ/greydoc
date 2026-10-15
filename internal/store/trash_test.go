@@ -91,6 +91,12 @@ func TestMigrationAddsTrashColumns(t *testing.T) {
 		search_tags TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, updated_at TEXT NOT NULL)`); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := db.Exec(`INSERT INTO note (id, content, created_at, updated_at) VALUES ('deck', '---
+type: slide
+---
+# Deck', '', ''), ('doc', '# A slide about cats', '', '')`); err != nil {
+		t.Fatal(err)
+	}
 	db.Close()
 	st, err := Open(path)
 	if err != nil {
@@ -106,5 +112,16 @@ func TestMigrationAddsTrashColumns(t *testing.T) {
 	}
 	if err := st.TrashNote(ctx, n.ID, "x", nil); err != nil {
 		t.Fatalf("trash on migrated db: %v", err)
+	}
+	var slides []string
+	rows, _ := st.db.Query(`SELECT id FROM note WHERE slides = 1`)
+	for rows.Next() {
+		var id string
+		_ = rows.Scan(&id)
+		slides = append(slides, id)
+	}
+	rows.Close()
+	if len(slides) != 1 || slides[0] != "deck" {
+		t.Fatalf("slides after migration: %v", slides)
 	}
 }

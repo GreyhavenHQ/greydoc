@@ -34,6 +34,12 @@ export function splitFrontMatter(text: string): { data: FrontMatter | null; body
   return { data: null, body: text, bodyLine: 0 }
 }
 
+// isSlides mirrors notemeta: front matter type: slide marks a presentation. Only the head is read, so it is cheap per render.
+export function isSlides(text: string): boolean {
+  const t = splitFrontMatter(text.slice(0, 8192)).data?.type
+  return typeof t === 'string' && ['slide', 'slides'].includes(t.trim().toLowerCase())
+}
+
 export function extractTitle(text: string): string {
   const { data, body } = splitFrontMatter(text)
   if (data?.title) return String(data.title).trim()

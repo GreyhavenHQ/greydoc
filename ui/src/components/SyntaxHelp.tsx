@@ -48,7 +48,7 @@ const sections: { id: string; label: string; entries: Entry[] }[] = [
     entries: [
       { label: 'Tags and title', src: '---\ntitle: Q4 plan\ntags: [roadmap, q4]\ndescription: Shown in the note list\n---', render: false },
       { label: 'Slides', src: '# First slide\n\n---\n\n# Second slide\n\n----\n\n# Below the second slide\n\nnote: Speaker notes start here.', render: false },
-      { label: 'Slide options', src: '---\nslideOptions:\n  theme: black\n  transition: fade\n  slideNumber: c/t\n---', render: false },
+      { label: 'Slide options', src: '---\ntype: slide\nslideOptions:\n  theme: black\n  transition: fade\n  slideNumber: c/t\n---', render: false },
     ],
   },
 ]

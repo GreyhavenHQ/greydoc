@@ -30,3 +30,16 @@ func TestExtract(t *testing.T) {
 		})
 	}
 }
+
+func TestExtractSlides(t *testing.T) {
+	for content, want := range map[string]bool{
+		"---\ntype: slide\n---\n# Deck":  true,
+		"---\ntype: Slides\n---\n# Deck": true,
+		"---\ntype: note\n---\n# Doc":    false,
+		"# type: slide":                  false,
+	} {
+		if got := Extract(content).Slides; got != want {
+			t.Errorf("%q: slides %v", content, got)
+		}
+	}
+}

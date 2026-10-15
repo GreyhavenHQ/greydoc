@@ -50,7 +50,7 @@ func (rs roomStore) SaveRoom(ctx context.Context, noteID string, ystate []byte, 
 			return store.NoteState{}, err
 		}
 		meta := notemeta.Extract(text)
-		return store.NoteState{YState: merged, Content: text, Title: meta.Title, Description: meta.Description, Tags: meta.Tags}, nil
+		return store.NoteState{YState: merged, Content: text, Title: meta.Title, Description: meta.Description, Tags: meta.Tags, Slides: meta.Slides}, nil
 	})
 }
 

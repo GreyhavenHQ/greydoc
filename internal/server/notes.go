@@ -86,7 +86,7 @@ func (s *Server) createNote(ctx context.Context, id *Identity, spec NoteSpec) (*
 		}
 		meta := notemeta.Extract(spec.Content)
 		if err := s.store.SaveNoteState(ctx, n.ID, store.NoteState{
-			Content: spec.Content, Title: meta.Title, Description: meta.Description, Tags: meta.Tags,
+			Content: spec.Content, Title: meta.Title, Description: meta.Description, Tags: meta.Tags, Slides: meta.Slides,
 		}); err != nil {
 			return nil, err
 		}

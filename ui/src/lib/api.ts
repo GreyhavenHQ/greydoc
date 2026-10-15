@@ -93,6 +93,7 @@ export interface NoteSummary {
   pinned: boolean
   snippet?: string
   view_count: number
+  slides: boolean
 }
 
 export interface Note {
@@ -103,6 +104,7 @@ export interface Note {
   tags: string[]
   agent_policy: AgentPolicy
   view_count: number
+  slides: boolean
   created_at: string
   updated_at: string
   level: Level

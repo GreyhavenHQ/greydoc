@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+
+	"github.com/greyhavenhq/greydoc/internal/notemeta"
 )
 
 // Migrations carry existing databases forward. Append only. Each one MUST be idempotent against the base schema.
@@ -38,6 +40,39 @@ var migrations = []migration{
 	addColumn("003_note_view_count", "note", "view_count", "BIGINT NOT NULL DEFAULT 0"),
 	addColumn("004_suggestion_ai_prompt", "suggestion", "ai_prompt", "TEXT NOT NULL DEFAULT ''"),
 	addColumn("005_token_rotated_at", "api_token", "rotated_at", "TEXT NOT NULL DEFAULT ''"),
+	{version: "006_note_slides", apply: addSlides},
+}
+
+// addSlides adds note.slides and sets it from the front matter of the existing notes.
+func addSlides(ctx context.Context, tx *sql.Tx, s *Store) error {
+	if err := addColumn("", "note", "slides", "INTEGER NOT NULL DEFAULT 0").apply(ctx, tx, s); err != nil {
+		return err
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT id, content FROM note WHERE content LIKE '%slide%'`)
+	if err != nil {
+		return err
+	}
+	var ids []string
+	for rows.Next() {
+		var id, content string
+		if err := rows.Scan(&id, &content); err != nil {
+			rows.Close()
+			return err
+		}
+		if notemeta.Extract(content).Slides {
+			ids = append(ids, id)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, id := range ids {
+		if _, err := tx.ExecContext(ctx, s.q(`UPDATE note SET slides = 1 WHERE id = ?`), id); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // columnExists checks inside the migration transaction. table comes from a constant, never from input.

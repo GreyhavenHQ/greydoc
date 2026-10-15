@@ -151,7 +151,7 @@ Moving a note to the trash hides it. The owner can restore it from the trash pag
 
 ## Slides
 
-Open the **...** menu and pick **Slide mode**. A line with `---` starts a new slide, and `----` starts a slide below the current one. Text after `note:` goes to the speaker notes.
+Open the **...** menu and pick **Slide mode**. Put `type: slide` in the front matter to mark the note as a presentation, as in HedgeDoc. The note list and the top bar then show a **Present** button. A line with `---` starts a new slide, and `----` starts a slide below the current one. Text after `note:` goes to the speaker notes.
 
 In slide mode:
 
@@ -163,6 +163,7 @@ Front matter options:
 
 ```yaml
 ---
+type: slide
 slideOptions:
   theme: black
   transition: fade

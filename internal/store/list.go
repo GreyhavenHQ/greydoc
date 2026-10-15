@@ -46,6 +46,7 @@ type NoteSummary struct {
 	Pinned       bool     `json:"pinned"`
 	Snippet      string   `json:"snippet,omitempty"`
 	ViewCount    int64    `json:"view_count"`
+	Slides       bool     `json:"slides"`
 }
 
 // visibleWhere matches notes the viewer can read through ownership or a grant.
@@ -117,7 +118,7 @@ func (s *Store) ListNotes(ctx context.Context, f ListFilter) ([]NoteSummary, err
 	}
 	args = append(args, f.Limit, max(f.Offset, 0))
 	rows, err := s.db.QueryContext(ctx, s.q(`SELECT n.id, a.name, n.title, n.description, COALESCE(u.display_name, ''), n.updated_at,
-		COALESCE(v.visited_at, ''), COALESCE(v.pinned, 0), n.view_count
+		COALESCE(v.visited_at, ''), COALESCE(v.pinned, 0), n.view_count, n.slides
 		FROM note n JOIN note_alias a ON a.note_id = n.id AND a.is_primary = 1
 		LEFT JOIN app_user u ON u.id = n.owner_id `+join+`
 		WHERE `+where+` ORDER BY `+order+` LIMIT ? OFFSET ?`), args...)
@@ -127,12 +128,13 @@ func (s *Store) ListNotes(ctx context.Context, f ListFilter) ([]NoteSummary, err
 	out := []NoteSummary{}
 	for rows.Next() {
 		var n NoteSummary
-		var pinned int
-		if err := rows.Scan(&n.ID, &n.PrimaryAlias, &n.Title, &n.Description, &n.OwnerName, &n.UpdatedAt, &n.VisitedAt, &pinned, &n.ViewCount); err != nil {
+		var pinned, slides int
+		if err := rows.Scan(&n.ID, &n.PrimaryAlias, &n.Title, &n.Description, &n.OwnerName, &n.UpdatedAt, &n.VisitedAt, &pinned, &n.ViewCount, &slides); err != nil {
 			rows.Close()
 			return nil, err
 		}
 		n.Pinned = pinned == 1
+		n.Slides = slides == 1
 		out = append(out, n)
 	}
 	rows.Close()
