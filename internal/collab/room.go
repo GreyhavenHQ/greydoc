@@ -199,10 +199,6 @@ func (r *Room) save() {
 		r.mu.Lock()
 		r.dirty = true
 		r.mu.Unlock()
-		return
-	}
-	if r.hub.opts.OnSaved != nil {
-		r.hub.opts.OnSaved(r.noteID)
 	}
 }
 

@@ -23,7 +23,6 @@ export default defineConfig({
       GREYDOC_DATABASE_URL: '/tmp/greydoc-e2e/greydoc.db',
       GREYDOC_DATA_DIR: '/tmp/greydoc-e2e/data',
       GREYDOC_SECRET_FILE: '/tmp/greydoc-e2e/secret',
-      GREYDOC_MIRROR_DEBOUNCE: '200ms',
       GREYDOC_ROOM_SAVE_INTERVAL: '200ms',
       LLM_API_BASEURL: 'http://127.0.0.1:3998',
       LLM_MODEL: 'fake',

@@ -11,7 +11,7 @@ greydoc reads environment variables. All have defaults. The server needs none of
 | `GREYDOC_BASE_URL` | derived from the request | Public origin, for example `https://notes.example.com`. Set it behind a proxy that does not forward the host. OAuth metadata and share links use it. |
 | `GREYDOC_ALLOW_NONLOCAL` | `false` | Allow local mode on an address other than loopback. Local mode has no login, so anyone who can reach the server can edit every note. |
 | `GREYDOC_DATABASE_URL` | `greydoc.db` | SQLite file path, or a `postgres://` URL. |
-| `GREYDOC_DATA_DIR` | `data` | Markdown copies go to `notes/`, uploads to `uploads/`. |
+| `GREYDOC_DATA_DIR` | `data` | Uploads go to `uploads/`. |
 | `GREYDOC_SECRET` | empty | Secret for cookies and token hashes. If empty, greydoc creates `GREYDOC_SECRET_FILE`. |
 | `GREYDOC_SECRET_FILE` | `.greydoc/secret` | Where the generated secret is kept. Back it up with the database. |
 | `GREYDOC_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error`. |
@@ -61,7 +61,6 @@ View-only links work for guests whatever these values are.
 |---|---|---|
 | `GREYDOC_MAX_NOTE_LENGTH` | `1000000` | Characters per note, for notes created through the API. |
 | `GREYDOC_MAX_UPLOAD_BYTES` | `10485760` | Largest upload. Images and PDF files only. |
-| `GREYDOC_MIRROR_DEBOUNCE` | `2s` | Wait after the last save before the Markdown copy is written. |
 | `GREYDOC_ROOM_SAVE_INTERVAL` | `5s` | How often an open note is saved while people type. |
 | `GREYDOC_ROOM_IDLE_GRACE` | `10s` | How long a note stays loaded after the last person leaves. |
 

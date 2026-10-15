@@ -53,8 +53,6 @@ type Options struct {
 	IdleGrace     time.Duration
 	FlushInterval time.Duration
 	SaveInterval  time.Duration
-	// OnSaved runs after a snapshot is stored.
-	OnSaved func(noteID string)
 	// OnClosed runs after a room closed and saved.
 	OnClosed func(noteID string)
 }

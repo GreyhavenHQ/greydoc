@@ -93,29 +93,23 @@ func TestDownloadMarkdown(t *testing.T) {
 	}
 }
 
-func TestMirrorFollowsEditsNotSuggestions(t *testing.T) {
-	e := newTestEnv(t, func(c *config.Config) {
-		c.MirrorDebounce = 20 * time.Millisecond
-		c.RoomSaveEvery = 50 * time.Millisecond
-	})
+func TestStoredContentFollowsEditsNotSuggestions(t *testing.T) {
+	e := newTestEnv(t, func(c *config.Config) { c.RoomSaveEvery = 50 * time.Millisecond })
 	alias := e.createNote(nil, "first")
 	n, _ := e.srv.Store().NoteByAlias(context.Background(), alias)
-	path := filepath.Join(e.cfg.DataDir, "notes", alias+".md")
-	waitFile := func(want string) {
+	waitContent := func(want string) {
 		t.Helper()
-		waitFor(t, "mirror "+want, func() bool {
-			b, _ := os.ReadFile(path)
-			return strings.HasSuffix(string(b), want)
+		waitFor(t, "content "+want, func() bool {
+			cur, err := e.srv.Store().NoteByID(context.Background(), n.ID)
+			return err == nil && cur.Content == want
 		})
 	}
-	waitFile("---\nfirst")
+	waitContent("first")
 	if _, err := e.srv.EditForTest(context.Background(), n.ID, "second"); err != nil {
 		t.Fatal(err)
 	}
-	waitFile("---\nsecond")
+	waitContent("second")
 	e.do(nil, "POST", "/api/notes/"+alias+"/suggestions", map[string]any{"quote": "second", "proposed": "third"})
 	time.Sleep(200 * time.Millisecond)
-	waitFile("---\nsecond")
-	e.do(nil, "DELETE", "/api/notes/"+alias, nil)
-	waitFor(t, "file removed", func() bool { _, err := os.Stat(path); return os.IsNotExist(err) })
+	waitContent("second")
 }

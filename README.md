@@ -140,7 +140,7 @@ The client signs you in through the browser. In opencode, `opencode mcp auth gre
 
 ## Data
 
-The database is the source of truth: Postgres in `docker-compose.yml`, or a SQLite file when `GREYDOC_DATABASE_URL` is a path (the binary's default). greydoc also writes every note as a Markdown file to `data/notes/<alias>.md`, with its metadata in the front matter. These files are a copy for backups, search tools and git. greydoc does not read them back: edits on disk are overwritten.
+The database is the source of truth: Postgres in `docker-compose.yml`, or a SQLite file when `GREYDOC_DATABASE_URL` is a path (the binary's default). The data directory holds uploads and the server secret. Back up both with the database.
 
 ## Develop
 

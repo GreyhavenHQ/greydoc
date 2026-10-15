@@ -45,11 +45,7 @@ func (s *Server) trashNote(ctx context.Context, id *Identity, n *store.Note) err
 }
 
 func (s *Server) restoreNote(ctx context.Context, id *Identity, n *store.Note) error {
-	if err := s.store.RestoreNote(ctx, n.ID, id.event(n.ID, "note.restore", noteData(n))); err != nil {
-		return err
-	}
-	s.mirror.Touch(n.ID)
-	return nil
+	return s.store.RestoreNote(ctx, n.ID, id.event(n.ID, "note.restore", noteData(n)))
 }
 
 // purgeNote deletes a trashed note for good, with its uploads.

@@ -34,7 +34,7 @@ services:
       start_period: 20s
       retries: 3
     volumes:
-      # Markdown copies, uploads and the server secret. Back it up with the database.
+      # Uploads and the server secret. Back it up with the database.
       - greydoc-data:/data
     environment:
       GREYDOC_DATABASE_URL: postgres://greydoc:${GREYDOC_POSTGRES_PASSWORD:-greydoc}@postgres:5432/greydoc?sslmode=disable

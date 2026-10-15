@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -15,10 +13,8 @@ import (
 )
 
 func TestTrashLifecycle(t *testing.T) {
-	e := newTestEnv(t, func(c *config.Config) { c.MirrorDebounce = 10 * time.Millisecond })
+	e := newTestEnv(t)
 	alias := e.createNote(nil, "# Doomed\nbody")
-	mirror := filepath.Join(e.cfg.DataDir, "notes", alias+".md")
-	waitFor(t, "mirror", func() bool { _, err := os.Stat(mirror); return err == nil })
 
 	if code, body := e.do(nil, "DELETE", "/api/notes/"+alias+"?permanent=1", nil); code != 409 {
 		t.Fatalf("permanent delete outside trash: %d %s", code, body)
@@ -36,7 +32,6 @@ func TestTrashLifecycle(t *testing.T) {
 	if _, body := e.do(nil, "GET", "/api/notes", nil); strings.Contains(body, alias) {
 		t.Fatal("trashed note listed")
 	}
-	waitFor(t, "mirror removed", func() bool { _, err := os.Stat(mirror); return os.IsNotExist(err) })
 	_, body = e.do(nil, "GET", "/api/trash", nil)
 	if !strings.Contains(body, `"title":"Doomed"`) {
 		t.Fatalf("trash list: %s", body)
@@ -47,7 +42,6 @@ func TestTrashLifecycle(t *testing.T) {
 	if code, _ := e.do(nil, "GET", "/api/notes/"+alias, nil); code != 200 {
 		t.Fatalf("after restore: %d", code)
 	}
-	waitFor(t, "mirror back", func() bool { _, err := os.Stat(mirror); return err == nil })
 
 	e.do(nil, "DELETE", "/api/notes/"+alias, nil)
 	if code, _ := e.do(nil, "DELETE", "/api/notes/"+alias+"?permanent=1", nil); code != 204 {

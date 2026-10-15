@@ -14,7 +14,6 @@ flowchart LR
   H --> L[(Update log with author and source)]
   H --> S[(Snapshot, text, title, tags)]
   L --> R[History: edit sessions to revisions]
-  S --> F[Markdown copy in data/notes]
 ```
 
 ## Live editing
@@ -51,17 +50,16 @@ Levels are deny, read, comment, write and full (owner). A person gets the highes
 
 ## Trash and audit
 
-Deleting a note moves it to the trash: it leaves lists, search and the data directory, and its live room closes. The owner, or an admin, restores it or deletes it for good. A background job deletes notes older than the retention period. Agents can trash and restore but never delete for good.
+Deleting a note moves it to the trash: it leaves lists and search, and its live room closes. The owner, or an admin, restores it or deletes it for good. A background job deletes notes older than the retention period. Agents can trash and restore but never delete for good.
 
 The audit log is the `audit_event` table. It holds note events (creation, trash, restore, deletion, permissions, comments, suggestions, restored versions) account events (sign-ins, access tokens, connected agents), and every MCP tool call and session. Events outlive their notes. Text edits are recorded as revisions in each note's timeline.
 
 ## Files
 
-The database is the source of truth. The Markdown copies in `data/notes` are written after each save and rebuilt from the database on start. Edits made to these files are ignored.
+The database is the source of truth. The data directory holds uploads and the server secret only. Markdown and HTML are exported on demand.
 
 ## Limits
 
 - One server per database in normal operation. Live state is in memory. Two servers can overlap during a deploy.
-- Markdown copies are one way.
 - Search is full text (SQLite FTS5 or Postgres `tsvector`), not semantic.
 - Diagram types other than Mermaid, embeds, and import from HedgeDoc are not supported yet.

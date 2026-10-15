@@ -382,23 +382,6 @@ func nullStr(s string) any {
 	return s
 }
 
-func (s *Store) AllNoteIDs(ctx context.Context) ([]string, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id FROM note`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var ids []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		ids = append(ids, id)
-	}
-	return ids, rows.Err()
-}
-
 // SetNoteTimes keeps an imported note's dates after its content was written.
 func (s *Store) SetNoteTimes(ctx context.Context, id, created, updated string) error {
 	_, err := s.db.ExecContext(ctx, s.q(`UPDATE note SET created_at = ?, updated_at = ? WHERE id = ?`), created, updated, id)

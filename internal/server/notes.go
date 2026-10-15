@@ -99,7 +99,6 @@ func (s *Server) createNote(ctx context.Context, id *Identity, spec NoteSpec) (*
 			return nil, err
 		}
 	}
-	s.mirror.Touch(n.ID)
 	return n, nil
 }
 
@@ -165,10 +164,9 @@ func (s *Server) handleGetNoteContent(w http.ResponseWriter, r *http.Request) {
 	_, _ = io.WriteString(w, s.noteContent(n))
 }
 
-// notifyNoteGone closes the note's live room and removes its Markdown copy. reason is trashed or deleted.
+// notifyNoteGone closes the note's live room. reason is trashed or deleted.
 func (s *Server) notifyNoteGone(n *store.Note, reason string) {
 	s.hub.CloseNote(n.ID, reason)
-	s.mirror.Remove(n.ID)
 }
 
 func (s *Server) handleAliases(w http.ResponseWriter, r *http.Request) {
@@ -218,7 +216,6 @@ func (s *Server) handleAliases(w http.ResponseWriter, r *http.Request) {
 		}
 		_ = s.store.AddEvent(r.Context(), id.event(n.ID, "alias.remove", map[string]any{"alias": strings.ToLower(name)}))
 	}
-	s.mirror.Touch(n.ID)
 	aliases, _ := s.store.Aliases(r.Context(), n.ID)
 	writeJSON(w, http.StatusOK, map[string]any{"aliases": aliases})
 }

@@ -12,7 +12,7 @@ import (
 type Config struct {
 	// DatabaseURL is a SQLite file path (default) or a postgres:// URL.
 	DatabaseURL string
-	// DataDir holds the markdown mirror (notes/) and uploads (uploads/).
+	// DataDir holds uploads (uploads/).
 	DataDir    string
 	SecretFile string
 	Secret     string
@@ -45,7 +45,6 @@ type Config struct {
 
 	MaxNoteLength  int
 	MaxUploadBytes int64
-	MirrorDebounce time.Duration
 	RoomIdleGrace  time.Duration
 	RoomSaveEvery  time.Duration
 
@@ -84,7 +83,6 @@ func FromEnv() Config {
 		DefaultSignedIn:  envStr("GREYDOC_DEFAULT_SIGNED_IN", "write"),
 		MaxNoteLength:    envInt("GREYDOC_MAX_NOTE_LENGTH", 1_000_000),
 		MaxUploadBytes:   envInt64("GREYDOC_MAX_UPLOAD_BYTES", 10<<20),
-		MirrorDebounce:   envDuration("GREYDOC_MIRROR_DEBOUNCE", 2*time.Second),
 		RoomIdleGrace:    envDuration("GREYDOC_ROOM_IDLE_GRACE", 10*time.Second),
 		RoomSaveEvery:    envDuration("GREYDOC_ROOM_SAVE_INTERVAL", 5*time.Second),
 		LLMBaseURL:       strings.TrimRight(envStr("LLM_API_BASEURL", ""), "/"),

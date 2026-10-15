@@ -25,7 +25,6 @@ docker compose -f docker-compose.dev.yml up app                     # http://127
 - `internal/permission`: pure access decisions.
 - `internal/notemeta`: front matter, tags, title.
 - `internal/history`: edit sessions into timeline revisions.
-- `internal/mirror`: write-only markdown mirror in the data directory.
 - `internal/ai`: OpenAI-compatible client for in-editor actions. It returns text and never writes.
 - `internal/server`: HTTP handlers, the embedded UI, the MCP tools (`mcp.go`) and the OAuth server for MCP (`oauth.go`). MCP shares the access checks of the REST handlers.
 - `ui/`: React + Vite. It builds into `internal/server/uidist/`, which is committed. After a UI change, run `just ui` and commit `uidist/`.
@@ -35,6 +34,6 @@ docker compose -f docker-compose.dev.yml up app                     # http://127
 - `docker-compose.dev.yml` is the project `greydoc-dev`. Its Postgres is a throwaway test database. Never point tests at the database of `docker-compose.yml`.
 - `just lint` MUST pass. Postgres changes MUST pass `just test-pg`.
 
-- The database is the source of truth. The data directory mirror is write-only.
+- The database is the source of truth. The data directory holds uploads and the secret only.
 - Every text change is stored with its author and source (`human`, `ai_assisted`, `agent`, `restore`).
 - In-app AI output is always a suggestion. It never changes text directly.

@@ -15,7 +15,6 @@ import (
 	"github.com/greyhavenhq/greydoc/internal/collab"
 	"github.com/greyhavenhq/greydoc/internal/config"
 	"github.com/greyhavenhq/greydoc/internal/history"
-	"github.com/greyhavenhq/greydoc/internal/mirror"
 	"github.com/greyhavenhq/greydoc/internal/oidc"
 	"github.com/greyhavenhq/greydoc/internal/permission"
 	"github.com/greyhavenhq/greydoc/internal/secrets"
@@ -33,7 +32,6 @@ type Server struct {
 	guestMax      permission.Level
 	defaultGroups map[string]permission.Level
 	hub           *collab.Hub
-	mirror        *mirror.Mirror
 	history       *history.Processor
 	stop          chan struct{}
 	workers       sync.WaitGroup
@@ -86,17 +84,12 @@ func Open(cfg config.Config) (*Server, error) {
 		}
 	}
 	s.history = &history.Processor{Store: st}
-	s.mirror = mirror.New(st, cfg.DataDir, cfg.MirrorDebounce)
-	if err := s.mirror.Rebuild(ctx); err != nil {
-		st.Close()
-		return nil, fmt.Errorf("rebuild the markdown mirror: %w", err)
-	}
 	if cfg.AIEnabled() {
 		s.ai = ai.New(cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.LLMModel)
 	}
 	s.stop = make(chan struct{})
 	s.hub = collab.NewHub(roomStore{st: st}, collab.Options{IdleGrace: cfg.RoomIdleGrace, SaveInterval: cfg.RoomSaveEvery,
-		OnSaved: s.afterSave, OnClosed: s.afterClose})
+		OnClosed: s.afterClose})
 	s.routes()
 	s.workers.Add(2)
 	go s.historyLoop()
@@ -113,7 +106,6 @@ func (s *Server) Close() error {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		s.hub.Shutdown(ctx)
-		s.mirror.Close()
 		s.closeErr = s.store.Close()
 	})
 	return s.closeErr
@@ -161,11 +153,6 @@ func (s *Server) ProcessHistory(ctx context.Context, force bool) error {
 		}
 	}
 	return nil
-}
-
-// afterSave runs when a room stored a snapshot.
-func (s *Server) afterSave(noteID string) {
-	s.mirror.Touch(noteID)
 }
 
 func (s *Server) Handler() http.Handler { return s.checkOrigin(s.withIdentity(s.mux)) }
