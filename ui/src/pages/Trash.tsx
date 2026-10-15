@@ -60,7 +60,7 @@ export default function Trash() {
       <main className="mx-auto max-w-3xl px-4 py-8">
         <h1 className="text-2xl font-semibold tracking-tight">Trash</h1>
         <p className="mt-1 mb-6 text-sm text-muted-foreground">
-          Notes stay here for {days} days, then they are deleted for good. The <Link to="/audit" className="underline">audit log</Link> keeps a record.
+          Documents stay here for {days} days, then they are deleted for good. The <Link to="/audit" className="underline">audit log</Link> keeps a record.
         </p>
         {notes?.length === 0 && <p className="rounded-lg border border-dashed py-12 text-center text-muted-foreground">The trash is empty.</p>}
         <ul className="flex flex-col divide-y rounded-lg border bg-card" data-testid="trash-list">

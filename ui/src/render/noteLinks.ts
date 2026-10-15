@@ -24,7 +24,7 @@ export function hydrateNoteLinks(root: HTMLElement): Promise<void> {
       if (!a.isConnected) return
       if (title === null) {
         a.classList.add('note-link-missing')
-        a.title = 'No note has this address yet'
+        a.title = 'No document has this address yet'
       } else if (title && !a.dataset.label) {
         a.textContent = title
       }

@@ -10,10 +10,10 @@ test('trash, restore and audit', async ({ page }) => {
   await expect(page.getByText('Moved to the trash', { exact: true })).toBeVisible()
 
   await page.goto('/n/' + alias)
-  await expect(page.getByText('This note is in the trash.')).toBeVisible()
+  await expect(page.getByText('This document is in the trash.')).toBeVisible()
 
   await page.goto('/audit')
-  const trashed = page.getByTestId('audit-event').filter({ hasText: 'moved the note to the trash' })
+  const trashed = page.getByTestId('audit-event').filter({ hasText: 'moved the document to the trash' })
   await expect(trashed).toContainText('Old plan')
   await expect(trashed).toContainText('in trash')
 
@@ -25,7 +25,7 @@ test('trash, restore and audit', async ({ page }) => {
   await expect(page.getByTestId('preview').locator('h1')).toHaveText('Old plan')
 
   await page.goto('/audit')
-  await expect(page.getByTestId('audit-event').first()).toContainText('restored the note from the trash')
+  await expect(page.getByTestId('audit-event').first()).toContainText('restored the document from the trash')
 })
 
 test('agent calls appear in the audit log with a usage summary', async ({ page, request }) => {

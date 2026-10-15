@@ -37,13 +37,13 @@ export function describe(e: AuditEvent): string {
   const d = e.data ?? {}
   switch (e.kind) {
     case 'note.create':
-      return 'created the note'
+      return 'created the document'
     case 'note.delete':
       return d.reason ? `deleted “${d.title || d.alias}” for good after its time in the trash` : `deleted “${d.title || d.alias}” for good`
     case 'note.trash':
-      return 'moved the note to the trash'
+      return 'moved the document to the trash'
     case 'note.restore':
-      return 'restored the note from the trash'
+      return 'restored the document from the trash'
     case 'permission.user':
       return d.level === 'deny' ? `removed @${d.username}` : `gave @${d.username} ${levelWords[String(d.level)] ?? d.level}`
     case 'permission.group': {

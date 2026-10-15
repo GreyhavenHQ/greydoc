@@ -45,5 +45,5 @@ export function download(filename: string, content: string, type: string) {
 
 export function fileName(title: string, ext: string) {
   const base = title.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '')
-  return (base || 'note') + ext
+  return (base || 'document') + ext
 }

@@ -75,11 +75,11 @@ export default function Home() {
       me?.local_mode
         ? [
             { id: 'recent', label: 'Recent' },
-            { id: 'all', label: 'All notes' },
+            { id: 'all', label: 'All documents' },
           ]
         : [
             { id: 'recent', label: 'Recent' },
-            { id: 'mine', label: 'My notes' },
+            { id: 'mine', label: 'My documents' },
             { id: 'shared', label: 'Shared with me' },
             { id: 'all', label: 'All' },
           ],
@@ -107,7 +107,7 @@ export default function Home() {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search titles, tags and text"
             className="pl-8"
-            aria-label="Search notes"
+            aria-label="Search documents"
           />
         </div>
         <div className="flex-1" />
@@ -166,7 +166,7 @@ export default function Home() {
           <div className="flex flex-col items-center gap-4 rounded-lg border border-dashed py-16 text-center">
             <FileText className="size-8 text-muted-foreground" />
             <p className="text-muted-foreground">
-              {q || tag ? 'No notes match.' : scope === 'recent' ? 'Notes you open appear here.' : 'No notes yet.'}
+              {q || tag ? 'No documents match.' : scope === 'recent' ? 'Documents you open appear here.' : 'No documents yet.'}
             </p>
             <NewNoteButton size="lg" />
           </div>
@@ -284,7 +284,7 @@ function TagFilter({ tags, selected, onSelect }: { tags: TagCount[]; selected: s
               <button
                 key={t.tag}
                 onClick={() => pick(t.tag)}
-                aria-label={`${t.tag}, ${t.count} ${t.count === 1 ? 'note' : 'notes'}`}
+                aria-label={`${t.tag}, ${t.count} ${t.count === 1 ? 'document' : 'documents'}`}
                 className={cn(
                   'flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-muted',
                   selected === t.tag && 'font-medium text-primary',
@@ -308,7 +308,7 @@ function TagChip({ tag, selected, onClick }: { tag: TagCount; selected: boolean;
     <button
       onClick={onClick}
       aria-pressed={selected}
-      aria-label={`${tag.tag}, ${tag.count} ${tag.count === 1 ? 'note' : 'notes'}`}
+      aria-label={`${tag.tag}, ${tag.count} ${tag.count === 1 ? 'document' : 'documents'}`}
       className={cn(
         'inline-flex h-6 items-center rounded-md border px-2 text-xs transition-colors',
         selected

@@ -17,7 +17,7 @@ export function SignInCard({ next = nextPath() }: { next?: string }) {
         <CardHeader className="items-center text-center">
           <Logo className="mx-auto mb-2 h-10" />
           <CardTitle className="font-serif text-2xl">greydoc</CardTitle>
-          <CardDescription>Shared notes, written together.</CardDescription>
+          <CardDescription>Shared documents, written together.</CardDescription>
         </CardHeader>
         <CardContent>
           <Button className="w-full" onClick={() => (window.location.href = '/auth/login?next=' + encodeURIComponent(next))}>

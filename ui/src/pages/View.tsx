@@ -48,7 +48,7 @@ export default function View({ alias: given }: { alias?: string } = {}) {
       location.href = loginHref()
       return null
     }
-    return <div className="flex h-screen items-center justify-center text-muted-foreground">{error.status === 404 ? 'This note does not exist.' : error.message}</div>
+    return <div className="flex h-screen items-center justify-center text-muted-foreground">{error.status === 404 ? 'This document does not exist.' : error.message}</div>
   }
   if (!note) {
     return (

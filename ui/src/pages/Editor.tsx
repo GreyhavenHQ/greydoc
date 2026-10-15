@@ -197,9 +197,9 @@ export default function Editor() {
         if (e instanceof ApiError && e.code === 'in_trash') setInTrash(true)
         setError(
           e instanceof ApiError && e.status === 404
-            ? 'This note does not exist.'
+            ? 'This document does not exist.'
             : e instanceof ApiError && e.code === 'in_trash'
-              ? 'This note is in the trash.'
+              ? 'This document is in the trash.'
               : e instanceof Error
                 ? e.message
                 : String(e),
@@ -238,21 +238,21 @@ export default function Editor() {
     const off = s.onEvent((ev: AppEvent) => {
       if (ev.type === 'access' && ev.level) {
         setLevel(ev.level)
-        if (ev.level === 'deny') toast.error('Your access to this note was removed.')
+        if (ev.level === 'deny') toast.error('Your access to this document was removed.')
       }
       if (ev.type === 'refused') {
         const code = Number(ev.code)
         if (code === 4401) location.href = loginHref()
         else {
           if (code === 4410) setInTrash(true)
-          setError(code === 4404 ? 'This note does not exist.' : code === 4410 ? 'This note is in the trash.' : 'You do not have access to this note.')
+          setError(code === 4404 ? 'This document does not exist.' : code === 4410 ? 'This document is in the trash.' : 'You do not have access to this document.')
         }
       }
       if (ev.type === 'timeline') setTimelineKey((k) => k + 1)
       if (ev.type === 'comments') loadThreadsRef.current()
       if (ev.type === 'suggestions') loadSuggestionsRef.current()
       if (ev.type === 'deleted' || ev.type === 'trashed') {
-        toast.error(ev.type === 'trashed' ? 'This note was moved to the trash.' : 'This note was deleted.')
+        toast.error(ev.type === 'trashed' ? 'This document was moved to the trash.' : 'This document was deleted.')
         navigate('/')
       }
     })
@@ -561,7 +561,7 @@ export default function Editor() {
             </Button>
           )}
           <Button asChild variant="outline">
-            <Link to="/">Back to notes</Link>
+            <Link to="/">Back to documents</Link>
           </Button>
         </div>
       </div>
@@ -586,7 +586,7 @@ export default function Editor() {
     <TooltipProvider delayDuration={300}>
       <div className="flex h-screen flex-col">
         <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
-          <Link to="/" className="flex items-center" aria-label="All notes">
+          <Link to="/" className="flex items-center" aria-label="All documents">
             <Logo className="h-5 text-foreground" />
           </Link>
           <h1 className="min-w-0 truncate px-1 text-sm font-medium" data-testid="note-title">
@@ -728,7 +728,7 @@ export default function Editor() {
               </div>
               <DropdownMenuItem asChild>
                 <Link to={'/audit?note=' + note.alias}>
-                  <ScrollText className="size-4" /> Audit log of this note
+                  <ScrollText className="size-4" /> Audit log of this document
                 </Link>
               </DropdownMenuItem>
               {(isOwner || me?.admin) && (

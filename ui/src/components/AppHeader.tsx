@@ -129,7 +129,7 @@ export function NewNoteButton({ size = 'sm' }: { size?: 'sm' | 'default' | 'lg' 
   const navigate = useNavigate()
   return (
     <Button size={size} onClick={() => navigate('/new')}>
-      <Plus className="size-4" /> New note
+      <Plus className="size-4" /> New document
     </Button>
   )
 }

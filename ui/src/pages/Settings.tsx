@@ -115,7 +115,7 @@ export default function Settings() {
           <CardHeader>
             <CardTitle>Connect an AI agent (MCP)</CardTitle>
             <CardDescription>
-              Agents read, comment, suggest and edit with your rights. Each note's owner decides how far agents may go.
+              Agents read, comment, suggest and edit with your rights. Each document's owner decides how far agents may go.
             </CardDescription>
           </CardHeader>
           <CardContent className="text-sm">
@@ -138,8 +138,8 @@ export default function Settings() {
                       <p className="text-muted-foreground">A browser window opens. Choose Allow. Run the command again when opencode reports that greydoc needs a sign-in.</p>
                     </Step>
                   )}
-                  <Step title="Start opencode and ask about your notes">
-                    <p className="text-muted-foreground">For example: “List my greydoc notes about the roadmap.”</p>
+                  <Step title="Start opencode and ask about your documents">
+                    <p className="text-muted-foreground">For example: “List my greydoc documents about the roadmap.”</p>
                   </Step>
                 </Steps>
               </TabsContent>
@@ -154,8 +154,8 @@ export default function Settings() {
                       <p className="text-muted-foreground">A browser window opens. Choose Allow. Do it again when Claude Code reports that greydoc needs a sign-in.</p>
                     </Step>
                   )}
-                  <Step title="Ask Claude about your notes">
-                    <p className="text-muted-foreground">For example: “List my greydoc notes about the roadmap.”</p>
+                  <Step title="Ask Claude about your documents">
+                    <p className="text-muted-foreground">For example: “List my greydoc documents about the roadmap.”</p>
                   </Step>
                 </Steps>
               </TabsContent>

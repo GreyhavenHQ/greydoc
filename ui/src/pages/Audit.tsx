@@ -16,7 +16,7 @@ import { relativeTime, shortDateTime } from '@/lib/time'
 
 const kinds = [
   { id: 'all', label: 'Everything' },
-  { id: 'note', label: 'Notes: create, trash, restore, delete' },
+  { id: 'note', label: 'Documents: create, trash, restore, delete' },
   { id: 'permission', label: 'Permissions' },
   { id: 'comment', label: 'Comments' },
   { id: 'suggestion', label: 'Suggestions' },
@@ -193,7 +193,7 @@ export default function Audit() {
       <main className="mx-auto max-w-4xl px-4 py-8">
         <h1 className="text-2xl font-semibold tracking-tight">Audit log</h1>
         <p className="mt-1 mb-6 text-sm text-muted-foreground">
-          {all ? 'Every recorded action on this server.' : 'Actions on notes you can read, and your own actions.'} Text edits are in each note's timeline.
+          {all ? 'Every recorded action on this server.' : 'Actions on documents you can read, and your own actions.'} Text edits are in each document's timeline.
         </p>
         <div className="mb-4 flex flex-wrap gap-2">
           <Select value={kind} onValueChange={(v) => set('kind', v)}>
@@ -223,8 +223,8 @@ export default function Audit() {
           <Input value={actor} onChange={(e) => setActor(e.target.value)} placeholder="Person" className="h-9 w-48" />
           {params.get('note') && (
             <Badge variant="secondary" className="h-9 gap-1">
-              Note {params.get('note')}
-              <button onClick={() => set('note', '')} aria-label="Clear note filter">
+              Document {params.get('note')}
+              <button onClick={() => set('note', '')} aria-label="Clear document filter">
                 ×
               </button>
             </Badge>
@@ -271,7 +271,7 @@ export default function Audit() {
                   )}
                   {ev.note_state === 'deleted' && (
                     <span className="flex items-center gap-1.5">
-                      <span>{ev.note_title || String(ev.data?.title ?? ev.data?.alias ?? 'a note')}</span>
+                      <span>{ev.note_title || String(ev.data?.title ?? ev.data?.alias ?? 'a document')}</span>
                       <Badge variant="outline" className="px-1 py-0 text-[10px]">
                         deleted
                       </Badge>
@@ -279,7 +279,7 @@ export default function Audit() {
                   )}
                   {ev.note_id && ev.note_state !== 'deleted' && (
                     <button className="underline-offset-2 hover:underline" onClick={() => set('note', ev.note_alias || ev.note_id!)}>
-                      only this note
+                      only this document
                     </button>
                   )}
                 </div>

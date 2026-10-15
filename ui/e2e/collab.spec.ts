@@ -75,7 +75,7 @@ test('timeline and author layer', async ({ page }) => {
   await expect(page.getByTestId('authors-legend')).toContainText('Anonymous')
   await page.getByRole('button', { name: 'More' }).click()
   await page.getByRole('menuitem', { name: 'Timeline' }).click()
-  await expect(page.getByTestId('timeline')).toContainText('created the note')
+  await expect(page.getByTestId('timeline')).toContainText('created the document')
   await expect(page.getByText(/Editing now/)).toBeVisible()
 })
 
@@ -292,7 +292,7 @@ test('a refused connection stops the retries and says why', async ({ page }) => 
     ws.close({ code: 4410, reason: 'this note is in the trash' })
   })
   await page.goto('/n/' + alias)
-  await expect(page.getByText('This note is in the trash.')).toBeVisible()
+  await expect(page.getByText('This document is in the trash.')).toBeVisible()
   await page.waitForTimeout(3000)
   expect(attempts).toBe(1)
 })

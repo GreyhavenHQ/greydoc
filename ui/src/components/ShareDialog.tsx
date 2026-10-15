@@ -107,7 +107,7 @@ export function ShareDialog({ alias, isOwner, open, onOpenChange }: { alias: str
         <DialogHeader>
           <DialogTitle>Share and protect</DialogTitle>
           <DialogDescription>
-            {me?.local_mode ? 'Local mode: everyone who can reach this server can edit.' : 'Choose who can view, comment on and edit this note.'}
+            {me?.local_mode ? 'Local mode: everyone who can reach this server can edit.' : 'Choose who can view, comment on and edit this document.'}
           </DialogDescription>
         </DialogHeader>
         {!perm ? null : (
@@ -183,7 +183,7 @@ export function ShareDialog({ alias, isOwner, open, onOpenChange }: { alias: str
                   <div className="flex items-center justify-between">
                     <div>
                       <div>View-only links</div>
-                      <div className="text-xs text-muted-foreground">For clients: rendered note only, no editor or comments.</div>
+                      <div className="text-xs text-muted-foreground">For clients: rendered document only, no editor or comments.</div>
                     </div>
                     <Button size="sm" variant="outline" onClick={createLink}>
                       <Link2 className="size-4" /> New link
