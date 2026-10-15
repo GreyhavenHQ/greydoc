@@ -149,6 +149,18 @@
 .reveal.greydoc-deck.overview .backgrounds .slide-background, .reveal.greydoc-deck.overview-deactivating .backgrounds .slide-background {
   transition: transform 0.5s cubic-bezier(0.26, 0.86, 0.44, 0.985), opacity 0.5s;
 }
+/* Only the current slide moves. The others fade in at their place, and vanish on the way back, so they never cross it. */
+.reveal.greydoc-deck.overview .slides section:not(.present), .reveal.greydoc-deck.overview .backgrounds .slide-background:not(.present) {
+  transition: opacity 0.4s;
+}
+.reveal.greydoc-deck.overview-deactivating .slides section:not(.present),
+.reveal.greydoc-deck.overview-deactivating .backgrounds .slide-background:not(.present) {
+  transition: none;
+}
+.reveal.greydoc-deck.overview-deactivating .slides section.present,
+.reveal.greydoc-deck.overview-deactivating .backgrounds .slide-background.present {
+  transition: transform 0.5s cubic-bezier(0.26, 0.86, 0.44, 0.985);
+}
 
 /* Dark deck, from the Greyhaven dark palette. */
 .greydoc-deck-dark { --r-background-color: #161614; }
