@@ -31,3 +31,13 @@ test('the features page renders the guide with live examples', async ({ page }) 
   await expect(doc.locator('.mermaid-block svg').first()).toBeVisible({ timeout: 15_000 })
   await expect(doc.locator('.katex').first()).toBeVisible()
 })
+
+test('the Markdown help shows example images at their own size', async ({ page }) => {
+  await page.goto('/new')
+  await expect(page).toHaveURL(/\/n\//)
+  await page.getByRole('button', { name: 'Markdown help' }).click()
+  const imgs = page.getByTestId('syntax-help').locator('.markdown-body img')
+  await expect(imgs).toHaveCount(2)
+  await expect.poll(async () => (await imgs.nth(0).boundingBox())?.width).toBe(32)
+  await expect.poll(async () => (await imgs.nth(1).boundingBox())?.width).toBe(64)
+})

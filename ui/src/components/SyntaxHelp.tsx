@@ -17,7 +17,7 @@ const sections: { id: string; label: string; entries: Entry[] }[] = [
       { label: 'Lists', src: '- item\n  - nested item\n1. first\n2. second' },
       { label: 'Tasks', src: '- [x] done\n- [ ] to do' },
       { label: 'Links', src: '[greydoc](https://example.com)\n<https://example.com>' },
-      { label: 'Images', src: '![alt text](/favicon.svg)\n![sized](/favicon.svg =32x32)' },
+      { label: 'Images', src: '![alt text](/favicon.svg)\n![wider](/favicon.svg =64x)' },
       { label: 'Quote', src: '> Text from someone else.' },
       { label: 'Code', src: 'Inline `code`.\n\n```js\nconst answer = 42\n```' },
       { label: 'Table', src: '| Name | Status |\n|:-----|:------:|\n| Search | Done |\n| SSO | Late |' },

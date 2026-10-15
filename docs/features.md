@@ -247,11 +247,11 @@ Hold Ctrl or Cmd and scroll over a diagram to zoom at the pointer. Drag to pan. 
 ### Images with a size
 
 ```markdown
-![logo](/favicon.svg =48x48)
+![logo](/favicon.svg =64x)
 <img src="/favicon.svg" height="48px">
 ```
 
-![logo](/favicon.svg =48x48) <img src="/favicon.svg" height="48px">
+![logo](/favicon.svg =64x) <img src="/favicon.svg" height="48px">
 
 ### Footnotes
 
