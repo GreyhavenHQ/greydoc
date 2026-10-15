@@ -300,13 +300,32 @@ test('the note shows as a page to read while the live copy connects', async ({ p
   const alias = await noteWith(page, '# Read me first\n\nThe body.')
   // The mocked socket opens but never syncs, like a slow connection.
   await page.routeWebSocket(/\/ws\//, () => {})
-  await page.goto('/n/' + alias)
-  const view = page.getByTestId('connecting-view')
-  await expect(view.locator('h1').last()).toHaveText('Read me first')
-  await expect(view).toContainText('The body.')
+  await page.goto('/n/' + alias + '?both')
+  await expect(page.getByTestId('preview').locator('h1')).toHaveText('Read me first')
+  await expect(page.getByTestId('preview')).toContainText('The body.')
   await expect(page.getByTestId('editor')).toHaveCount(0)
+  await expect(page.getByTestId('editor-connecting')).toBeVisible()
   await page.waitForTimeout(4500)
-  await expect(page.getByTestId('connecting-view')).toBeVisible()
+  await expect(page.getByTestId('connecting')).toBeVisible()
+})
+
+test('in preview-only mode the note does not render again when the live copy arrives', async ({ page }) => {
+  const alias = await noteWith(page, '# Steady\n\nNo flicker here.')
+  // Mark the first heading the preview renders. A second render would replace it.
+  await page.addInitScript(() => {
+    new MutationObserver(() => {
+      const h = document.querySelector<HTMLElement>('[data-testid=preview] h1')
+      if (h && !(window as unknown as { marked?: boolean }).marked) {
+        ;(window as unknown as { marked?: boolean }).marked = true
+        h.dataset.first = '1'
+      }
+    }).observe(document, { childList: true, subtree: true })
+  })
+  await page.goto('/n/' + alias + '?view')
+  await expect(page.getByTitle('Connected')).toBeVisible()
+  await page.waitForTimeout(400)
+  await expect(page.locator('[data-testid=preview] h1[data-first="1"]')).toHaveText('Steady')
+  await expect(page.getByTestId('connecting')).toHaveCount(0)
 })
 
 test('the view page and slide mode load the note once, with no live connection', async ({ page }) => {

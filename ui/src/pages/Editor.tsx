@@ -94,11 +94,15 @@ function useYText(session: NoteSession | null): string {
       clearTimeout(timer)
       timer = setTimeout(() => setText(session.text.toString()), 120)
     }
+    // The synced text is taken at once, in the same render that ends the connecting state.
+    const onSync = (v: boolean) => v && setText(session.text.toString())
     setText(session.text.toString())
     session.text.observe(update)
+    session.provider.on('sync', onSync)
     return () => {
       clearTimeout(timer)
       session.text.unobserve(update)
+      session.provider.off('sync', onSync)
     }
   }, [session])
   return text
@@ -570,30 +574,10 @@ export default function Editor() {
       </div>
     )
   }
-  if (!session || !loaded) {
-    // Until the live copy arrives, the note shows as a page to read. The editor mounts once synced.
-    return (
-      <div className="flex h-screen flex-col" data-testid="connecting-view">
-        <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
-          <Link to="/" className="flex items-center" aria-label="All notes">
-            <Logo className="h-5 text-foreground" />
-          </Link>
-          <h1 className="min-w-0 truncate px-1 text-sm font-medium">{title}</h1>
-          <span className="size-2 shrink-0 animate-pulse rounded-full bg-amber-500" />
-          <span className="text-xs text-muted-foreground">{connected ? 'Loading the live copy…' : 'Connecting…'} You can read while it loads.</span>
-          <div className="flex-1" />
-          <UserMenu />
-        </header>
-        <main className="min-h-0 flex-1 overflow-y-auto">
-          <WithToc show={false}>
-            <div className="px-8 py-8">
-              <Preview source={note.content ?? ''} />
-            </div>
-          </WithToc>
-        </main>
-      </div>
-    )
-  }
+  // Until the live copy arrives, the page shows the note's text from the first request. The same page stays
+  // once it arrives, so the preview does not render again.
+  const ready = Boolean(session && loaded)
+  const shown = ready ? text : (note.content ?? '')
 
   const showEditor = mode !== 'view' && atLeast(level, 'comment')
   const showPreview = (mode !== 'edit' && mode !== 'live') || !atLeast(level, 'comment')
@@ -609,9 +593,14 @@ export default function Editor() {
             {title}
           </h1>
           <span
-            className={cn('size-2 shrink-0 rounded-full', connected && synced ? 'bg-emerald-500' : 'bg-amber-500')}
+            className={cn('size-2 shrink-0 rounded-full', connected && synced ? 'bg-emerald-500' : 'bg-amber-500', !ready && 'animate-pulse')}
             title={connected ? (synced ? 'Connected' : 'Syncing') : 'Offline, reconnecting'}
           />
+          {!ready && (
+            <span className="hidden text-xs text-muted-foreground sm:inline" data-testid="connecting">
+              {connected ? 'Loading the live copy…' : 'Connecting…'}
+            </span>
+          )}
           {!canEdit && (
             <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
               {level === 'comment' ? 'Suggesting' : 'Read only'}
@@ -816,16 +805,22 @@ export default function Editor() {
                   ))}
                 </div>
               )}
-              <CodeEditor
-                ytext={session.text}
-                awareness={session.provider.awareness}
-                readOnly={!atLeast(level, 'comment')}
-                overlay={authorsOverlay}
-                live={mode === 'live'}
-                extensions={editorExtensions}
-                onView={onView}
-                autoFocus
-              />
+              {session && ready ? (
+                <CodeEditor
+                  ytext={session.text}
+                  awareness={session.provider.awareness}
+                  readOnly={!atLeast(level, 'comment')}
+                  overlay={authorsOverlay}
+                  live={mode === 'live'}
+                  extensions={editorExtensions}
+                  onView={onView}
+                  autoFocus
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center text-sm text-muted-foreground" data-testid="editor-connecting">
+                  {connected ? 'Loading the live copy…' : 'Connecting…'}
+                </div>
+              )}
             </section>
           )}
           {showPreview && (
@@ -838,7 +833,7 @@ export default function Editor() {
             >
               <WithToc show={!showEditor && !commentsOpen} scroller={previewEl}>
                 <div className="px-8 py-8">
-                  <Preview source={text} ref={article} onToggleTask={canEdit ? toggleTask : undefined} />
+                  <Preview source={shown} ref={article} onToggleTask={canEdit && ready ? toggleTask : undefined} />
                 </div>
               </WithToc>
             </section>

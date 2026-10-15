@@ -23,16 +23,19 @@ export const Preview = forwardRef<HTMLElement, PreviewProps>(function Preview({ 
     const el = root.current
     if (!el) return
     el.innerHTML = renderMarkdown(source).html
-    if (toggle.current) {
-      el.querySelectorAll<HTMLInputElement>('li[data-line] > input[type=checkbox], li[data-line] > label > input[type=checkbox]').forEach((b) => {
-        b.disabled = false
-        b.classList.add('task-toggle')
-      })
-    }
     void hydrateNoteLinks(el)
     void hydrateMermaid(el, { mode: resolvedTheme }).then(() => onRendered?.(el))
     onRendered?.(el)
   }, [source, resolvedTheme, onRendered])
+
+  // Task boxes follow whether toggling is allowed, which can change without the text changing.
+  const canToggle = Boolean(onToggleTask)
+  useLayoutEffect(() => {
+    root.current?.querySelectorAll<HTMLInputElement>('li[data-line] > input[type=checkbox], li[data-line] > label > input[type=checkbox]').forEach((b) => {
+      b.disabled = !canToggle
+      b.classList.toggle('task-toggle', canToggle)
+    })
+  }, [canToggle, source, resolvedTheme])
 
   useEffect(() => {
     const el = root.current
