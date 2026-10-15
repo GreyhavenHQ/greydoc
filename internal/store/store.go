@@ -99,6 +99,8 @@ func (s *Store) LockInstance(ctx context.Context) error {
 
 func (s *Store) Dialect() string { return s.dialect }
 
+func (s *Store) Ping(ctx context.Context) error { return s.db.PingContext(ctx) }
+
 func (s *Store) Init(ctx context.Context) error {
 	for _, stmt := range strings.Split(schemaFor(s.dialect), ";") {
 		stmt = strings.ReplaceAll(strings.TrimSpace(stmt), triggerSemicolon, ";")

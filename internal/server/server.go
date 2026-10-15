@@ -170,9 +170,7 @@ func (s *Server) afterSave(noteID string) {
 func (s *Server) Handler() http.Handler { return s.checkOrigin(s.withIdentity(s.mux)) }
 
 func (s *Server) routes() {
-	s.mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]string{"status": "ok"})
-	})
+	s.mux.HandleFunc("GET /healthz", s.handleHealthz)
 	s.mux.HandleFunc("GET /auth/login", s.handleAuthLogin)
 	s.mux.HandleFunc("GET /auth/callback", s.handleAuthCallback)
 	s.mux.HandleFunc("POST /auth/logout", s.handleAuthLogout)
@@ -294,4 +292,15 @@ func (s *Server) checkOrigin(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// handleHealthz answers 200 when the server and its database work, for container health checks.
+func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	defer cancel()
+	if err := s.store.Ping(ctx); err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "error", "error": "database unreachable"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }

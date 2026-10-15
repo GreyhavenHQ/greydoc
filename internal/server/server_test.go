@@ -23,3 +23,12 @@ func TestUnknownPathServesIndex(t *testing.T) {
 		t.Fatalf("index must not be cached, got %q", resp.Header.Get("Cache-Control"))
 	}
 }
+
+func TestHealthzReportsDatabaseFailure(t *testing.T) {
+	e := newTestEnv(t)
+	_ = e.srv.Store().Close()
+	resp, body := e.get("/healthz")
+	if resp.StatusCode != 503 || !strings.Contains(body, "database") {
+		t.Fatalf("%d %q", resp.StatusCode, body)
+	}
+}
