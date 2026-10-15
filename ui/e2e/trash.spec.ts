@@ -22,7 +22,7 @@ test('trash, restore and audit', async ({ page }) => {
   await page.getByRole('button', { name: 'Restore' }).click()
   await expect(page.getByText('Restored', { exact: true })).toBeVisible()
   await page.goto('/n/' + alias)
-  await expect(page.getByTestId('editor').locator('.cm-lp-h1')).toHaveText('Old plan')
+  await expect(page.getByTestId('preview').locator('h1')).toHaveText('Old plan')
 
   await page.goto('/audit')
   await expect(page.getByTestId('audit-event').first()).toContainText('restored the note from the trash')

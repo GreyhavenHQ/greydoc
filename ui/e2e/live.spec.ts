@@ -1,12 +1,22 @@
 import { expect, test } from '@playwright/test'
 
+// These tests are about live mode, which is not the default.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    if (!sessionStorage.getItem('mode-set')) {
+      localStorage.setItem('greydoc-mode', 'live')
+      sessionStorage.setItem('mode-set', '1')
+    }
+  })
+})
+
 async function noteWith(page: import('@playwright/test').Page, text: string): Promise<string> {
   const resp = await page.request.post('/api/notes', { data: { content: text } })
   expect(resp.status()).toBe(201)
   return (await resp.json()).alias
 }
 
-test('live mode is the default and renders markdown in place', async ({ page }) => {
+test('live mode renders markdown in place', async ({ page }) => {
   const alias = await noteWith(page, '# Plan\n\nSome **bold** text.\n\n```mermaid\ngraph LR\nA-->B\n```\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n- [ ] ship\n\nend')
   await page.goto('/n/' + alias)
   const editor = page.getByTestId('editor')
@@ -130,4 +140,19 @@ test('front matter collapses to one line in live mode', async ({ page }) => {
   await props.click()
   await expect(editor.getByTestId('front-matter')).toHaveCount(0)
   await expect(editor.locator('.cm-line', { hasText: 'tags: [design, q4]' })).toHaveCount(1)
+})
+
+test('a new note opens in split view, and a chosen mode is remembered', async ({ browser }) => {
+  const ctx = await browser.newContext()
+  const page = await ctx.newPage()
+  await page.goto('/new')
+  await expect(page).toHaveURL(/\/n\//)
+  await expect(page.getByTestId('editor')).toHaveCount(1)
+  await expect(page.getByTestId('preview')).toHaveCount(1)
+  await page.getByRole('radio', { name: /Live/ }).click()
+  await expect(page.getByTestId('preview')).toHaveCount(0)
+  await page.goto('/new')
+  await expect(page).toHaveURL(/\/n\//)
+  await expect(page.getByTestId('editor').locator('.cm-live')).toHaveCount(1)
+  await ctx.close()
 })

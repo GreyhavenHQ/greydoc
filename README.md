@@ -38,7 +38,7 @@ docker compose up -d greydoc
 |---|---|
 | New note | Press "New note", or open `/new`. `/new?alias=standup` picks the address. |
 | Short address | `/<alias>` opens `/n/<alias>`. HedgeDoc 1 links work for imported notes; see [docs/import-hedgedoc.md](docs/import-hedgedoc.md). |
-| Read and edit in one view | Live mode (the book button, Ctrl+Alt+L) renders the note in place. The line you edit shows its Markdown. Click a diagram, table or formula to edit its source. The pencil, split and eye buttons give the source editor, editor with preview, and preview only. |
+| Read and edit in one view | Notes open in split view: editor and preview side by side, as in HedgeDoc. Live mode (the book button, Ctrl+Alt+L) renders the note in place: the line you edit shows its Markdown, and a click on a diagram, table or formula edits its source. The pencil and eye buttons give the editor alone and the preview alone. Your browser remembers the last mode you chose. |
 | Tags | Add `tags: [design, q4]` to the front matter. Click a tag on the home page to filter. |
 | Protect a note | "Share" in the editor: people, groups, signed-in users, anyone with the address. Levels are view, comment and edit. |
 | Share with a client | "Share", then "New link". The link opens `/s/<alias>`: the rendered note with no editor, comments or toolbar. |

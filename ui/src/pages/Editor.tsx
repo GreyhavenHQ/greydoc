@@ -62,7 +62,8 @@ type Mode = 'live' | 'edit' | 'both' | 'view'
 const toolbarButton = 'h-7 gap-1 px-2 text-background hover:bg-background/15 hover:text-background'
 
 const MODE_KEY = 'greydoc-mode'
-const defaultEditMode: Mode = 'live'
+// Split view, as in HedgeDoc, until the user picks another mode.
+const defaultEditMode: Mode = 'both'
 
 // savedMode reads HedgeDoc 1's ?view, ?edit and ?both first, then the last mode used in this browser.
 function savedMode(): Mode {
