@@ -120,7 +120,7 @@ test('AI refine becomes an AI-assisted suggestion', async ({ page }) => {
   await page.keyboard.type('the meeting was good i think')
   await page.keyboard.press('Shift+Home')
   await page.getByTestId('selection-toolbar').getByRole('button', { name: 'AI' }).click()
-  await page.getByRole('menuitem', { name: 'Refine' }).click()
+  await page.getByTestId('ai-preset').filter({ hasText: 'Make it clearer' }).click()
   await expect(page.locator('.cm-sugg-ins.cm-sugg-ai_assisted .cm-sugg-text')).toHaveText('The meeting went well.')
   await expect(page.getByTestId('preview')).toHaveText('the meeting was good i think')
   await page.getByRole('button', { name: 'Accept suggestion' }).click()

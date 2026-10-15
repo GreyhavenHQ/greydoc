@@ -70,13 +70,14 @@ Select text and pick **Suggest**. A suggestion proposes new text. A person who c
 
 ### AI assistant
 
-Select text and pick **AI**:
+Select text and pick **AI**. Type what the AI must do with the selection, then press Enter. Below the text box, presets do common jobs in one click:
 
-- Refine
-- Shorten
 - Fix spelling and grammar
-- Continue writing
+- Make it clearer
+- Make it shorter
 - Make a diagram below
+
+Each preset shows the exact instruction that the model gets. The server administrator can change the presets.
 
 The result is always a suggestion. The AI never changes the note by itself. Before you accept, you can ask the AI to revise the suggestion, for example "make it vertical". Accepted text stays marked as AI-assisted.
 

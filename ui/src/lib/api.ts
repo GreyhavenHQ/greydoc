@@ -54,10 +54,19 @@ export const levelRank: Record<Level, number> = { deny: 0, read: 1, comment: 2, 
 
 export const atLeast = (l: Level | undefined, need: Level) => !!l && levelRank[l] >= levelRank[need]
 
+export interface AiPreset {
+  id: string
+  label: string
+  instruction: string
+  output: 'replace' | 'below' | 'diagram'
+}
+
 export interface Me {
   authenticated: boolean
   local_mode: boolean
   ai_enabled: boolean
+  // ai_actions are the server's AI presets, set with GREYDOC_AI_ACTIONS.
+  ai_actions?: AiPreset[] | null
   login_url: string
   id?: string
   username?: string

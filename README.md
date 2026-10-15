@@ -47,7 +47,7 @@ docker compose up -d greydoc
 | Share with a client | "Share", then "New link". The short link `/v/<token>` opens the rendered note with no editor, comments or toolbar. Older `/s/<alias>?share=<token>` links keep working. |
 | Comment | Select text, press "Comment". |
 | Suggest | Select text, press "Suggest". People with comment access suggest each time they type. |
-| AI | Select text, press "AI": refine, shorten, fix, diagram, continue, or ask. The answer is a suggestion. |
+| AI | Select text, press "AI", and type what to do, or pick a preset: fix spelling and grammar, make it clearer, make it shorter, make a diagram. Presets are set server-wide with `GREYDOC_AI_ACTIONS`. The answer is a suggestion. |
 | History | The clock button opens the timeline. Open a revision to see its diff or restore it. Open a suggestion or comment event to see it, accept or reject it, or jump to it in the note. An AI suggestion shows the request and, on demand, the full prompt sent to the model. |
 | Who wrote what | The people button colors text by author. Dashed underline means AI-assisted. Dotted means agent. |
 | Slides | Menu, "Slide mode". `---` starts a slide, `----` a vertical slide, `note:` starts speaker notes. Escape shows all slides, D switches between light and dark. |

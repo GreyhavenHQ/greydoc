@@ -98,11 +98,13 @@ interface SuggestionDetail {
 
 interface AIPrompt {
   action: string
+  label?: string
   instruction?: string
   model?: string
   messages: { role: string; content: string }[]
 }
 
+// aiActions name the actions of AI requests recorded before presets had labels.
 const aiActions: Record<string, string> = {
   refine: 'Refine',
   shorten: 'Shorten',
@@ -119,7 +121,7 @@ function PromptDetails({ prompt }: { prompt: AIPrompt }) {
   return (
     <div className="rounded border border-purple-500/30 bg-purple-500/5 px-2 py-1.5 text-xs" data-testid="ai-prompt">
       <div className="flex items-center gap-2">
-        <span className="font-medium">AI request: {aiActions[prompt.action] ?? prompt.action}</span>
+        <span className="font-medium">AI request: {prompt.label || aiActions[prompt.action] || prompt.action}</span>
         {prompt.model && <span className="font-mono text-[10px] text-muted-foreground">{prompt.model}</span>}
       </div>
       {prompt.instruction && <p className="mt-1">“{prompt.instruction}”</p>}
