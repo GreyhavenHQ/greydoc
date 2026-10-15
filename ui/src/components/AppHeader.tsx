@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { BookOpen, LogIn, LogOut, Moon, Plus, ScrollText, Settings, Sun, Trash2 } from 'lucide-react'
+import { BookOpen, CircleHelp, LogIn, LogOut, Moon, Plus, ScrollText, Settings, Sun, Trash2 } from 'lucide-react'
+import { SyntaxHelp } from '@/components/SyntaxHelp'
 import { Logo } from '@/components/Logo'
 import { Button } from '@/components/ui/button'
 import {
@@ -28,16 +30,22 @@ export function ThemeToggle() {
   )
 }
 
+// UserMenu holds the account, Markdown help and the light or dark theme. Signed-out visitors get the theme button and Sign in.
 export function UserMenu() {
   const { me } = useMe()
+  const { resolvedTheme, setTheme } = useTheme()
+  const [helpOpen, setHelpOpen] = useState(false)
   if (!me) return null
   if (!me.authenticated) {
     return (
-      <Button variant="outline" size="sm" asChild>
-        <a href={loginHref()}>
-          <LogIn className="size-4" /> Sign in
-        </a>
-      </Button>
+      <>
+        <ThemeToggle />
+        <Button variant="outline" size="sm" asChild>
+          <a href={loginHref()}>
+            <LogIn className="size-4" /> Sign in
+          </a>
+        </Button>
+      </>
     )
   }
   const name = me.local_mode ? localName() : me.display_name || me.username
@@ -61,6 +69,14 @@ export function UserMenu() {
             {me.local_mode ? 'Local mode, no sign-in' : '@' + me.username}
           </div>
         </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => setHelpOpen(true)}>
+          <CircleHelp className="size-4" /> Markdown help
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}>
+          {resolvedTheme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
+          {resolvedTheme === 'dark' ? 'Light mode' : 'Dark mode'}
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
           <Link to="/settings">
@@ -104,6 +120,7 @@ export function UserMenu() {
           </DropdownMenuItem>
         )}
       </DropdownMenuContent>
+      <SyntaxHelp open={helpOpen} onOpenChange={setHelpOpen} />
     </DropdownMenu>
   )
 }
@@ -125,7 +142,6 @@ export function AppHeader({ children }: { children?: React.ReactNode }) {
         <span>greydoc</span>
       </Link>
       <div className="flex flex-1 items-center gap-2">{children}</div>
-      <ThemeToggle />
       <UserMenu />
     </header>
   )

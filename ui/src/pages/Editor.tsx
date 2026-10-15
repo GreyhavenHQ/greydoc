@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import type { EditorView } from '@codemirror/view'
 import {
-  CircleHelp,
   Columns2,
   Download,
   Eye,
@@ -12,7 +11,6 @@ import {
   History,
   MessageSquare,
   MessageSquarePlus,
-  Users,
   MoreHorizontal,
   NotebookPen,
   Pencil,
@@ -23,14 +21,14 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Logo } from '@/components/Logo'
-import { SyntaxHelp } from '@/components/SyntaxHelp'
 import { WithToc } from '@/components/TocSidebar'
 import { noteLinkCompletion, type NoteHit } from '@/editor/noteLinks'
-import { ThemeToggle, UserMenu } from '@/components/AppHeader'
+import { UserMenu } from '@/components/AppHeader'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -166,7 +164,6 @@ export default function Editor() {
   const [activeThread, setActiveThread] = useState<string | null>(null)
   const [selection, setSelection] = useState<SelectionInfo | null>(null)
   const [rawSuggestions, setRawSuggestions] = useState<Suggestion[]>([])
-  const [helpOpen, setHelpOpen] = useState(false)
   const [suggestDraft, setSuggestDraft] = useState<SuggestDraft | null>(null)
   const viewRef = useRef<EditorView | null>(null)
   const sessionRef = useRef<NoteSession | null>(null)
@@ -606,25 +603,6 @@ export default function Editor() {
               </ToggleGroupItem>
             </ToggleGroup>
           )}
-          {atLeast(level, 'comment') && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={showAuthors ? 'secondary' : 'ghost'}
-                  size="icon"
-                  aria-label="Show authors"
-                  aria-pressed={showAuthors}
-                  onClick={() => {
-                    setShowAuthors(!showAuthors)
-                    if (mode === 'view') setMode(defaultEditMode)
-                  }}
-                >
-                  <Users className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Who wrote what</TooltipContent>
-            </Tooltip>
-          )}
           <Button
             variant={commentsOpen ? 'secondary' : 'ghost'}
             size="sm"
@@ -643,14 +621,6 @@ export default function Editor() {
             </TooltipTrigger>
             <TooltipContent>Timeline</TooltipContent>
           </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" aria-label="Markdown help" onClick={() => setHelpOpen(true)}>
-                <CircleHelp className="size-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Markdown help</TooltipContent>
-          </Tooltip>
           {me?.authenticated && (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -667,7 +637,21 @@ export default function Editor() {
                 <MoreHorizontal className="size-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuContent align="end" className="w-64">
+              {atLeast(level, 'comment') && (
+                <>
+                  <DropdownMenuCheckboxItem
+                    checked={showAuthors}
+                    onCheckedChange={(on) => {
+                      setShowAuthors(Boolean(on))
+                      if (on && mode === 'view') setMode(defaultEditMode)
+                    }}
+                  >
+                    Who wrote what
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
               <DropdownMenuItem asChild>
                 <a href={withShare(`/p/${note.alias}`)} target="_blank" rel="noreferrer">
                   <Presentation className="size-4" /> Slide mode
@@ -711,7 +695,6 @@ export default function Editor() {
               )}
             </DropdownMenuContent>
           </DropdownMenu>
-          <ThemeToggle />
           <UserMenu />
         </header>
         <main className="flex min-h-0 flex-1">
@@ -832,7 +815,6 @@ export default function Editor() {
             />
           )}
         </main>
-        <SyntaxHelp open={helpOpen} onOpenChange={setHelpOpen} />
         <ShareDialog alias={note.alias} isOwner={isOwner} open={shareOpen} onOpenChange={setShareOpen} />
         <Timeline
           alias={note.alias}
