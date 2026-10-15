@@ -15,7 +15,7 @@ export default function NewNote() {
     const alias = new URLSearchParams(location.search).get('alias') ?? undefined
     api
       .post<Note>('/api/notes', { content: '', alias })
-      .then((n) => navigate('/n/' + n.alias, { replace: true }))
+      .then((n) => navigate('/n/' + n.alias, { replace: true, state: { fresh: true } }))
       .catch((e: unknown) => {
         if (e instanceof ApiError && e.status === 401) {
           location.href = loginHref('/new')

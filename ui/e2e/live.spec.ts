@@ -170,3 +170,17 @@ test('a new note opens in split view, and a chosen mode is remembered', async ({
   await expect(page.getByTestId('editor').locator('.cm-live')).toHaveCount(1)
   await ctx.close()
 })
+
+test('a new note opens for editing even after preview-only mode', async ({ page }) => {
+  await page.goto('/')
+  await page.evaluate(() => localStorage.setItem('greydoc-mode', 'view'))
+  await page.goto('/new')
+  await expect(page).toHaveURL(/\/n\//)
+  await expect(page.getByTestId('editor')).toHaveCount(1)
+  await expect(page.getByRole('radio', { name: /Split view/ })).toHaveAttribute('aria-checked', 'true')
+  expect(await page.evaluate(() => localStorage.getItem('greydoc-mode'))).toBe('view')
+  const alias = new URL(page.url()).pathname.split('/').pop()
+  await page.goto('/')
+  await page.goto('/n/' + alias)
+  await expect(page.getByTestId('editor')).toHaveCount(0)
+})

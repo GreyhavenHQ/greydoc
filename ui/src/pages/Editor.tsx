@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import type { EditorView } from '@codemirror/view'
 import {
   CircleHelp,
@@ -71,10 +71,12 @@ const MODE_KEY = 'greydoc-mode'
 const defaultEditMode: Mode = 'both'
 
 // savedMode reads HedgeDoc 1's ?view, ?edit and ?both first, then the last mode used in this browser.
-function savedMode(): Mode {
+// A new note has nothing to read, so it skips a remembered preview-only mode.
+function savedMode(fresh: boolean): Mode {
   const q = new URLSearchParams(location.search)
   for (const m of ['view', 'edit', 'both'] as const) if (q.has(m)) return m
   const m = localStorage.getItem(MODE_KEY)
+  if (m === 'view' && fresh) return defaultEditMode
   return m === 'live' || m === 'edit' || m === 'both' || m === 'view' ? m : defaultEditMode
 }
 
@@ -141,7 +143,8 @@ export default function Editor() {
   const [error, setError] = useState<string>('')
   const [inTrash, setInTrash] = useState(false)
   const [level, setLevel] = useState<Level>('read')
-  const [mode, setModeState] = useState<Mode>(savedMode)
+  const fresh = Boolean((useLocation().state as { fresh?: boolean } | null)?.fresh)
+  const [mode, setModeState] = useState<Mode>(() => savedMode(fresh))
   const setMode = useCallback((m: Mode) => {
     setModeState(m)
     localStorage.setItem(MODE_KEY, m)
