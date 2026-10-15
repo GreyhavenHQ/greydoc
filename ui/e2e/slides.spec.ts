@@ -42,3 +42,15 @@ test('a slide keeps its place after a round trip through the overview', async ({
   expect(Math.abs(after.y - before.y)).toBeLessThan(1)
   expect(Math.abs(after.x - before.x)).toBeLessThan(1)
 })
+
+test('images on later slides load before the slide shows', async ({ page }) => {
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64')
+  await page.request.post('/api/notes', { data: { content: '# Holder\n', alias: 'deck-img-holder' } })
+  const { url } = await (await page.request.post('/api/notes/deck-img-holder/media', { multipart: { file: { name: 'a.png', mimeType: 'image/png', buffer: png } } })).json()
+  const resp = await page.request.post('/api/notes', { data: { content: `# One\n\n---\n\n# Two\n\n---\n\n![late](${url})` } })
+  await page.goto('/p/' + (await resp.json()).alias)
+  const img = page.locator('.reveal .slides img')
+  await expect(img).toHaveAttribute('loading', 'eager')
+  await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth)).toBe(1)
+  await expect(page.locator('.reveal .slides > section').first()).toHaveClass(/present/)
+})

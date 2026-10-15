@@ -22,7 +22,7 @@ function pick(opts: Record<string, unknown>, keys: string[]) {
 const slideNumberFormats = ['h.v', 'h/v', 'c', 'c/t']
 
 function slideHTML(src: string) {
-  return renderMarkdown(src).html
+  return renderMarkdown(src, { eagerImages: true }).html
 }
 
 // Slides renders the note as a reveal.js deck, like HedgeDoc's slide mode.

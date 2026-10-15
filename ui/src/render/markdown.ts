@@ -111,6 +111,9 @@ DOMPurify.addHook('uponSanitizeElement', (node, data) => {
 })
 
 // Large local uploads come from a resized copy. The server returns the original when it is already small.
+// eagerImages is set while a deck renders. Its hidden slides must have their images ready.
+let eagerImages = false
+
 const resizable = /^\/uploads\/[0-9a-f]{32}\.(?:png|jpg)$/
 
 // Base CSS sets img height to auto, which beats the width and height attributes. Inline styles keep them.
@@ -121,7 +124,8 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
     const m = /^\s*(\d+(?:\.\d+)?)(px|%)?\s*$/.exec(el.getAttribute(dim) ?? '')
     if (m) el.style[dim] = m[1] + (m[2] ?? 'px')
   }
-  if (!el.hasAttribute('loading')) el.setAttribute('loading', 'lazy')
+  if (eagerImages) el.setAttribute('loading', 'eager')
+  else if (!el.hasAttribute('loading')) el.setAttribute('loading', 'lazy')
   el.setAttribute('decoding', 'async')
   const src = el.getAttribute('src') ?? ''
   if (resizable.test(src)) el.setAttribute('src', src + '?w=1600')
@@ -132,16 +136,21 @@ export interface Rendered {
   frontMatter: FrontMatter | null
 }
 
-export function renderMarkdown(src: string): Rendered {
+export function renderMarkdown(src: string, opts: { eagerImages?: boolean } = {}): Rendered {
   const { data, body, bodyLine } = splitFrontMatter(src)
   lineOffset = bodyLine
   const raw = md.render(body)
   lineOffset = 0
-  const html = DOMPurify.sanitize(raw, {
-    ...purifyConfig,
-    FORBID_TAGS: purifyConfig.FORBID_TAGS.filter((t) => t !== 'input'),
-  }) as string
-  return { html, frontMatter: data }
+  eagerImages = Boolean(opts.eagerImages)
+  try {
+    const html = DOMPurify.sanitize(raw, {
+      ...purifyConfig,
+      FORBID_TAGS: purifyConfig.FORBID_TAGS.filter((t) => t !== 'input'),
+    }) as string
+    return { html, frontMatter: data }
+  } finally {
+    eagerImages = false
+  }
 }
 
 export function renderInline(src: string): string {
