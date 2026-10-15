@@ -18,7 +18,11 @@ greydoc reads environment variables. All have defaults. The server needs none of
 
 Run one server per database. With Postgres, a second server refuses to start, because live editing state is in memory.
 
+`greydoc copy-db --from <database> --to <empty database>` copies everything from one database to another, for example from SQLite to Postgres. Stop the server first. The source is not changed.
+
 ## Sign-in (OIDC)
+
+[Sign in with authentik](authentik.md) gives the steps for authentik.
 
 When `GREYDOC_OIDC_ISSUER` is empty, greydoc runs in local mode: no login, full access for every request.
 

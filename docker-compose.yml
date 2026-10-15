@@ -1,28 +1,52 @@
-# Run greydoc. Without GREYDOC_OIDC_ISSUER it starts in local mode: no login, everyone can edit.
+# Run greydoc with Postgres. Without GREYDOC_OIDC_ISSUER it starts in local mode: no login, everyone can edit.
 # Local mode is published on 127.0.0.1 only. Configure OIDC before you expose it to a network.
+# Set GREYDOC_POSTGRES_PASSWORD in .env. The database is not published outside this Compose network.
 services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: greydoc
+      POSTGRES_PASSWORD: ${GREYDOC_POSTGRES_PASSWORD:-greydoc}
+      POSTGRES_DB: greydoc
+    volumes:
+      - greydoc-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U greydoc -d greydoc"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   greydoc:
     build: .
     image: greydoc
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "127.0.0.1:43030:3000"
     volumes:
+      # Markdown copies, uploads and the server secret. Back it up with the database.
       - greydoc-data:/data
     environment:
+      GREYDOC_DATABASE_URL: postgres://greydoc:${GREYDOC_POSTGRES_PASSWORD:-greydoc}@postgres:5432/greydoc?sslmode=disable
       GREYDOC_ALLOW_NONLOCAL: ${GREYDOC_ALLOW_NONLOCAL:-1}
       GREYDOC_BASE_URL: ${GREYDOC_BASE_URL:-}
-      GREYDOC_DATABASE_URL: ${GREYDOC_DATABASE_URL:-/data/greydoc.db}
       GREYDOC_OIDC_ISSUER: ${GREYDOC_OIDC_ISSUER:-}
       GREYDOC_OIDC_CLIENT_ID: ${GREYDOC_OIDC_CLIENT_ID:-}
       GREYDOC_OIDC_CLIENT_SECRET: ${GREYDOC_OIDC_CLIENT_SECRET:-}
+      GREYDOC_OIDC_SCOPES: ${GREYDOC_OIDC_SCOPES:-openid profile email}
       GREYDOC_OIDC_GROUPS_CLAIM: ${GREYDOC_OIDC_GROUPS_CLAIM:-groups}
+      GREYDOC_ADMIN_GROUP: ${GREYDOC_ADMIN_GROUP:-}
       GREYDOC_GUEST_MAX: ${GREYDOC_GUEST_MAX:-read}
       GREYDOC_DEFAULT_EVERYONE: ${GREYDOC_DEFAULT_EVERYONE:-deny}
       GREYDOC_DEFAULT_SIGNED_IN: ${GREYDOC_DEFAULT_SIGNED_IN:-write}
+      GREYDOC_TRASH_RETENTION: ${GREYDOC_TRASH_RETENTION:-720h}
       LLM_API_BASEURL: ${LLM_API_BASEURL:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-}
 
 volumes:
+  greydoc-postgres:
   greydoc-data:

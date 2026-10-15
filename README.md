@@ -18,9 +18,19 @@ It keeps what HedgeDoc users expect: split editor and preview, Mermaid diagrams,
 docker compose up -d
 ```
 
-Open <http://127.0.0.1:43030>. Without OIDC, greydoc runs in local mode: there is no login and everyone can edit. Local mode listens on 127.0.0.1 only.
+Open <http://127.0.0.1:43030>. The Compose file runs greydoc with Postgres. Set `GREYDOC_POSTGRES_PASSWORD` in `.env` before the first start.
 
-To use it as a team, configure OIDC. See [docs/configuration.md](docs/configuration.md).
+Without OIDC, greydoc runs in local mode: there is no login and everyone can edit. Local mode listens on 127.0.0.1 only. To use it as a team, configure OIDC, for example [with authentik](docs/authentik.md). All settings are in [docs/configuration.md](docs/configuration.md).
+
+To move an existing SQLite database to Postgres, stop greydoc, then copy the data. The command never changes the source.
+
+```bash
+docker compose stop greydoc
+docker compose up -d --wait postgres
+docker compose run --rm --no-deps greydoc copy-db --from /data/greydoc.db \
+  --to "postgres://greydoc:$GREYDOC_POSTGRES_PASSWORD@postgres:5432/greydoc?sslmode=disable"
+docker compose up -d greydoc
+```
 
 ## Use it
 
@@ -126,7 +136,7 @@ The client signs you in through the browser. In opencode, `opencode mcp auth gre
 
 ## Data
 
-The database is the source of truth: SQLite by default, Postgres with `GREYDOC_DATABASE_URL=postgres://…`. greydoc also writes every note as a Markdown file to `data/notes/<alias>.md`, with its metadata in the front matter. These files are a copy for backups, search tools and git. greydoc does not read them back: edits on disk are overwritten.
+The database is the source of truth: Postgres in `docker-compose.yml`, or a SQLite file when `GREYDOC_DATABASE_URL` is a path (the binary's default). greydoc also writes every note as a Markdown file to `data/notes/<alias>.md`, with its metadata in the front matter. These files are a copy for backups, search tools and git. greydoc does not read them back: edits on disk are overwritten.
 
 ## Develop
 
@@ -137,4 +147,4 @@ docker compose -f docker-compose.dev.yml run --rm dev just test
 docker compose -f docker-compose.dev.yml up app
 ```
 
-More: [architecture](docs/architecture.md), [configuration](docs/configuration.md), [MCP](docs/mcp.md).
+More: [architecture](docs/architecture.md), [configuration](docs/configuration.md), [authentik](docs/authentik.md), [MCP](docs/mcp.md), [import from HedgeDoc 1](docs/import-hedgedoc.md).

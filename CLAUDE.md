@@ -18,7 +18,7 @@ docker compose -f docker-compose.dev.yml up app                     # http://127
 
 ## Layout
 
-- `cmd/greydoc`: CLI (`serve`, `token create`, `version`).
+- `cmd/greydoc`: CLI (`serve`, `token create`, `copy-db`, `version`).
 - `internal/config`: `GREYDOC_*` variables. Empty `GREYDOC_OIDC_ISSUER` means local mode: no login, full access.
 - `internal/store`: all persistence. `schema.go` is the DDL for SQLite and Postgres.
 - `internal/collab`: Yjs sync hub. `crdt.go` is the only file that imports `ygo`.
