@@ -18,6 +18,10 @@ func (s *Server) uiHandler() http.Handler {
 		panic(err)
 	}
 	fileServer := http.FileServerFS(dist)
+	index, err := fs.ReadFile(dist, "index.html")
+	if err != nil {
+		panic(err)
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			writeError(w, http.StatusNotFound, "not_found", "no such endpoint")
@@ -37,7 +41,6 @@ func (s *Server) uiHandler() http.Handler {
 				return
 			}
 		}
-		w.Header().Set("Cache-Control", "no-cache")
-		http.ServeFileFS(w, r, dist, "index.html")
+		s.serveIndex(w, r, index)
 	})
 }

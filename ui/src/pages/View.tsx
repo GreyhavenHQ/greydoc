@@ -10,6 +10,7 @@ import { renderMarkdown } from '@/render/markdown'
 import { Spinner } from '@/components/ui/spinner'
 import { api } from '@/lib/api'
 import { WithToc } from '@/components/TocSidebar'
+import { takeBoot } from '@/lib/boot'
 
 // View is the read-only page for clients: the rendered note and nothing else.
 export default function View({ alias: given }: { alias?: string } = {}) {
@@ -71,13 +72,18 @@ export default function View({ alias: given }: { alias?: string } = {}) {
 // ShortShare opens a view-only link of the form /v/<token>. The token alone names the note.
 export function ShortShare() {
   const { token = '' } = useParams()
-  const [alias, setAlias] = useState<string | null | undefined>(undefined)
+  const [first] = useState(() => {
+    const b = takeBoot('share')
+    return b && b.token === token ? b.alias : undefined
+  })
+  const [alias, setAlias] = useState<string | null | undefined>(first)
   useEffect(() => {
+    if (first) return
     api
       .get<{ alias: string }>('/api/share/' + encodeURIComponent(token))
       .then((r) => setAlias(r.alias))
       .catch(() => setAlias(null))
-  }, [token])
+  }, [token, first])
   if (alias === null) return <div className="flex h-screen items-center justify-center text-muted-foreground">This link does not exist or was revoked.</div>
   if (!alias) {
     return (

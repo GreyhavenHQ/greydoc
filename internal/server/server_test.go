@@ -19,7 +19,7 @@ func TestUnknownPathServesIndex(t *testing.T) {
 	if resp.StatusCode != 200 || !strings.Contains(body, `<div id="root">`) {
 		t.Fatalf("spa fallback: %d %q", resp.StatusCode, body)
 	}
-	if resp.Header.Get("Cache-Control") != "no-cache" {
+	if resp.Header.Get("Cache-Control") != "private, no-cache" {
 		t.Fatalf("index must not be cached, got %q", resp.Header.Get("Cache-Control"))
 	}
 }
