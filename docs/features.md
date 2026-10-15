@@ -95,6 +95,8 @@ Each note has an agent policy, set in the **Share** dialog:
 
 A note that a person creates starts at Suggest. A note that an agent creates starts at Edit, so the agent can keep working on its own draft.
 
+An agent can add images and PDF files to a note. It asks greydoc for a one-time upload URL and sends the file with `curl`. The file does not pass through the model.
+
 ## History and audit
 
 ### Timeline

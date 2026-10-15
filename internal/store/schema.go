@@ -234,6 +234,15 @@ CREATE TABLE IF NOT EXISTS media (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_media_note ON media(note_id);
+CREATE TABLE IF NOT EXISTS upload_ticket (
+    token_hash TEXT PRIMARY KEY,
+    note_id TEXT NOT NULL REFERENCES note(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL DEFAULT '',
+    display_name TEXT NOT NULL DEFAULT '',
+    client TEXT NOT NULL DEFAULT '',
+    filename TEXT NOT NULL DEFAULT '',
+    expires_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS note_tag (
     note_id TEXT NOT NULL REFERENCES note(id) ON DELETE CASCADE,
     tag TEXT NOT NULL,

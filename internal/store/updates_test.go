@@ -3,6 +3,7 @@ package store
 import (
 	"errors"
 	"testing"
+	"time"
 )
 
 func TestUpdateLogAndSnapshotMarker(t *testing.T) {
@@ -94,6 +95,33 @@ func TestCommitHistoryOnce(t *testing.T) {
 		}
 		if revs, _ := st.Revisions(ctx, n.ID, 10); len(revs) != 1 {
 			t.Fatalf("%d revisions", len(revs))
+		}
+	})
+}
+
+func TestUploadTicketIsSingleUseAndExpires(t *testing.T) {
+	eachDialect(t, func(t *testing.T, st *Store) {
+		n, _ := st.CreateNote(ctx, NewNote{})
+		live := UploadTicket{Hash: "h-live", NoteID: n.ID, UserID: "u", Filename: "a.png", ExpiresAt: FormatTime(time.Now().Add(time.Minute))}
+		old := UploadTicket{Hash: "h-old", NoteID: n.ID, ExpiresAt: FormatTime(time.Now().Add(-time.Minute))}
+		if err := st.CreateUploadTicket(ctx, live); err != nil {
+			t.Fatal(err)
+		}
+		_ = st.CreateUploadTicket(ctx, old)
+		if got, err := st.UploadTicket(ctx, "h-live"); err != nil || got.Filename != "a.png" {
+			t.Fatalf("%+v %v", got, err)
+		}
+		if _, err := st.UploadTicket(ctx, "h-old"); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("expired ticket found: %v", err)
+		}
+		if ok, err := st.ConsumeUploadTicket(ctx, "h-live"); !ok || err != nil {
+			t.Fatalf("consume: %v %v", ok, err)
+		}
+		if ok, _ := st.ConsumeUploadTicket(ctx, "h-live"); ok {
+			t.Fatal("consumed twice")
+		}
+		if ok, _ := st.ConsumeUploadTicket(ctx, "h-old"); ok {
+			t.Fatal("consumed an expired ticket")
 		}
 	})
 }

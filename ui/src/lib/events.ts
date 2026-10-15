@@ -92,6 +92,8 @@ export function describe(e: AuditEvent): string {
       return 'revoked an access token'
     case 'oauth.connect':
       return `connected the agent ${String(d.client ?? '')}`
+    case 'media.upload':
+      return `uploaded “${String(d.filename ?? 'a file')}”`
     case 'mcp.call':
       return `called ${String(d.tool ?? 'a tool')}`
     case 'mcp.session':

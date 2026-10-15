@@ -99,10 +99,21 @@ The policy only lowers access. An agent never gets more than the person it acts 
 | `trash_note` | Move a note to the trash. Only for a note the user owns, with agent policy `edit`. |
 | `restore_note` | Bring a note back from the trash. Same rules as `trash_note`. |
 | `get_history` | Edit sessions with authors and sources, and comment, suggestion and permission events. Pass `revision_id` for the full text and diff. |
+| `create_upload` | A one-time URL to upload an image or a PDF file to a note, and the `curl` command that uses it. Needs agent policy `suggest` or `edit`. |
 
 `old_text` and `quote` must match the note exactly. If the text appears more than once, quote more context or pass `occurrence` (1 is the first match).
 
 A note can be given as its alias, as `/n/<alias>`, or as its full URL. A view-only link, such as `https://notes.example.com/v/<token>`, works too and gives read access.
+
+## Upload images and files
+
+A tool call cannot carry a file, so the agent uploads it with `curl`. The file goes straight from the agent's disk to greydoc. It does not pass through the model.
+
+1. The agent calls `create_upload` with the note. It gets an upload URL and a command such as `curl -sS -F "file=@chart.png" https://notes.example.com/api/uploads/gd_up_…`.
+2. The agent runs the command. The answer holds the Markdown for the file, for example `![chart.png](/uploads/1f3a….png)`.
+3. The agent puts that Markdown in the note with `edit_note`, or proposes it with `suggest_edit`.
+
+The URL works once and expires after 10 minutes. A rejected file, for example HTML or a file over the size limit, leaves the URL usable. The audit log records the upload as made by the agent.
 
 ## Import from HedgeDoc
 

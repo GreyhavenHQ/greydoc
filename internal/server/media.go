@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -42,49 +43,66 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	f, ok := s.readUpload(w, r)
+	if !ok {
+		return
+	}
+	m, err := s.storeUpload(r.Context(), n.ID, identityFrom(r.Context()).UserID(), f)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"url": "/uploads/" + m.StoredName, "media": m})
+}
+
+type uploadFile struct {
+	name, contentType, ext string
+	data                   []byte
+}
+
+// readUpload reads the multipart field "file" and checks its size and type. It writes the error response itself.
+func (s *Server) readUpload(w http.ResponseWriter, r *http.Request) (uploadFile, bool) {
 	r.Body = http.MaxBytesReader(w, r.Body, s.cfg.MaxUploadBytes+64<<10)
 	file, hdr, err := r.FormFile("file")
 	if err != nil {
 		var mbe *http.MaxBytesError
 		if errors.As(err, &mbe) {
 			writeError(w, http.StatusRequestEntityTooLarge, "too_large", "the file is too large")
-			return
+			return uploadFile{}, false
 		}
 		writeError(w, http.StatusBadRequest, "bad_upload", "send the file as multipart field \"file\"")
-		return
+		return uploadFile{}, false
 	}
 	defer file.Close()
 	if hdr.Size > s.cfg.MaxUploadBytes {
 		writeError(w, http.StatusRequestEntityTooLarge, "too_large", "the file is too large")
-		return
+		return uploadFile{}, false
 	}
 	data, err := io.ReadAll(io.LimitReader(file, s.cfg.MaxUploadBytes+1))
 	if err != nil || int64(len(data)) > s.cfg.MaxUploadBytes {
 		writeError(w, http.StatusRequestEntityTooLarge, "too_large", "the file is too large")
-		return
+		return uploadFile{}, false
 	}
 	ct := sniff(hdr.Filename, data[:min(len(data), 512)])
 	ext, allowed := mediaTypes[ct]
 	if !allowed {
 		writeError(w, http.StatusUnsupportedMediaType, "bad_type", "only images and PDF files can be uploaded")
-		return
+		return uploadFile{}, false
 	}
-	name := secrets.NewID() + ext
+	return uploadFile{name: filepath.Base(hdr.Filename), contentType: ct, ext: ext, data: data}, true
+}
+
+// storeUpload writes a checked file to the uploads directory and records it on the note.
+func (s *Server) storeUpload(ctx context.Context, noteID, userID string, f uploadFile) (*store.Media, error) {
+	name := secrets.NewID() + f.ext
 	if err := os.MkdirAll(s.uploadsDir(), 0o755); err != nil {
-		internalError(w, err)
-		return
+		return nil, err
 	}
-	if err := os.WriteFile(filepath.Join(s.uploadsDir(), name), data, 0o644); err != nil {
-		internalError(w, err)
-		return
+	if err := os.WriteFile(filepath.Join(s.uploadsDir(), name), f.data, 0o644); err != nil {
+		return nil, err
 	}
-	id := identityFrom(r.Context())
-	m := &store.Media{NoteID: n.ID, StoredName: name, Filename: filepath.Base(hdr.Filename), ContentType: ct, Size: int64(len(data)), UploadedBy: id.UserID()}
-	if err := s.store.AddMedia(r.Context(), m); err != nil {
-		internalError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, map[string]any{"url": "/uploads/" + name, "media": m})
+	m := &store.Media{NoteID: noteID, StoredName: name, Filename: f.name, ContentType: f.contentType, Size: int64(len(f.data)), UploadedBy: userID}
+	return m, s.store.AddMedia(ctx, m)
 }
 
 func (s *Server) handleServeUpload(w http.ResponseWriter, r *http.Request) {

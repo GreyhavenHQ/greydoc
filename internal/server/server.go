@@ -208,6 +208,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/notes/{alias}/export.zip", s.handleExportBundle)
 	s.mux.HandleFunc("POST /api/notes/{alias}/media", s.handleUpload)
 	s.mux.HandleFunc("GET /uploads/{name}", s.handleServeUpload)
+	s.mux.HandleFunc("POST /api/uploads/{ticket}", s.handleTicketUpload)
 	s.mux.HandleFunc("POST /api/notes/{alias}/aliases", s.handleAliases)
 	s.mux.HandleFunc("PUT /api/notes/{alias}/aliases", s.handleAliases)
 	s.mux.HandleFunc("DELETE /api/notes/{alias}/aliases/{name}", s.handleAliases)

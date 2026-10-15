@@ -495,6 +495,9 @@ func (s *Server) registerTools(srv *mcp.Server) {
 	mcp.AddTool(srv, &mcp.Tool{Name: "trash_note", Description: "Move a note to the trash. Only for notes the user owns, with agent policy edit. " +
 		"It can be restored until the trash retention ends. Agents cannot delete notes for good."}, trash(false))
 	mcp.AddTool(srv, &mcp.Tool{Name: "restore_note", Description: "Bring a note back from the trash. Same rules as trash_note."}, trash(true))
+	mcp.AddTool(srv, &mcp.Tool{Name: "create_upload", Description: "Get a one-time URL to upload a local image or PDF file to a note. " +
+		"Run the returned curl command with the file path: it prints the Markdown to put in the note with edit_note or suggest_edit. " +
+		"The URL works once and expires after 10 minutes."}, s.mcpCreateUpload)
 	mcp.AddTool(srv, &mcp.Tool{Name: "get_history", Description: "Timeline of a note: edit sessions with authors and sources, comments, suggestions and permission changes.", Annotations: ro},
 		func(ctx context.Context, req *mcp.CallToolRequest, in historyIn) (*mcp.CallToolResult, any, error) {
 			id, err := s.mcpIdentity(req)

@@ -156,6 +156,9 @@ func (s *Store) PurgeExpiredTokens(ctx context.Context) error {
 	if err == nil {
 		_, err = s.db.ExecContext(ctx, s.q(`DELETE FROM oauth_code WHERE expires_at < ?`), Now())
 	}
+	if err == nil {
+		_, err = s.db.ExecContext(ctx, s.q(`DELETE FROM upload_ticket WHERE expires_at < ?`), Now())
+	}
 	return err
 }
 
