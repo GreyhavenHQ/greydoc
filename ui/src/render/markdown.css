@@ -123,7 +123,7 @@
 .columns img { border: 1px solid rgb(0 0 0 / 0.12); border-radius: 6px; }
 @media (max-width: 640px) { .markdown-body .columns { grid-template-columns: 1fr; } }
 .columns.even { grid-template-columns: 1fr 1fr; align-items: start; }
-.reveal.greydoc-deck .columns { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 1.2em; }
+.reveal.greydoc-deck .columns { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 1.5em; }
 .reveal.greydoc-deck .columns.even { grid-template-columns: 1fr 1fr; }
 .reveal.greydoc-deck .columns h2 { font-size: 1.25em; }
 .reveal.greydoc-deck .columns ul { margin-left: 1em; font-size: 0.7em; }
