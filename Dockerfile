@@ -20,6 +20,7 @@ RUN adduser -D -u 1000 greydoc && mkdir -p /data && chown greydoc:greydoc /data
 COPY --from=build /out/greydoc /usr/local/bin/greydoc
 USER greydoc
 VOLUME /data
+# Defaults for a plain `docker run`: SQLite in the data volume. docker-compose.yml sets Postgres instead.
 ENV GREYDOC_DATABASE_URL=/data/greydoc.db \
     GREYDOC_DATA_DIR=/data \
     GREYDOC_SECRET_FILE=/data/secret \
