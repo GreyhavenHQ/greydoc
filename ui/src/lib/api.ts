@@ -73,6 +73,7 @@ export interface NoteSummary {
   visited_at?: string
   pinned: boolean
   snippet?: string
+  view_count: number
 }
 
 export interface Note {
@@ -82,6 +83,7 @@ export interface Note {
   description: string
   tags: string[]
   agent_policy: AgentPolicy
+  view_count: number
   created_at: string
   updated_at: string
   level: Level

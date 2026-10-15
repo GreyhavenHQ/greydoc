@@ -56,6 +56,7 @@ import { loginHref, useMe } from '@/lib/me'
 import { localName, presenceColor } from '@/lib/presence'
 import { extractTitle } from '@/lib/meta'
 import { cn } from '@/lib/utils'
+import { shortDateTime } from '@/lib/time'
 
 type Mode = 'live' | 'edit' | 'both' | 'view'
 
@@ -672,6 +673,10 @@ export default function Editor() {
                 </a>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
+              <div className="px-2 py-1.5 text-xs text-muted-foreground" data-testid="note-info">
+                {note.view_count} {note.view_count === 1 ? 'view' : 'views'} · created {shortDateTime(note.created_at)}
+                {note.owner && <div>Owner: {note.owner.display_name || note.owner.username}</div>}
+              </div>
               <DropdownMenuItem asChild>
                 <Link to={'/audit?note=' + note.alias}>
                   <ScrollText className="size-4" /> Audit log of this note

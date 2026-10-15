@@ -43,6 +43,7 @@ type NoteSummary struct {
 	VisitedAt    string   `json:"visited_at,omitempty"`
 	Pinned       bool     `json:"pinned"`
 	Snippet      string   `json:"snippet,omitempty"`
+	ViewCount    int64    `json:"view_count"`
 }
 
 // visibleWhere matches notes the viewer can read through ownership or a grant.
@@ -108,7 +109,7 @@ func (s *Store) ListNotes(ctx context.Context, f ListFilter) ([]NoteSummary, err
 	}
 	args = append(args, f.Limit)
 	rows, err := s.db.QueryContext(ctx, s.q(`SELECT n.id, a.name, n.title, n.description, COALESCE(u.display_name, ''), n.updated_at,
-		COALESCE(v.visited_at, ''), COALESCE(v.pinned, 0)
+		COALESCE(v.visited_at, ''), COALESCE(v.pinned, 0), n.view_count
 		FROM note n JOIN note_alias a ON a.note_id = n.id AND a.is_primary = 1
 		LEFT JOIN app_user u ON u.id = n.owner_id `+join+`
 		WHERE `+where+` ORDER BY `+order+` LIMIT ?`), args...)
@@ -119,7 +120,7 @@ func (s *Store) ListNotes(ctx context.Context, f ListFilter) ([]NoteSummary, err
 	for rows.Next() {
 		var n NoteSummary
 		var pinned int
-		if err := rows.Scan(&n.ID, &n.PrimaryAlias, &n.Title, &n.Description, &n.OwnerName, &n.UpdatedAt, &n.VisitedAt, &pinned); err != nil {
+		if err := rows.Scan(&n.ID, &n.PrimaryAlias, &n.Title, &n.Description, &n.OwnerName, &n.UpdatedAt, &n.VisitedAt, &pinned, &n.ViewCount); err != nil {
 			rows.Close()
 			return nil, err
 		}

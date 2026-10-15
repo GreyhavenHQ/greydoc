@@ -121,3 +121,24 @@ func TestAgentPolicyDependsOnCreator(t *testing.T) {
 		}
 	}
 }
+
+func TestViewCounter(t *testing.T) {
+	e := newTestEnv(t)
+	alias := e.createNote(nil, "# Counted")
+	e.do(nil, "GET", "/api/notes/"+alias+"?visit=1", nil)
+	e.do(nil, "GET", "/api/notes/"+alias+"?visit=1", nil)
+	e.do(nil, "GET", "/api/notes/"+alias, nil)
+	call(t, e.mcp(""), "read_note", map[string]any{"note": alias})
+	_, body := e.do(nil, "GET", "/api/notes/"+alias, nil)
+	if !strings.Contains(body, `"view_count":2`) {
+		t.Fatalf("note: %s", body)
+	}
+	_, body = e.do(nil, "GET", "/api/notes?scope=all", nil)
+	if !strings.Contains(body, `"view_count":2`) || !strings.Contains(body, `"owner":"Local user"`) {
+		t.Fatalf("list: %s", body)
+	}
+	_, body = e.get("/" + alias + "/info")
+	if !strings.Contains(body, `"viewcount":2`) {
+		t.Fatalf("info: %s", body)
+	}
+}

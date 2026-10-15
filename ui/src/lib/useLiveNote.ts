@@ -13,7 +13,7 @@ export function useLiveNote(alias: string) {
     let session: NoteSession | null = null
     let cancelled = false
     api
-      .get<Note>(withShare(`/api/notes/${alias}`))
+      .get<Note>(withShare(`/api/notes/${alias}?visit=1`))
       .then((n) => {
         if (cancelled) return
         setNote(n)

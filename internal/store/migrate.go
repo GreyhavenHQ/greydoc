@@ -35,6 +35,7 @@ func addColumn(version, table, column, definition string) migration {
 var migrations = []migration{
 	addColumn("001_note_deleted_at", "note", "deleted_at", "TEXT"),
 	addColumn("002_note_deleted_by", "note", "deleted_by", "TEXT NOT NULL DEFAULT ''"),
+	addColumn("003_note_view_count", "note", "view_count", "BIGINT NOT NULL DEFAULT 0"),
 }
 
 // columnExists checks inside the migration transaction. table comes from a constant, never from input.

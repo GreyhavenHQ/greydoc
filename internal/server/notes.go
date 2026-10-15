@@ -137,8 +137,15 @@ func (s *Server) handleGetNote(w http.ResponseWriter, r *http.Request) {
 	}
 	content := s.noteContent(n)
 	v := noteView{Note: n, Level: l, Content: &content}
-	if id := identityFrom(r.Context()); id != nil && r.URL.Query().Get("visit") == "1" {
-		_ = s.store.RecordVisit(r.Context(), id.UserID(), n.ID)
+	if r.URL.Query().Get("visit") == "1" {
+		id := identityFrom(r.Context())
+		if !id.isAgent() {
+			_ = s.store.CountView(r.Context(), n.ID)
+			n.ViewCount++
+		}
+		if id != nil {
+			_ = s.store.RecordVisit(r.Context(), id.UserID(), n.ID)
+		}
 	}
 	if l >= permission.Write {
 		v.Aliases, _ = s.store.Aliases(r.Context(), n.ID)

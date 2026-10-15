@@ -39,6 +39,7 @@ type Note struct {
 	AgentPolicy  AgentPolicy `json:"agent_policy"`
 	CreatedAt    string      `json:"created_at"`
 	UpdatedAt    string      `json:"updated_at"`
+	ViewCount    int64       `json:"view_count"`
 	DeletedAt    string      `json:"deleted_at,omitempty"`
 	DeletedBy    string      `json:"deleted_by,omitempty"`
 }
@@ -173,13 +174,13 @@ func (s *Store) insertAlias(ctx context.Context, tx execer, noteID, alias string
 }
 
 const noteColumns = `n.id, a.name, COALESCE(n.owner_id, ''), n.title, n.description, n.content, n.ystate, n.agent_policy, n.created_at, n.updated_at,
-	COALESCE(n.deleted_at, ''), n.deleted_by`
+	COALESCE(n.deleted_at, ''), n.deleted_by, n.view_count`
 
 func (s *Store) scanNote(ctx context.Context, row *sql.Row) (*Note, error) {
 	var n Note
 	var policy string
 	if err := row.Scan(&n.ID, &n.PrimaryAlias, &n.OwnerID, &n.Title, &n.Description, &n.Content, &n.YState,
-		&policy, &n.CreatedAt, &n.UpdatedAt, &n.DeletedAt, &n.DeletedBy); err != nil {
+		&policy, &n.CreatedAt, &n.UpdatedAt, &n.DeletedAt, &n.DeletedBy, &n.ViewCount); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -384,5 +385,11 @@ func (s *Store) AllNoteIDs(ctx context.Context) ([]string, error) {
 // SetNoteTimes keeps an imported note's dates after its content was written.
 func (s *Store) SetNoteTimes(ctx context.Context, id, created, updated string) error {
 	_, err := s.db.ExecContext(ctx, s.q(`UPDATE note SET created_at = ?, updated_at = ? WHERE id = ?`), created, updated, id)
+	return err
+}
+
+// CountView adds one to a note's view counter, as HedgeDoc does on each page load.
+func (s *Store) CountView(ctx context.Context, id string) error {
+	_, err := s.db.ExecContext(ctx, s.q(`UPDATE note SET view_count = view_count + 1 WHERE id = ?`), id)
 	return err
 }

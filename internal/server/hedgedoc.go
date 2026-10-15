@@ -58,9 +58,8 @@ func (s *Server) handleHedgeDocInfo(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	views, _ := s.store.VisitCount(r.Context(), n.ID)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"title": n.Title, "description": n.Description, "viewcount": views,
+		"title": n.Title, "description": n.Description, "viewcount": n.ViewCount,
 		"createtime": hedgedocTime(n.CreatedAt), "updatetime": hedgedocTime(n.UpdatedAt),
 	})
 }

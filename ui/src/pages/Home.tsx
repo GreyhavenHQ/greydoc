@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { FileText, Pin, PinOff, Search, X } from 'lucide-react'
+import { Eye, FileText, Pin, PinOff, Search, X } from 'lucide-react'
 import { AppHeader, NewNoteButton } from '@/components/AppHeader'
 import { SignInCard } from '@/pages/Login'
 import { Input } from '@/components/ui/input'
@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { api, noteTitle, type NoteSummary, type TagCount } from '@/lib/api'
 import { useMe } from '@/lib/me'
 import { relativeTime } from '@/lib/time'
+import { authorColor } from '@/lib/authors'
 import { cn } from '@/lib/utils'
 
 type Scope = 'recent' | 'mine' | 'shared' | 'all'
@@ -165,6 +166,7 @@ export default function Home() {
                   <div className="pr-6 font-medium leading-snug">{noteTitle(n)}</div>
                   {(n.snippet || n.description) && <p className="line-clamp-3 text-sm text-muted-foreground">{n.snippet || n.description}</p>}
                   <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1 text-xs text-muted-foreground">
+                    {n.tags.length === 0 && <span className="h-5" />}
                     {n.tags.map((t) => (
                       <span
                         key={t}
@@ -179,7 +181,24 @@ export default function Home() {
                         #{t}
                       </span>
                     ))}
-                    <span className="ml-auto">{relativeTime(n.visited_at && scope === 'recent' ? n.visited_at : n.updated_at)}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 border-t pt-2 text-xs text-muted-foreground" data-testid="note-meta">
+                    {n.owner && (
+                      <span className="flex min-w-0 items-center gap-1" title={'Owner: ' + n.owner}>
+                        <span
+                          className="flex size-4 shrink-0 items-center justify-center rounded-full text-[8px] font-semibold text-white"
+                          style={{ backgroundColor: authorColor(n.owner) }}
+                        >
+                          {n.owner.slice(0, 1).toUpperCase()}
+                        </span>
+                        <span className="truncate">{n.owner}</span>
+                      </span>
+                    )}
+                    <span className="ml-auto flex shrink-0 items-center gap-1" title={`${n.view_count} views`}>
+                      <Eye className="size-3" /> {n.view_count}
+                    </span>
+                    <span className="shrink-0">·</span>
+                    <span className="shrink-0">{relativeTime(n.visited_at && scope === 'recent' ? n.visited_at : n.updated_at)}</span>
                   </div>
                 </Link>
                 <button

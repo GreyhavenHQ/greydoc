@@ -9,6 +9,7 @@ It adds what HedgeDoc does not have:
 - Comments on a text range, with replies, resolve and reopen.
 - Suggestions: proposed changes that a writer accepts or rejects. AI output is always a suggestion.
 - An MCP endpoint, so AI agents can read, comment, suggest and, if the note allows it, edit.
+- A note list with the owner and a view counter for each note, as in HedgeDoc.
 
 It keeps what HedgeDoc users expect: split editor and preview, Mermaid diagrams, KaTeX math, tags in front matter, slide mode, a view-only page, and Markdown and HTML download.
 
