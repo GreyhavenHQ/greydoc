@@ -69,12 +69,20 @@ const maxDocument = 24000
 
 var fence = regexp.MustCompile("(?s)^```[a-zA-Z]*\\n(.*?)\\n?```$")
 
-// Run asks the model for the replacement of the selection.
-func (c *Client) Run(ctx context.Context, r Request) (string, error) {
+// Message is one chat message sent to the model.
+type Message struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+func (c *Client) Model() string { return c.model }
+
+// Messages returns the exact chat messages that Run sends for r.
+func (c *Client) Messages(r Request) ([]Message, error) {
 	task, ok := tasks[r.Action]
 	if r.Action == ActionPrompt || r.Action == ActionRevise {
 		if strings.TrimSpace(r.Instruction) == "" {
-			return "", errors.New("the prompt is empty")
+			return nil, errors.New("the prompt is empty")
 		}
 		task, ok = "Apply this request to the selection: "+r.Instruction, true
 		if r.Action == ActionRevise && strings.Contains(r.Selection, "```mermaid") {
@@ -82,7 +90,7 @@ func (c *Client) Run(ctx context.Context, r Request) (string, error) {
 		}
 	}
 	if !ok {
-		return "", fmt.Errorf("unknown action %q", r.Action)
+		return nil, fmt.Errorf("unknown action %q", r.Action)
 	}
 	doc := r.Document
 	marked := "<<<SELECTION>>>" + r.Selection + "<<<END>>>"
@@ -97,14 +105,16 @@ func (c *Client) Run(ctx context.Context, r Request) (string, error) {
 		end := min(len(doc), i+len(marked)+maxDocument/2)
 		doc = doc[start:end]
 	}
-	body, _ := json.Marshal(map[string]any{
-		"model":       c.model,
-		"temperature": 0.3,
-		"messages": []map[string]string{
-			{"role": "system", "content": system},
-			{"role": "user", "content": "Task: " + task + "\n\nDocument:\n" + doc},
-		},
-	})
+	return []Message{{Role: "system", Content: system}, {Role: "user", Content: "Task: " + task + "\n\nDocument:\n" + doc}}, nil
+}
+
+// Run asks the model for the replacement of the selection.
+func (c *Client) Run(ctx context.Context, r Request) (string, error) {
+	messages, err := c.Messages(r)
+	if err != nil {
+		return "", err
+	}
+	body, _ := json.Marshal(map[string]any{"model": c.model, "temperature": 0.3, "messages": messages})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url, bytes.NewReader(body))
 	if err != nil {
 		return "", err

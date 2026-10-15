@@ -24,6 +24,8 @@ type Suggestion struct {
 	CreatedAt   string `json:"created_at"`
 	DecidedBy   string `json:"decided_by,omitempty"`
 	DecidedAt   string `json:"decided_at,omitempty"`
+	// AIPrompt is the JSON of the request to the model, for AI suggestions. It holds the document, so lists leave it out.
+	AIPrompt string `json:"-"`
 }
 
 func (s *Store) CreateSuggestion(ctx context.Context, sg *Suggestion, ev *Event) error {
@@ -33,9 +35,9 @@ func (s *Store) CreateSuggestion(ctx context.Context, sg *Suggestion, ev *Event)
 	sg.Status, sg.CreatedAt = "pending", Now()
 	return s.tx(ctx, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, s.q(`INSERT INTO suggestion (id, note_id, anchor_start, anchor_end, original, proposed, reason,
-			status, author_id, author_name, source, client, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)`),
+			status, author_id, author_name, source, client, created_at, ai_prompt) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)`),
 			sg.ID, sg.NoteID, sg.AnchorStart, sg.AnchorEnd, sg.Original, sg.Proposed, sg.Reason, sg.AuthorID, sg.AuthorName,
-			string(sg.Source), sg.Client, sg.CreatedAt); err != nil {
+			string(sg.Source), sg.Client, sg.CreatedAt, sg.AIPrompt); err != nil {
 			return err
 		}
 		return s.insertEvent(ctx, tx, ev)
@@ -43,13 +45,13 @@ func (s *Store) CreateSuggestion(ctx context.Context, sg *Suggestion, ev *Event)
 }
 
 const suggestionColumns = `id, note_id, anchor_start, anchor_end, original, proposed, reason, status, author_id, author_name, source,
-	client, created_at, decided_by, COALESCE(decided_at, '')`
+	client, created_at, decided_by, COALESCE(decided_at, ''), ai_prompt`
 
 func scanSuggestion(sc interface{ Scan(...any) error }) (*Suggestion, error) {
 	var sg Suggestion
 	var src string
 	if err := sc.Scan(&sg.ID, &sg.NoteID, &sg.AnchorStart, &sg.AnchorEnd, &sg.Original, &sg.Proposed, &sg.Reason, &sg.Status,
-		&sg.AuthorID, &sg.AuthorName, &src, &sg.Client, &sg.CreatedAt, &sg.DecidedBy, &sg.DecidedAt); err != nil {
+		&sg.AuthorID, &sg.AuthorName, &src, &sg.Client, &sg.CreatedAt, &sg.DecidedBy, &sg.DecidedAt, &sg.AIPrompt); err != nil {
 		return nil, err
 	}
 	sg.Source = Source(src)

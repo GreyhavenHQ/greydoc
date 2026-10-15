@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"sync"
@@ -81,6 +82,10 @@ type createSuggestionRequest struct {
 	AnchorEnd   []byte `json:"anchor_end"`
 	// Source overrides the caller's source. Only ai_assisted is accepted, from the AI endpoint.
 	Source store.Source `json:"-"`
+	// AIPrompt, AIAction and AIInstruction are set by the AI endpoints only.
+	AIPrompt      string `json:"-"`
+	AIAction      string `json:"-"`
+	AIInstruction string `json:"-"`
 }
 
 var errStale = errors.New("the text changed since the suggestion was made")
@@ -101,6 +106,7 @@ func (s *Server) createSuggestion(ctx context.Context, id *Identity, n *store.No
 		AuthorID: id.UserID(), AuthorName: id.displayName(), Source: id.source(), Client: clientOf(id)}
 	if req.Source == store.SourceAIAssisted {
 		sg.Source = req.Source
+		sg.AIPrompt = req.AIPrompt
 	}
 	if len(req.AnchorStart) > 0 && len(req.AnchorEnd) > 0 {
 		text, offs, oks, err := s.hub.Resolve(ctx, n.ID, req.AnchorStart, req.AnchorEnd)
@@ -124,7 +130,11 @@ func (s *Server) createSuggestion(ctx context.Context, id *Identity, n *store.No
 	if sg.Original == sg.Proposed {
 		return nil, &httpError{http.StatusBadRequest, "no_change", errors.New("the suggestion does not change anything")}
 	}
-	ev := id.event(n.ID, "suggestion.create", map[string]any{"suggestion": sg.ID, "original": excerpt(sg.Original), "proposed": excerpt(sg.Proposed)})
+	data := map[string]any{"suggestion": sg.ID, "original": excerpt(sg.Original), "proposed": excerpt(sg.Proposed)}
+	if req.AIAction != "" {
+		data["ai_action"], data["instruction"] = req.AIAction, excerpt(req.AIInstruction)
+	}
+	ev := id.event(n.ID, "suggestion.create", data)
 	ev.Source = sg.Source
 	if err := s.store.CreateSuggestion(ctx, sg, ev); err != nil {
 		return nil, err
@@ -275,5 +285,12 @@ func (s *Server) handleGetSuggestion(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, out[0])
+	var prompt json.RawMessage
+	if sg.AIPrompt != "" {
+		prompt = json.RawMessage(sg.AIPrompt)
+	}
+	writeJSON(w, http.StatusOK, struct {
+		suggestionOut
+		AIPrompt json.RawMessage `json:"ai_prompt,omitempty"`
+	}{out[0], prompt})
 }

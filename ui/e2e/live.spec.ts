@@ -54,6 +54,20 @@ test('AI and comments work while reading in live mode', async ({ page }) => {
   await expect(page.getByTestId('editor').locator('.cm-line', { hasText: 'The meeting went well.' })).toHaveCount(1)
 })
 
+test('the timeline shows what was asked of the AI', async ({ page }) => {
+  const alias = await noteWith(page, '# Notes\n\nthe meeting was good i think\n')
+  const resp = await page.request.post(`/api/notes/${alias}/ai`, { data: { action: 'refine', quote: 'the meeting was good i think' } })
+  expect(resp.status()).toBe(201)
+  await page.goto('/n/' + alias)
+  await page.getByRole('button', { name: 'Timeline' }).click()
+  const ev = page.getByTestId('timeline-event').filter({ hasText: 'asked the AI to refine the text' })
+  await ev.getByRole('button').first().click()
+  const prompt = page.getByTestId('ai-prompt')
+  await expect(prompt).toContainText('AI request: Refine')
+  await prompt.getByRole('button', { name: 'Show the full prompt' }).click()
+  await expect(page.getByTestId('ai-prompt-full')).toContainText('<<<SELECTION>>>the meeting was good i think<<<END>>>')
+})
+
 test('timeline shows the content of a suggestion', async ({ page }) => {
   const alias = await noteWith(page, 'alpha beta')
   await page.request.post(`/api/notes/${alias}/suggestions`, { data: { quote: 'beta', proposed: 'gamma', reason: 'clearer' } })

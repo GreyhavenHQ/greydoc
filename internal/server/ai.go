@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -56,7 +57,8 @@ func (s *Server) handleAI(w http.ResponseWriter, r *http.Request) {
 	selection := text[start:end]
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
 	defer cancel()
-	out, err := s.ai.Run(ctx, ai.Request{Action: req.Action, Instruction: req.Instruction, Document: text, Selection: selection})
+	areq := ai.Request{Action: req.Action, Instruction: req.Instruction, Document: text, Selection: selection}
+	out, err := s.ai.Run(ctx, areq)
 	if err != nil {
 		slog.Warn("ai request failed", "error", err)
 		writeError(w, http.StatusBadGateway, "ai_failed", err.Error())
@@ -78,6 +80,7 @@ func (s *Server) handleAI(w http.ResponseWriter, r *http.Request) {
 		sreq = createSuggestionRequest{AnchorStart: startRel, AnchorEnd: endRel, Original: "", Proposed: "\n\n" + strings.TrimSpace(out) + "\n", Reason: req.Reason}
 	}
 	sreq.Source = store.SourceAIAssisted
+	sreq.AIPrompt, sreq.AIAction, sreq.AIInstruction = s.aiPrompt(areq), string(req.Action), req.Instruction
 	if sreq.Reason == "" {
 		sreq.Reason = aiReason(req.Action, req.Instruction)
 	}
@@ -92,6 +95,16 @@ func (s *Server) handleAI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, sg)
+}
+
+// aiPrompt records what was asked of the model, for the timeline.
+func (s *Server) aiPrompt(r ai.Request) string {
+	messages, err := s.ai.Messages(r)
+	if err != nil {
+		return ""
+	}
+	b, _ := json.Marshal(map[string]any{"action": r.Action, "instruction": r.Instruction, "model": s.ai.Model(), "messages": messages})
+	return string(b)
 }
 
 func aiReason(a ai.Action, instruction string) string {
@@ -143,7 +156,8 @@ func (s *Server) handleReviseSuggestion(w http.ResponseWriter, r *http.Request) 
 	doc := text[:a] + old.Proposed + text[b:]
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
 	defer cancel()
-	out, err := s.ai.Run(ctx, ai.Request{Action: ai.ActionRevise, Instruction: req.Instruction, Document: doc, Selection: strings.TrimSpace(old.Proposed)})
+	areq := ai.Request{Action: ai.ActionRevise, Instruction: req.Instruction, Document: doc, Selection: strings.TrimSpace(old.Proposed)}
+	out, err := s.ai.Run(ctx, areq)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "ai_failed", err.Error())
 		return
@@ -154,6 +168,7 @@ func (s *Server) handleReviseSuggestion(w http.ResponseWriter, r *http.Request) 
 	sg, err := s.createSuggestion(r.Context(), id, n, createSuggestionRequest{
 		AnchorStart: old.AnchorStart, AnchorEnd: old.AnchorEnd, Original: old.Original,
 		Proposed: lead + strings.TrimSpace(out) + trail, Reason: "AI: " + req.Instruction, Source: store.SourceAIAssisted,
+		AIPrompt: s.aiPrompt(areq),
 	})
 	if err != nil {
 		s.writeHTTPError(w, err)

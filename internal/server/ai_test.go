@@ -127,3 +127,45 @@ func TestReviseAISuggestion(t *testing.T) {
 		t.Fatalf("pending %s", body)
 	}
 }
+
+func TestAISuggestionKeepsItsPrompt(t *testing.T) {
+	llm := fakeLLM(t, "Better words.")
+	e := newTestEnv(t, func(c *config.Config) { c.LLMBaseURL = llm.URL; c.LLMModel = "model-x" })
+	alias := e.createNote(nil, "# T\nsome words\n")
+	code, body := e.do(nil, "POST", "/api/notes/"+alias+"/ai", map[string]any{"action": "prompt", "instruction": "make it formal", "quote": "some words"})
+	if code != 201 {
+		t.Fatalf("%d %s", code, body)
+	}
+	var sg suggestionView
+	_ = json.Unmarshal([]byte(body), &sg)
+	_, list := e.get("/api/notes/" + alias + "/suggestions")
+	if strings.Contains(list, "ai_prompt") {
+		t.Fatal("the list carries full prompts")
+	}
+	_, detail := e.get("/api/notes/" + alias + "/suggestions/" + sg.ID)
+	var got struct {
+		AIPrompt struct {
+			Action      string `json:"action"`
+			Instruction string `json:"instruction"`
+			Model       string `json:"model"`
+			Messages    []struct {
+				Role    string `json:"role"`
+				Content string `json:"content"`
+			} `json:"messages"`
+		} `json:"ai_prompt"`
+	}
+	if err := json.Unmarshal([]byte(detail), &got); err != nil {
+		t.Fatal(err)
+	}
+	p := got.AIPrompt
+	if p.Action != "prompt" || p.Instruction != "make it formal" || p.Model != "model-x" || len(p.Messages) != 2 {
+		t.Fatalf("%+v", p)
+	}
+	_, events := e.get("/api/notes/" + alias + "/timeline")
+	if !strings.Contains(events, `"ai_action":"prompt"`) || !strings.Contains(events, `"instruction":"make it formal"`) {
+		t.Fatalf("timeline event: %s", events)
+	}
+	if p.Messages[0].Role != "system" || !strings.Contains(p.Messages[1].Content, "make it formal") || !strings.Contains(p.Messages[1].Content, "<<<SELECTION>>>some words<<<END>>>") {
+		t.Fatalf("%+v", p.Messages)
+	}
+}

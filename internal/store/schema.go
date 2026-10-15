@@ -185,7 +185,8 @@ CREATE TABLE IF NOT EXISTS suggestion (
     client TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL,
     decided_by TEXT NOT NULL DEFAULT '',
-    decided_at TEXT
+    decided_at TEXT,
+    ai_prompt TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_suggestion_note ON suggestion(note_id, status);
 -- Bearer tokens: personal access tokens, and OAuth access and refresh tokens for MCP clients.

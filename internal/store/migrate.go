@@ -36,6 +36,7 @@ var migrations = []migration{
 	addColumn("001_note_deleted_at", "note", "deleted_at", "TEXT"),
 	addColumn("002_note_deleted_by", "note", "deleted_by", "TEXT NOT NULL DEFAULT ''"),
 	addColumn("003_note_view_count", "note", "view_count", "BIGINT NOT NULL DEFAULT 0"),
+	addColumn("004_suggestion_ai_prompt", "suggestion", "ai_prompt", "TEXT NOT NULL DEFAULT ''"),
 }
 
 // columnExists checks inside the migration transaction. table comes from a constant, never from input.

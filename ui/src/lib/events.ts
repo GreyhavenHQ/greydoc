@@ -18,6 +18,20 @@ export interface AuditEvent {
 
 const levelWords: Record<string, string> = { deny: 'no access', read: 'view access', comment: 'comment access', write: 'edit access' }
 
+// aiAsk describes an AI request in the timeline, with the person's own words when there are some.
+function aiAsk(action: string, instruction: string): string {
+  const what: Record<string, string> = {
+    refine: 'asked the AI to refine the text',
+    shorten: 'asked the AI to shorten the text',
+    fix: 'asked the AI to fix spelling and grammar',
+    diagram: 'asked the AI for a diagram',
+    continue: 'asked the AI to continue the text',
+    revise: 'asked the AI to revise its suggestion',
+  }
+  if (instruction) return `asked the AI: “${instruction}”`
+  return what[action] ?? 'asked the AI for a change'
+}
+
 export function describe(e: AuditEvent): string {
   const d = e.data ?? {}
   switch (e.kind) {
@@ -62,6 +76,7 @@ export function describe(e: AuditEvent): string {
     case 'comment.delete':
       return 'deleted a comment'
     case 'suggestion.create':
+      if (d.ai_action) return aiAsk(String(d.ai_action), String(d.instruction ?? ''))
       return 'suggested a change'
     case 'suggestion.accept':
       return 'accepted a suggestion'

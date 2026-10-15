@@ -93,6 +93,51 @@ interface SuggestionDetail {
   decided_by?: string
   stale: boolean
   detached: boolean
+  ai_prompt?: AIPrompt
+}
+
+interface AIPrompt {
+  action: string
+  instruction?: string
+  model?: string
+  messages: { role: string; content: string }[]
+}
+
+const aiActions: Record<string, string> = {
+  refine: 'Refine',
+  shorten: 'Shorten',
+  fix: 'Fix spelling and grammar',
+  diagram: 'Make a diagram',
+  continue: 'Continue writing',
+  prompt: 'Custom request',
+  revise: 'Revise the suggestion',
+}
+
+// PromptDetails shows what was asked of the AI: the action and the person's words, and the full prompt on demand.
+function PromptDetails({ prompt }: { prompt: AIPrompt }) {
+  const [full, setFull] = useState(false)
+  return (
+    <div className="rounded border border-purple-500/30 bg-purple-500/5 px-2 py-1.5 text-xs" data-testid="ai-prompt">
+      <div className="flex items-center gap-2">
+        <span className="font-medium">AI request: {aiActions[prompt.action] ?? prompt.action}</span>
+        {prompt.model && <span className="font-mono text-[10px] text-muted-foreground">{prompt.model}</span>}
+      </div>
+      {prompt.instruction && <p className="mt-1">“{prompt.instruction}”</p>}
+      <button className="mt-1 text-muted-foreground underline underline-offset-2 hover:text-foreground" onClick={() => setFull(!full)}>
+        {full ? 'Hide the full prompt' : 'Show the full prompt'}
+      </button>
+      {full && (
+        <div className="mt-1.5 flex flex-col gap-1.5" data-testid="ai-prompt-full">
+          {prompt.messages.map((m, i) => (
+            <div key={i}>
+              <div className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">{m.role}</div>
+              <pre className="max-h-60 overflow-auto rounded bg-background px-2 py-1 font-mono text-[11px] whitespace-pre-wrap">{m.content}</pre>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 interface ThreadDetail {
@@ -135,7 +180,8 @@ function SuggestionDetails({ alias, id, canDecide, onShow, onChanged }: { alias:
       <div className="text-xs text-muted-foreground">{statusText}</div>
       {sg.original && <div className="max-h-40 overflow-auto rounded bg-red-500/10 px-2 py-1 font-mono text-xs whitespace-pre-wrap line-through decoration-red-500/60">{sg.original}</div>}
       {sg.proposed && <div className="max-h-60 overflow-auto rounded bg-emerald-500/10 px-2 py-1 font-mono text-xs whitespace-pre-wrap">{sg.proposed}</div>}
-      {sg.reason && <p className="text-xs">{sg.reason}</p>}
+      {sg.reason && !sg.ai_prompt && <p className="text-xs">{sg.reason}</p>}
+      {sg.ai_prompt && <PromptDetails prompt={sg.ai_prompt} />}
       <div className="flex flex-wrap gap-1.5 pt-1">
         {sg.status === 'pending' && !sg.detached && (
           <Button size="sm" variant="ghost" className="h-7" onClick={() => onShow(id)}>
