@@ -13,8 +13,10 @@ greydoc reads environment variables. All have defaults. The server needs none of
 | `GREYDOC_DATABASE_URL` | `greydoc.db` | SQLite file path, or a `postgres://` URL. |
 | `GREYDOC_DATA_DIR` | `data` | Uploads go to `uploads/`. |
 | `GREYDOC_SECRET` | empty | Secret for cookies and token hashes. If empty, greydoc creates `GREYDOC_SECRET_FILE`. |
-| `GREYDOC_SECRET_FILE` | `.greydoc/secret` | Where the generated secret is kept. Back it up with the database. |
+| `GREYDOC_SECRET_FILE` | `.greydoc/secret` | Where the generated secret is kept. Back it up with the database. The Docker image puts it in `/data`. |
 | `GREYDOC_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error`. |
+
+Keep `/data` on a persistent volume. It holds the uploaded files and the secret. If `/data` is lost at a deploy, the uploads are gone, and greydoc creates a new secret: every browser session and MCP token stops working, and everyone must sign in again. The log then says `created a new secret`. To keep sessions across deploys whatever happens to `/data`, set `GREYDOC_SECRET` to a fixed random value, for example the output of `openssl rand -hex 32`.
 
 Run one server per database in normal operation. Two servers can run at the same time during a rolling deploy. Each save merges the edits that the other server stored, so no edit is lost. Live editing state is in memory, so people connected to different servers do not see each other's typing until they reconnect.
 

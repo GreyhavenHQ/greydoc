@@ -1,9 +1,12 @@
 package server_test
 
 import (
+	"bytes"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/cookiejar"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -170,5 +173,29 @@ func TestSessionSlidesWhileUsed(t *testing.T) {
 	time.Sleep(2100 * time.Millisecond)
 	if code, _ := e.do(idle, "GET", "/api/notes", nil); code != 401 {
 		t.Fatalf("an unused session did not expire: %d", code)
+	}
+}
+
+// A lost secret file signs everyone out. The server says so, with the fix.
+func TestNewSecretWithExistingSessionsIsLogged(t *testing.T) {
+	e, idp := newOIDCEnv(t)
+	e.login(idp, map[string]any{"sub": "s", "preferred_username": "sam"})
+	cfg := e.cfg
+	e.ts.Close()
+	e.srv.Close()
+	if err := os.Remove(cfg.SecretFile); err != nil {
+		t.Fatal(err)
+	}
+	var logs bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	defer slog.SetDefault(prev)
+	srv, err := server.Open(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.Close()
+	if !strings.Contains(logs.String(), "new secret") || !strings.Contains(logs.String(), "GREYDOC_SECRET") {
+		t.Fatalf("no warning: %s", logs.String())
 	}
 }

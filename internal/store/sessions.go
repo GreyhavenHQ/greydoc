@@ -41,3 +41,10 @@ func (s *Store) DeleteSessionByHash(ctx context.Context, tokenHash string) error
 	_, err := s.db.ExecContext(ctx, s.q(`DELETE FROM session WHERE token_hash = ?`), tokenHash)
 	return err
 }
+
+// HasCredentials reports whether any session or token exists, to tell a first start from a lost secret.
+func (s *Store) HasCredentials(ctx context.Context) (bool, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT (SELECT COUNT(*) FROM session) + (SELECT COUNT(*) FROM api_token)`).Scan(&n)
+	return n > 0, err
+}

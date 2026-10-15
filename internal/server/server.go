@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -45,6 +46,8 @@ type Server struct {
 }
 
 func Open(cfg config.Config) (*Server, error) {
+	_, statErr := os.Stat(cfg.SecretFile)
+	newSecret := cfg.Secret == "" && statErr != nil
 	secret, err := secrets.LoadOrCreate(cfg.Secret, cfg.SecretFile)
 	if err != nil {
 		return nil, err
@@ -58,6 +61,13 @@ func Open(cfg config.Config) (*Server, error) {
 	if err := st.Init(ctx); err != nil {
 		st.Close()
 		return nil, err
+	}
+	if newSecret {
+		if has, err := st.HasCredentials(ctx); err == nil && has {
+			// Sessions and tokens are stored as hashes made with the secret, so none of them match any more.
+			slog.Warn("created a new secret, so every browser session and MCP token stopped working. "+
+				"Keep the secret file on a persistent volume, or set GREYDOC_SECRET to a fixed value.", "secret_file", cfg.SecretFile)
+		}
 	}
 	s := &Server{cfg: cfg, store: st, secret: secret, mux: http.NewServeMux()}
 	var ok bool
