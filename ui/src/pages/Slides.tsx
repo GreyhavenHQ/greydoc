@@ -12,6 +12,11 @@ import { hydrateMermaid } from '@/render/mermaid'
 import { splitFrontMatter, extractTitle } from '@/lib/meta'
 import { Spinner } from '@/components/ui/spinner'
 
+// pick copies the reveal.js options that HedgeDoc's slideOptions also accepts.
+function pick(opts: Record<string, unknown>, keys: string[]) {
+  return Object.fromEntries(keys.filter((k) => opts[k] !== undefined).map((k) => [k, opts[k]]))
+}
+
 function slideHTML(src: string) {
   return renderMarkdown(src).html
 }
@@ -45,6 +50,7 @@ export default function Slides() {
         embedded: false,
         transition: (opts.transition as 'slide') ?? 'slide',
         slideNumber: Boolean(opts.slideNumber),
+        ...pick(opts, ['width', 'height', 'margin', 'center', 'controls', 'progress', 'backgroundTransition']),
         plugins: [RevealNotes],
       })
       void deck.current.initialize()

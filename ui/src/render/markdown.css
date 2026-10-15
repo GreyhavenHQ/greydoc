@@ -76,7 +76,7 @@
 .markdown-body .mermaid-source { text-align: left; color: rgb(var(--muted-foreground)); }
 .mermaid-view {
   position: relative; overflow: hidden; border: 1px solid rgb(var(--border) / 0.6); border-radius: var(--radius);
-  background: rgb(var(--background)); padding: 1em; cursor: grab; touch-action: none;
+  background: rgb(var(--background)); padding: 1em; cursor: grab; touch-action: none; user-select: none;
 }
 .mermaid-view:active { cursor: grabbing; }
 .mermaid-view.is-fullscreen { display: flex; align-items: center; justify-content: center; }
@@ -116,3 +116,14 @@
 .greydoc-deck .mermaid-block { display: flex; justify-content: center; }
 .greydoc-deck .mermaid-block svg { max-height: 60vh; }
 .greydoc-deck pre code { font-size: 0.7em; }
+
+/* Two columns: <div class="columns"><div>text</div><div>image</div></div>. */
+.columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); gap: 1.5em; align-items: center; text-align: left; }
+.columns > div > :first-child { margin-top: 0; }
+.columns img { border: 1px solid rgb(0 0 0 / 0.12); border-radius: 6px; }
+@media (max-width: 640px) { .markdown-body .columns { grid-template-columns: 1fr; } }
+.greydoc-deck .columns ul { margin-left: 1em; font-size: 0.8em; }
+.greydoc-deck .columns p { font-size: 0.85em; }
+.greydoc-deck .columns img { margin: 0; max-height: 78vh; box-shadow: 0 4px 24px rgb(0 0 0 / 0.08); }
+.greydoc-deck h1, .greydoc-deck h2 { letter-spacing: -0.01em; }
+.greydoc-deck em { color: #d95e2a; font-style: normal; }
