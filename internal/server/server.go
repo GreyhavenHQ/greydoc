@@ -43,6 +43,7 @@ type Server struct {
 	aiLimit       *rateLimiter
 	aiPresets     []ai.Preset
 	seenBase      atomic.Value
+	resizeMu      sync.Mutex
 }
 
 func Open(cfg config.Config) (*Server, error) {

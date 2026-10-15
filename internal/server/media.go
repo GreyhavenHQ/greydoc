@@ -5,10 +5,12 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/greyhavenhq/greydoc/internal/permission"
@@ -119,7 +121,15 @@ func (s *Server) handleServeUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox")
-	f, err := os.Open(filepath.Join(s.uploadsDir(), name))
+	path := filepath.Join(s.uploadsDir(), name)
+	if r.URL.Query().Get("w") == strconv.Itoa(resizeWidth) {
+		if p, err := s.resizedUpload(name); err == nil {
+			path = p
+		} else if !os.IsNotExist(err) {
+			slog.Warn("resize upload", "name", name, "err", err)
+		}
+	}
+	f, err := os.Open(path)
 	if err != nil {
 		// A missing file may be restored later, so its 404 is not cached.
 		w.Header().Set("Cache-Control", "no-store")
@@ -140,6 +150,7 @@ func (s *Server) removeNoteMedia(media []store.Media) {
 	for _, m := range media {
 		if storedName.MatchString(m.StoredName) {
 			_ = os.Remove(filepath.Join(s.uploadsDir(), m.StoredName))
+			_ = os.Remove(filepath.Join(resizeDir(s.uploadsDir()), m.StoredName))
 		}
 	}
 }

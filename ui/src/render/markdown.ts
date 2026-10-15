@@ -110,6 +110,9 @@ DOMPurify.addHook('uponSanitizeElement', (node, data) => {
   }
 })
 
+// Large local uploads come from a resized copy. The server returns the original when it is already small.
+const resizable = /^\/uploads\/[0-9a-f]{32}\.(?:png|jpg)$/
+
 // Base CSS sets img height to auto, which beats the width and height attributes. Inline styles keep them.
 DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   if (node.nodeName !== 'IMG') return
@@ -118,6 +121,10 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
     const m = /^\s*(\d+(?:\.\d+)?)(px|%)?\s*$/.exec(el.getAttribute(dim) ?? '')
     if (m) el.style[dim] = m[1] + (m[2] ?? 'px')
   }
+  if (!el.hasAttribute('loading')) el.setAttribute('loading', 'lazy')
+  el.setAttribute('decoding', 'async')
+  const src = el.getAttribute('src') ?? ''
+  if (resizable.test(src)) el.setAttribute('src', src + '?w=1600')
 })
 
 export interface Rendered {

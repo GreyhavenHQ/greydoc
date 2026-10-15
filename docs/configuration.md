@@ -11,7 +11,7 @@ greydoc reads environment variables. All have defaults. The server needs none of
 | `GREYDOC_BASE_URL` | derived from the request in local mode | Public origin, for example `https://notes.example.com`. Required with OIDC. OAuth metadata, login redirects and share links use it. Request headers such as `X-Forwarded-Host` are never trusted. |
 | `GREYDOC_ALLOW_NONLOCAL` | `false` | Allow local mode on an address other than loopback. Local mode has no login, so anyone who can reach the server can edit every note. |
 | `GREYDOC_DATABASE_URL` | `greydoc.db` | SQLite file path, or a `postgres://` URL. |
-| `GREYDOC_DATA_DIR` | `data` | Uploads go to `uploads/`. |
+| `GREYDOC_DATA_DIR` | `data` | Uploads go to `uploads/`. Smaller copies of wide images go to `uploads/.w1600/`. greydoc makes them again if they are lost. |
 | `GREYDOC_SECRET` | empty | Secret for cookies and token hashes. If empty, greydoc creates `GREYDOC_SECRET_FILE`. |
 | `GREYDOC_SECRET_FILE` | `.greydoc/secret` | Where the generated secret is kept. Back it up with the database. The Docker image puts it in `/data`. |
 | `GREYDOC_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error`. |

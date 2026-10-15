@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"image"
+	"image/png"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -123,5 +125,48 @@ func TestMissingUploadIsNotCached(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != 404 || strings.Contains(resp.Header.Get("Cache-Control"), "immutable") {
 		t.Fatalf("%d, Cache-Control %q", resp.StatusCode, resp.Header.Get("Cache-Control"))
+	}
+}
+
+func TestLargeUploadsHaveASmallerCopy(t *testing.T) {
+	e := newTestEnv(t)
+	alias := e.createNote(nil, "x")
+	var big bytes.Buffer
+	img := image.NewRGBA(image.Rect(0, 0, 3200, 1000))
+	for i := range img.Pix {
+		img.Pix[i] = byte(i * 7)
+	}
+	_ = png.Encode(&big, img)
+	_, body := upload(t, e, nil, alias, "wide.png", big.Bytes())
+	var m struct{ URL string }
+	_ = json.Unmarshal([]byte(body), &m)
+
+	size := func(url string) (int, int) {
+		resp, err := http.Get(e.ts.URL + url)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		cfg, err := png.DecodeConfig(resp.Body)
+		if err != nil || resp.Header.Get("Content-Type") != "image/png" {
+			t.Fatalf("%s: %v %s", url, err, resp.Header.Get("Content-Type"))
+		}
+		return cfg.Width, cfg.Height
+	}
+	for range 2 {
+		if w, h := size(m.URL + "?w=1600"); w != 1600 || h != 500 {
+			t.Fatalf("copy is %dx%d", w, h)
+		}
+	}
+	if w, _ := size(m.URL); w != 3200 {
+		t.Fatalf("original is %d wide", w)
+	}
+	_, body = upload(t, e, nil, alias, "small.png", pngBytes)
+	_ = json.Unmarshal([]byte(body), &m)
+	resp, _ := http.Get(e.ts.URL + m.URL + "?w=1600")
+	got, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if !bytes.Equal(got, pngBytes) {
+		t.Fatal("a small image must come back as it is")
 	}
 }
