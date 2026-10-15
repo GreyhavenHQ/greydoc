@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -88,4 +89,22 @@ func (s *Server) issueSession(w http.ResponseWriter, r *http.Request, userID str
 	}
 	s.setCookie(w, r, sessionCookieName, token, s.cfg.SessionTTL)
 	return nil
+}
+
+// extendSession renews a browser session used past half its lifetime. Only an unused session expires.
+func (s *Server) extendSession(w http.ResponseWriter, r *http.Request, id *Identity) {
+	if time.Until(id.sessionExpiry) > s.cfg.SessionTTL/2 {
+		return
+	}
+	c, err := r.Cookie(sessionCookieName)
+	if err != nil {
+		return
+	}
+	expires := time.Now().Add(s.cfg.SessionTTL)
+	if err := s.store.ExtendSession(r.Context(), secrets.Hash(s.secret, c.Value), store.FormatTime(expires)); err != nil {
+		slog.Warn("session renewal failed", "error", err)
+		return
+	}
+	id.sessionExpiry = expires
+	s.setCookie(w, r, sessionCookieName, c.Value, s.cfg.SessionTTL)
 }

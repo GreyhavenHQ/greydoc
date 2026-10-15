@@ -26,6 +26,8 @@ type Identity struct {
 	// Scopes limit token callers. Nil means no limit.
 	Scopes      []string
 	tokenExpiry time.Time
+	// sessionExpiry is when a browser session ends, so the middleware can extend it while it is used.
+	sessionExpiry time.Time
 }
 
 func (id *Identity) UserID() string {
@@ -57,6 +59,9 @@ func (s *Server) withIdentity(next http.Handler) http.Handler {
 			writeError(w, http.StatusUnauthorized, "invalid_token", err.Error())
 			return
 		}
+		if id != nil && id.Via == "session" {
+			s.extendSession(w, r, id)
+		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), identityKey, id)))
 	})
 }
@@ -83,9 +88,9 @@ func (s *Server) identifyRaw(r *http.Request) (*Identity, error) {
 		return &Identity{User: s.localUser, Local: true, Via: "local"}, nil
 	}
 	if c, err := r.Cookie(sessionCookieName); err == nil && c.Value != "" {
-		u, err := s.store.UserBySessionHash(r.Context(), secrets.Hash(s.secret, c.Value))
+		u, expires, err := s.store.SessionUser(r.Context(), secrets.Hash(s.secret, c.Value))
 		if err == nil {
-			return &Identity{User: u, Via: "session"}, nil
+			return &Identity{User: u, Via: "session", sessionExpiry: store.ParseTime(expires)}, nil
 		}
 		if !errors.Is(err, store.ErrNotFound) {
 			return nil, err

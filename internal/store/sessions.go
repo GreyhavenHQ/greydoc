@@ -16,17 +16,25 @@ func (s *Store) CreateSession(ctx context.Context, userID, tokenHash, expiresAt 
 }
 
 // UserBySessionHash returns the session's user, or ErrNotFound for an unknown or expired session.
-func (s *Store) UserBySessionHash(ctx context.Context, tokenHash string) (*User, error) {
-	var userID string
-	err := s.db.QueryRowContext(ctx, s.q(`SELECT user_id FROM session WHERE token_hash = ? AND expires_at > ?`),
-		tokenHash, Now()).Scan(&userID)
+// SessionUser returns the user of a live session and when the session ends.
+func (s *Store) SessionUser(ctx context.Context, tokenHash string) (*User, string, error) {
+	var userID, expires string
+	err := s.db.QueryRowContext(ctx, s.q(`SELECT user_id, expires_at FROM session WHERE token_hash = ? AND expires_at > ?`),
+		tokenHash, Now()).Scan(&userID, &expires)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrNotFound
+		return nil, "", ErrNotFound
 	}
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return s.UserByID(ctx, userID)
+	u, err := s.UserByID(ctx, userID)
+	return u, expires, err
+}
+
+// ExtendSession moves a live session's end.
+func (s *Store) ExtendSession(ctx context.Context, tokenHash, expires string) error {
+	_, err := s.db.ExecContext(ctx, s.q(`UPDATE session SET expires_at = ? WHERE token_hash = ? AND expires_at > ?`), expires, tokenHash, Now())
+	return err
 }
 
 func (s *Store) DeleteSessionByHash(ctx context.Context, tokenHash string) error {

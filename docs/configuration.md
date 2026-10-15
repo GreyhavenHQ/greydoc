@@ -34,7 +34,8 @@ When `GREYDOC_OIDC_ISSUER` is empty, greydoc runs in local mode: no login, full 
 | `GREYDOC_OIDC_REDIRECT_URL` | `<base>/auth/callback` | Register this URL at the provider. |
 | `GREYDOC_OIDC_SCOPES` | `openid profile email` | Requested scopes. Add the scope that returns groups if your provider needs one. |
 | `GREYDOC_OIDC_GROUPS_CLAIM` | `groups` | Userinfo claim with the user's groups. Groups can receive note access. |
-| `GREYDOC_SESSION_TTL` | `168h` | Browser session lifetime. |
+| `GREYDOC_SESSION_TTL` | `168h` | Browser session lifetime. A session in use is extended, so it ends after this long without use. |
+| `GREYDOC_REFRESH_REUSE_GRACE` | `24h` | How long an MCP client may still use a refresh token after it was rotated. Sessions of one client that share stored tokens need it. A reuse after this time revokes all of the client's tokens. `0` turns it off. |
 
 ## Access defaults
 

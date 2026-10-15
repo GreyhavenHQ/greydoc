@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/greyhavenhq/greydoc/internal/config"
 	"github.com/greyhavenhq/greydoc/internal/server"
@@ -150,5 +151,24 @@ func TestLoginRejectsForeignNext(t *testing.T) {
 	resp.Body.Close()
 	if resp.Request.URL.Host != e.ts.Listener.Addr().String() || resp.Request.URL.Path != "/" {
 		t.Fatalf("redirected to %s", resp.Request.URL)
+	}
+}
+
+// A session in use is extended, so people who work every day are not asked to sign in again.
+func TestSessionSlidesWhileUsed(t *testing.T) {
+	e, idp := newOIDCEnv(t, func(c *config.Config) { c.SessionTTL = 2 * time.Second })
+	c := e.login(idp, map[string]any{"sub": "s", "preferred_username": "sam"})
+	time.Sleep(1200 * time.Millisecond)
+	if code, _ := e.do(c, "GET", "/api/notes", nil); code != 200 {
+		t.Fatalf("before expiry: %d", code)
+	}
+	time.Sleep(1300 * time.Millisecond)
+	if code, body := e.do(c, "GET", "/api/notes", nil); code != 200 {
+		t.Fatalf("session used past half its life was not extended: %d %s", code, body)
+	}
+	idle := e.login(idp, map[string]any{"sub": "i", "preferred_username": "ida"})
+	time.Sleep(2100 * time.Millisecond)
+	if code, _ := e.do(idle, "GET", "/api/notes", nil); code != 401 {
+		t.Fatalf("an unused session did not expire: %d", code)
 	}
 }
