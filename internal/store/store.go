@@ -71,6 +71,9 @@ func (s *Store) Dialect() string { return s.dialect }
 
 func (s *Store) Ping(ctx context.Context) error { return s.db.PingContext(ctx) }
 
+// Stats reports the connection pool, for slow-request logs.
+func (s *Store) Stats() sql.DBStats { return s.db.Stats() }
+
 func (s *Store) Init(ctx context.Context) error {
 	for _, stmt := range strings.Split(schemaFor(s.dialect), ";") {
 		stmt = strings.ReplaceAll(strings.TrimSpace(stmt), triggerSemicolon, ";")

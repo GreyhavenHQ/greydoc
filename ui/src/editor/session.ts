@@ -21,8 +21,8 @@ export class NoteSession {
   readonly text = this.doc.getText('content')
   readonly provider: WebsocketProvider
   private listeners = new Set<(e: AppEvent) => void>()
-  // attempts counts connection tries, for the slow-load report.
-  attempts = 0
+  // attempts counts connection tries, for the slow-load report. The first starts in the provider's constructor.
+  attempts = 1
   lastClose = 0
 
   constructor(alias: string, opts: { name?: string; share?: string | null }) {
@@ -34,11 +34,9 @@ export class NoteSession {
       params,
       shouldReconnect: (ev: CloseEvent) => !isRefusal(ev.code),
     })
-    this.provider.on('status', (e: { status: string }) => {
-      if (e.status === 'connecting') this.attempts++
-    })
     this.provider.on('connection-close', (ev: CloseEvent | null) => {
       if (ev) this.lastClose = ev.code
+      if (this.provider.shouldConnect) this.attempts++
     })
     this.provider.on('closed', (ev: { code: number; reason: string }) => {
       if (isRefusal(ev.code)) this.listeners.forEach((l) => l({ type: 'refused', code: ev.code, reason: ev.reason }))

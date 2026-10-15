@@ -220,7 +220,8 @@ export default function Editor() {
         console.warn(
           `greydoc: "${note.alias}" took ${(now / 1000).toFixed(1)} s to arrive. WebSocket created at ${(created / 1000).toFixed(1)} s, ` +
             `connected at ${(connectedAt / 1000).toFixed(1)} s, text at ${(now / 1000).toFixed(1)} s, ` +
-            `${s.attempts} connection attempt(s)${s.lastClose ? `, last close code ${s.lastClose}` : ''}.`,
+            `${s.attempts} connection attempt(s)${s.lastClose ? `, last close code ${s.lastClose}` : ''}. ` +
+            `The Server-Timing header of the /ws/ request shows how long greydoc itself took.`,
         )
       }
     }

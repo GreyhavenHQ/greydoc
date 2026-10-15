@@ -162,7 +162,7 @@ func (s *Server) ProcessHistory(ctx context.Context, force bool) error {
 	return nil
 }
 
-func (s *Server) Handler() http.Handler { return s.checkOrigin(s.withIdentity(s.mux)) }
+func (s *Server) Handler() http.Handler { return s.withTiming(s.checkOrigin(s.withIdentity(s.mux))) }
 
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /healthz", s.handleHealthz)
