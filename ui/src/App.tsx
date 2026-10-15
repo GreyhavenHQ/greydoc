@@ -8,6 +8,7 @@ import Settings from '@/pages/Settings'
 import View from '@/pages/View'
 import Trash from '@/pages/Trash'
 import Audit from '@/pages/Audit'
+import Login from '@/pages/Login'
 
 const Slides = lazy(() => import('@/pages/Slides'))
 
@@ -17,6 +18,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/new" element={<NewNote />} />
+        <Route path="/login" element={<Login />} />
         <Route path="/n/:alias" element={<Editor />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/trash" element={<Trash />} />

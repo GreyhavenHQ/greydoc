@@ -46,3 +46,9 @@ test('agent calls appear in the audit log with a usage summary', async ({ page, 
   await expect(page.getByTestId('audit-event').filter({ hasText: 'called read_note' })).toContainText('Watched')
   await expect(page.getByTestId('audit-event').filter({ hasText: 'opened an MCP session' })).toContainText('e2e-agent')
 })
+
+test('in local mode the sign-in page goes straight on', async ({ page }) => {
+  await page.goto('/login?next=/settings')
+  await expect(page).toHaveURL(/\/settings$/)
+  await expect(page.getByTestId('sign-in')).toHaveCount(0)
+})

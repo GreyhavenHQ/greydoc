@@ -2,13 +2,14 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { FileText, Pin, PinOff, Search, X } from 'lucide-react'
 import { AppHeader, NewNoteButton } from '@/components/AppHeader'
+import { SignInCard } from '@/pages/Login'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api, noteTitle, type NoteSummary, type TagCount } from '@/lib/api'
-import { loginHref, useMe } from '@/lib/me'
+import { useMe } from '@/lib/me'
 import { relativeTime } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
@@ -78,20 +79,7 @@ export default function Home() {
     [me],
   )
 
-  if (me && !me.authenticated) {
-    return (
-      <div className="min-h-screen">
-        <AppHeader />
-        <main className="mx-auto flex max-w-xl flex-col items-center gap-4 px-6 py-24 text-center">
-          <h1 className="text-3xl font-semibold tracking-tight">Shared notes, written together</h1>
-          <p className="text-muted-foreground">Sign in to create notes and see the ones shared with you.</p>
-          <Button asChild size="lg">
-            <a href={loginHref('/')}>Sign in</a>
-          </Button>
-        </main>
-      </div>
-    )
-  }
+  if (me && !me.authenticated) return <SignInCard next="/" />
 
   return (
     <div className="min-h-screen">
