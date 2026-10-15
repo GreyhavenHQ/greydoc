@@ -14,23 +14,21 @@ import (
 	"time"
 )
 
-type Action string
+// Output says where an answer goes: in place of the selection, as text below it, or as a diagram below it.
+type Output string
 
 const (
-	ActionRefine   Action = "refine"
-	ActionShorten  Action = "shorten"
-	ActionFix      Action = "fix"
-	ActionDiagram  Action = "diagram"
-	ActionContinue Action = "continue"
-	ActionPrompt   Action = "prompt"
-	// ActionRevise changes an earlier AI answer, given as the selection.
-	ActionRevise Action = "revise"
+	OutputReplace Output = "replace"
+	OutputBelow   Output = "below"
+	OutputDiagram Output = "diagram"
 )
 
 type Request struct {
-	Action Action
-	// Instruction is the user's own request, required for ActionPrompt.
+	// Action names the request in the timeline: a preset ID, "prompt" or "revise".
+	Action string
+	// Instruction is the task for the model.
 	Instruction string
+	Output      Output
 	Document    string
 	Selection   string
 }
@@ -57,14 +55,6 @@ The user message holds the document. The part to work on is between <<<SELECTION
 Reply with the replacement text for that part only: Markdown, no preamble, no explanation, no surrounding quotes.
 Keep the language of the document. Keep Markdown structure (headings, lists, links) unless asked to change it.`
 
-var tasks = map[Action]string{
-	ActionRefine:   "Rewrite the selection so it reads clearly and concisely. Keep the meaning and every fact.",
-	ActionShorten:  "Make the selection shorter. Keep the key facts.",
-	ActionFix:      "Fix spelling, grammar and punctuation in the selection. Change nothing else.",
-	ActionDiagram:  "Draw the selection as a Mermaid diagram. Reply with one ```mermaid fenced block and nothing else. Use flowchart TD when there are more than four steps, flowchart LR otherwise, or sequenceDiagram for exchanges between parties. Keep node labels short.",
-	ActionContinue: "Write the text that follows the selection. Reply with the selection followed by the new text.",
-}
-
 const maxDocument = 24000
 
 var fence = regexp.MustCompile("(?s)^```[a-zA-Z]*\\n(.*?)\\n?```$")
@@ -79,18 +69,12 @@ func (c *Client) Model() string { return c.model }
 
 // Messages returns the exact chat messages that Run sends for r.
 func (c *Client) Messages(r Request) ([]Message, error) {
-	task, ok := tasks[r.Action]
-	if r.Action == ActionPrompt || r.Action == ActionRevise {
-		if strings.TrimSpace(r.Instruction) == "" {
-			return nil, errors.New("the prompt is empty")
-		}
-		task, ok = "Apply this request to the selection: "+r.Instruction, true
-		if r.Action == ActionRevise && strings.Contains(r.Selection, "```mermaid") {
-			task += " Keep it one ```mermaid fenced block."
-		}
+	task := strings.TrimSpace(r.Instruction)
+	if task == "" {
+		return nil, errors.New("the request is empty")
 	}
-	if !ok {
-		return nil, fmt.Errorf("unknown action %q", r.Action)
+	if r.Output == OutputDiagram {
+		task += " Reply with one ```mermaid fenced block and nothing else."
 	}
 	doc := r.Document
 	marked := "<<<SELECTION>>>" + r.Selection + "<<<END>>>"
@@ -142,19 +126,15 @@ func (c *Client) Run(ctx context.Context, r Request) (string, error) {
 	if err := json.Unmarshal(raw, &out); err != nil || len(out.Choices) == 0 {
 		return "", errors.New("AI endpoint returned no answer")
 	}
-	action := r.Action
-	if action == ActionRevise && strings.Contains(r.Selection, "```mermaid") {
-		action = ActionDiagram
-	}
-	return clean(out.Choices[0].Message.Content, action), nil
+	return clean(out.Choices[0].Message.Content, r.Output), nil
 }
 
 // clean removes a fence wrapping the whole answer, except the mermaid fence a diagram needs.
-func clean(s string, a Action) string {
+func clean(s string, o Output) string {
 	s = strings.TrimSpace(s)
 	s = strings.TrimPrefix(s, "<<<SELECTION>>>")
 	s = strings.TrimSuffix(s, "<<<END>>>")
-	if a == ActionDiagram {
+	if o == OutputDiagram {
 		if !strings.HasPrefix(s, "```mermaid") {
 			if m := fence.FindStringSubmatch(s); m != nil {
 				s = m[1]

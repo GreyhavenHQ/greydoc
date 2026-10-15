@@ -105,6 +105,7 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		"authenticated": id != nil,
 		"local_mode":    s.cfg.LocalMode(),
 		"ai_enabled":    s.cfg.AIEnabled(),
+		"ai_actions":    s.aiPresets,
 		"login_url":     "/auth/login",
 	}
 	if id != nil {

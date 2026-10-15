@@ -35,7 +35,7 @@ func TestRefineSendsContextAndCleansOutput(t *testing.T) {
 	}))
 	defer ts.Close()
 	c := New(ts.URL, "k", "m")
-	out, err := c.Run(context.Background(), Request{Action: ActionRefine, Document: "# Doc\nBad text.\nEnd", Selection: "Bad text."})
+	out, err := c.Run(context.Background(), Request{Action: "clearer", Instruction: "Make it clearer.", Document: "# Doc\nBad text.\nEnd", Selection: "Bad text."})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func TestDiagramKeepsMermaidFence(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"content": "```mermaid\ngraph TD\nA-->B\n```"}}}})
 	}))
 	defer ts.Close()
-	out, err := New(ts.URL, "", "m").Run(context.Background(), Request{Action: ActionDiagram, Document: "a then b", Selection: "a then b"})
+	out, err := New(ts.URL, "", "m").Run(context.Background(), Request{Action: "diagram", Instruction: "Draw it.", Output: OutputDiagram, Document: "a then b", Selection: "a then b"})
 	if err != nil || !strings.HasPrefix(out, "```mermaid\n") {
 		t.Fatalf("%q %v", out, err)
 	}
@@ -63,14 +63,48 @@ func TestDiagramKeepsMermaidFence(t *testing.T) {
 func TestUpstreamErrorIsReported(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Error(w, "nope", 500) }))
 	defer ts.Close()
-	if _, err := New(ts.URL, "", "m").Run(context.Background(), Request{Action: ActionRefine, Selection: "x"}); err == nil {
+	if _, err := New(ts.URL, "", "m").Run(context.Background(), Request{Instruction: "Fix it.", Selection: "x"}); err == nil {
 		t.Fatal("no error")
 	}
 }
 
-func TestUnknownAction(t *testing.T) {
-	if _, err := New("http://x", "", "m").Run(context.Background(), Request{Action: "nope"}); err == nil {
+func TestEmptyInstruction(t *testing.T) {
+	if _, err := New("http://x", "", "m").Run(context.Background(), Request{Action: "prompt"}); err == nil {
 		t.Fatal("no error")
+	}
+}
+
+func TestLoadPresets(t *testing.T) {
+	def, err := LoadPresets("")
+	if err != nil || len(def) != 4 || def[0].ID != "fix" {
+		t.Fatalf("defaults: %v %v", def, err)
+	}
+	for _, p := range def {
+		if p.ID == "continue" || p.ID == "refine" {
+			t.Fatalf("vague default %q", p.ID)
+		}
+	}
+	got, err := LoadPresets(`[{"id":"tldr","label":"Add a summary below","instruction":"Summarize the selection in two sentences.","output":"below"},{"id":"formal","label":"Formal tone","instruction":"Rewrite formally."}]`)
+	if err != nil || len(got) != 2 || got[0].Output != OutputBelow || got[1].Output != OutputReplace {
+		t.Fatalf("inline: %+v %v", got, err)
+	}
+	file := t.TempDir() + "/actions.json"
+	_ = os.WriteFile(file, []byte(`[{"id":"fix","label":"Fix","instruction":"Fix it."}]`), 0o644)
+	if got, err := LoadPresets(file); err != nil || got[0].Label != "Fix" {
+		t.Fatalf("file: %+v %v", got, err)
+	}
+	for _, bad := range []string{
+		`[{"id":"Bad Id","label":"x","instruction":"y"}]`,
+		`[{"id":"prompt","label":"x","instruction":"y"}]`,
+		`[{"id":"a","label":"x","instruction":"y"},{"id":"a","label":"x","instruction":"y"}]`,
+		`[{"id":"a","label":"","instruction":"y"}]`,
+		`[{"id":"a","label":"x","instruction":"y","output":"sideways"}]`,
+		`[not json`,
+		"/no/such/file.json",
+	} {
+		if _, err := LoadPresets(bad); err == nil {
+			t.Errorf("accepted %s", bad)
+		}
 	}
 }
 
@@ -83,7 +117,7 @@ func TestRealEndpoint(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	out, err := New(base, os.Getenv("LLM_API_KEY"), os.Getenv("LLM_MODEL")).Run(ctx, Request{
-		Action: ActionRefine, Document: "Notes\n\nthe meeting was good we decide to ship it next week maybe",
+		Action: "clearer", Instruction: DefaultPresets()[1].Instruction, Document: "Notes\n\nthe meeting was good we decide to ship it next week maybe",
 		Selection: "the meeting was good we decide to ship it next week maybe",
 	})
 	if err != nil {

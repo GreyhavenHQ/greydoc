@@ -75,3 +75,20 @@ The AI actions call an OpenAI-compatible chat endpoint. When `LLM_API_BASEURL` i
 | `LLM_API_KEY` | Sent as a bearer token. |
 | `LLM_MODEL` | Model name. |
 | `GREYDOC_AI_RATE_PER_MINUTE` | AI requests allowed per user per minute. Default `20`. `0` removes the limit. |
+| `GREYDOC_AI_ACTIONS` | The presets of the AI menu: a JSON list, or the path of a JSON file. Empty means the four built-in presets. |
+
+Each preset has an `id` (lowercase letters, digits and dashes), a `label`, the `instruction` for the model, and an `output`:
+
+- `replace` (default): the answer replaces the selection.
+- `below`: the answer goes below the selection.
+- `diagram`: the answer is a Mermaid diagram below the selection.
+
+```json
+[
+  {"id": "fix", "label": "Fix spelling and grammar", "instruction": "Fix spelling, grammar and punctuation in the selection. Change nothing else."},
+  {"id": "summary", "label": "Add a summary below", "instruction": "Summarize the selection in two sentences.", "output": "below"},
+  {"id": "flow", "label": "Make a diagram below", "instruction": "Draw the selection as a Mermaid flowchart.", "output": "diagram"}
+]
+```
+
+The menu always has a free text box above the presets. The server does not start if the list is not valid.

@@ -86,6 +86,7 @@ type createSuggestionRequest struct {
 	AIPrompt      string `json:"-"`
 	AIAction      string `json:"-"`
 	AIInstruction string `json:"-"`
+	AILabel       string `json:"-"`
 }
 
 var errStale = errors.New("the text changed since the suggestion was made")
@@ -132,7 +133,7 @@ func (s *Server) createSuggestion(ctx context.Context, id *Identity, n *store.No
 	}
 	data := map[string]any{"suggestion": sg.ID, "original": excerpt(sg.Original), "proposed": excerpt(sg.Proposed)}
 	if req.AIAction != "" {
-		data["ai_action"], data["instruction"] = req.AIAction, excerpt(req.AIInstruction)
+		data["ai_action"], data["instruction"], data["label"] = req.AIAction, excerpt(req.AIInstruction), req.AILabel
 	}
 	ev := id.event(n.ID, "suggestion.create", data)
 	ev.Source = sg.Source

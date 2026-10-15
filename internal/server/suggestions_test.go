@@ -13,6 +13,7 @@ type suggestionView struct {
 	Original string `json:"original"`
 	Proposed string `json:"proposed"`
 	Source   string `json:"source"`
+	Reason   string `json:"reason"`
 	Stale    bool   `json:"stale"`
 }
 

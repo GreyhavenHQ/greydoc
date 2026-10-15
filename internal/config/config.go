@@ -54,6 +54,8 @@ type Config struct {
 	// RefreshReuseGrace is how long a rotated OAuth refresh token still works. MCP clients that share
 	// stored tokens across sessions present the old token after another session rotated it.
 	RefreshReuseGrace time.Duration
+	// AIActions is GREYDOC_AI_ACTIONS: the AI presets as a JSON list, or a file path. Empty means the defaults.
+	AIActions string
 	// AIRatePerMinute caps AI requests per user.
 	AIRatePerMinute int
 
@@ -95,6 +97,7 @@ func FromEnv() Config {
 		LLMModel:          envStr("LLM_MODEL", ""),
 		AIRatePerMinute:   envInt("GREYDOC_AI_RATE_PER_MINUTE", 20),
 		RefreshReuseGrace: envDuration("GREYDOC_REFRESH_REUSE_GRACE", 24*time.Hour),
+		AIActions:         envStr("GREYDOC_AI_ACTIONS", ""),
 		LogLevel:          envStr("GREYDOC_LOG_LEVEL", "info"),
 	}
 }

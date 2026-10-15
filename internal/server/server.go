@@ -40,6 +40,7 @@ type Server struct {
 	noteLocks     sync.Map
 	ai            *ai.Client
 	aiLimit       *rateLimiter
+	aiPresets     []ai.Preset
 	seenBase      atomic.Value
 }
 
@@ -92,6 +93,10 @@ func Open(cfg config.Config) (*Server, error) {
 	s.history = &history.Processor{Store: st}
 	if cfg.AIEnabled() {
 		s.ai = ai.New(cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.LLMModel)
+		if s.aiPresets, err = ai.LoadPresets(cfg.AIActions); err != nil {
+			st.Close()
+			return nil, err
+		}
 		s.aiLimit = newRateLimiter(cfg.AIRatePerMinute, time.Minute)
 	}
 	s.stop = make(chan struct{})

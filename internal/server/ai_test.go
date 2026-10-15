@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/greyhavenhq/greydoc/internal/config"
+	"github.com/greyhavenhq/greydoc/internal/server"
 )
 
 func fakeLLM(t *testing.T, answer string) *httptest.Server {
@@ -24,7 +25,7 @@ func TestAIRefineCreatesAISuggestion(t *testing.T) {
 	e := newTestEnv(t, func(c *config.Config) { c.LLMBaseURL = llm.URL; c.LLMModel = "m" })
 	alias := e.createNote(nil, "# T\nmessy sentence here\n")
 	n, _ := e.srv.Store().NoteByAlias(context.Background(), alias)
-	code, body := e.do(nil, "POST", "/api/notes/"+alias+"/ai", map[string]any{"action": "refine", "quote": "messy sentence here"})
+	code, body := e.do(nil, "POST", "/api/notes/"+alias+"/ai", map[string]any{"action": "clearer", "quote": "messy sentence here"})
 	if code != 201 {
 		t.Fatalf("%d %s", code, body)
 	}
@@ -58,11 +59,11 @@ func TestAIRateLimitPerUser(t *testing.T) {
 	e := newTestEnv(t, func(c *config.Config) { c.LLMBaseURL = llm.URL; c.AIRatePerMinute = 2 })
 	alias := e.createNote(nil, "one two three")
 	for i := range 2 {
-		if code, body := e.do(nil, "POST", "/api/notes/"+alias+"/ai", map[string]any{"action": "refine", "quote": "one"}); code != 201 {
+		if code, body := e.do(nil, "POST", "/api/notes/"+alias+"/ai", map[string]any{"action": "clearer", "quote": "one"}); code != 201 {
 			t.Fatalf("call %d: %d %s", i, code, body)
 		}
 	}
-	code, body := e.do(nil, "POST", "/api/notes/"+alias+"/ai", map[string]any{"action": "refine", "quote": "two"})
+	code, body := e.do(nil, "POST", "/api/notes/"+alias+"/ai", map[string]any{"action": "clearer", "quote": "two"})
 	if code != 429 || !strings.Contains(body, "rate_limited") {
 		t.Fatalf("third call: %d %s", code, body)
 	}
@@ -71,7 +72,7 @@ func TestAIRateLimitPerUser(t *testing.T) {
 func TestAIDisabledWithoutEndpoint(t *testing.T) {
 	e := newTestEnv(t)
 	alias := e.createNote(nil, "x")
-	code, body := e.do(nil, "POST", "/api/notes/"+alias+"/ai", map[string]any{"action": "refine", "quote": "x"})
+	code, body := e.do(nil, "POST", "/api/notes/"+alias+"/ai", map[string]any{"action": "clearer", "quote": "x"})
 	if code != 404 || !strings.Contains(body, "ai_disabled") {
 		t.Fatalf("%d %s", code, body)
 	}
@@ -118,7 +119,7 @@ func TestReviseAISuggestion(t *testing.T) {
 	defer ts.Close()
 	e := newTestEnv(t, func(c *config.Config) { c.LLMBaseURL = ts.URL })
 	alias := e.createNote(nil, "rough text here")
-	_, body := e.do(nil, "POST", "/api/notes/"+alias+"/ai", map[string]any{"action": "refine", "quote": "rough text here"})
+	_, body := e.do(nil, "POST", "/api/notes/"+alias+"/ai", map[string]any{"action": "clearer", "quote": "rough text here"})
 	var first suggestionView
 	_ = json.Unmarshal([]byte(body), &first)
 	code, body := e.do(nil, "POST", "/api/notes/"+alias+"/suggestions/"+first.ID+"/revise", map[string]any{"instruction": "shorter"})
@@ -182,5 +183,44 @@ func TestAISuggestionKeepsItsPrompt(t *testing.T) {
 	}
 	if p.Messages[0].Role != "system" || !strings.Contains(p.Messages[1].Content, "make it formal") || !strings.Contains(p.Messages[1].Content, "<<<SELECTION>>>some words<<<END>>>") {
 		t.Fatalf("%+v", p.Messages)
+	}
+}
+
+func TestAIPresetsAreConfigurable(t *testing.T) {
+	llm := fakeLLM(t, "Two sentences of summary.")
+	presets := `[{"id":"tldr","label":"Add a summary below","instruction":"Summarize the selection in two sentences.","output":"below"}]`
+	e := newTestEnv(t, func(c *config.Config) { c.LLMBaseURL = llm.URL; c.AIActions = presets })
+	_, me := e.get("/api/me")
+	if !strings.Contains(me, `"id":"tldr"`) || !strings.Contains(me, `"instruction":"Summarize the selection in two sentences."`) || strings.Contains(me, `"id":"clearer"`) {
+		t.Fatalf("me: %s", me)
+	}
+	alias := e.createNote(nil, "Long text here.\nNext line.")
+	code, body := e.do(nil, "POST", "/api/notes/"+alias+"/ai", map[string]any{"action": "tldr", "quote": "Long text here."})
+	if code != 201 {
+		t.Fatalf("%d %s", code, body)
+	}
+	var sg suggestionView
+	_ = json.Unmarshal([]byte(body), &sg)
+	if sg.Original != "" || sg.Proposed != "\n\nTwo sentences of summary.\n" || sg.Reason != "AI: Add a summary below" {
+		t.Fatalf("a below preset must insert after the selection: %+v", sg)
+	}
+	_, timeline := e.get("/api/notes/" + alias + "/timeline")
+	if !strings.Contains(timeline, `"label":"Add a summary below"`) {
+		t.Fatalf("timeline: %s", timeline)
+	}
+	if code, _ := e.do(nil, "POST", "/api/notes/"+alias+"/ai", map[string]any{"action": "clearer", "quote": "Long text here."}); code != 400 {
+		t.Fatalf("an action missing from the server list ran: %d", code)
+	}
+	if code, _ := e.do(nil, "POST", "/api/notes/"+alias+"/ai", map[string]any{"action": "prompt", "quote": "Long text here."}); code != 400 {
+		t.Fatalf("an empty prompt ran: %d", code)
+	}
+}
+
+func TestBadAIPresetsStopTheServer(t *testing.T) {
+	cfg := config.FromEnv()
+	cfg.DatabaseURL, cfg.DataDir, cfg.SecretFile = t.TempDir()+"/db", t.TempDir(), t.TempDir()+"/secret"
+	cfg.OIDCIssuer, cfg.LLMBaseURL, cfg.AIActions = "", "http://127.0.0.1:1", `[{"id":"x"}]`
+	if _, err := server.Open(cfg); err == nil || !strings.Contains(err.Error(), "GREYDOC_AI_ACTIONS") {
+		t.Fatalf("bad presets accepted: %v", err)
 	}
 }

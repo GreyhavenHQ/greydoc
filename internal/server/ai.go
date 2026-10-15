@@ -29,11 +29,27 @@ func (s *Server) handleAI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Action      ai.Action `json:"action"`
-		Instruction string    `json:"instruction"`
+		// Action is a preset ID, or "prompt" with the person's own instruction.
+		Action      string `json:"action"`
+		Instruction string `json:"instruction"`
 		createSuggestionRequest
 	}
 	if !readJSON(w, r, &req) {
+		return
+	}
+	areq := ai.Request{Action: req.Action, Output: ai.OutputReplace}
+	label := "Custom request"
+	if req.Action == "prompt" {
+		if strings.TrimSpace(req.Instruction) == "" {
+			writeError(w, http.StatusBadRequest, "empty_prompt", "say what the AI should do with the selection")
+			return
+		}
+		areq.Instruction = "Apply this request to the selection: " + strings.TrimSpace(req.Instruction)
+	} else if p, ok := s.aiPreset(req.Action); ok {
+		areq.Instruction, areq.Output, label = p.Instruction, p.Output, p.Label
+		req.Instruction = ""
+	} else {
+		writeError(w, http.StatusBadRequest, "unknown_action", "this AI action does not exist on this server")
 		return
 	}
 	text, err := s.hub.Text(r.Context(), n.ID)
@@ -60,7 +76,7 @@ func (s *Server) handleAI(w http.ResponseWriter, r *http.Request) {
 	selection := text[start:end]
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
 	defer cancel()
-	areq := ai.Request{Action: req.Action, Instruction: req.Instruction, Document: text, Selection: selection}
+	areq.Document, areq.Selection = text, selection
 	out, err := s.ai.Run(ctx, areq)
 	if err != nil {
 		slog.Warn("ai request failed", "error", err)
@@ -69,8 +85,8 @@ func (s *Server) handleAI(w http.ResponseWriter, r *http.Request) {
 	}
 	sreq := req.createSuggestionRequest
 	sreq.Proposed = out
-	if req.Action == ai.ActionDiagram {
-		// A diagram goes after the selection's last line. The selected text stays.
+	if areq.Output != ai.OutputReplace {
+		// A diagram or added text goes after the selection's last line. The selected text stays.
 		at := len(text)
 		if i := strings.IndexByte(text[end:], '\n'); i >= 0 {
 			at = end + i
@@ -83,9 +99,12 @@ func (s *Server) handleAI(w http.ResponseWriter, r *http.Request) {
 		sreq = createSuggestionRequest{AnchorStart: startRel, AnchorEnd: endRel, Original: "", Proposed: "\n\n" + strings.TrimSpace(out) + "\n", Reason: req.Reason}
 	}
 	sreq.Source = store.SourceAIAssisted
-	sreq.AIPrompt, sreq.AIAction, sreq.AIInstruction = s.aiPrompt(areq), string(req.Action), req.Instruction
+	sreq.AIPrompt, sreq.AIAction, sreq.AIInstruction, sreq.AILabel = s.aiPrompt(areq, label, req.Instruction), req.Action, req.Instruction, label
 	if sreq.Reason == "" {
-		sreq.Reason = aiReason(req.Action, req.Instruction)
+		sreq.Reason = "AI: " + label
+		if req.Instruction != "" {
+			sreq.Reason = "AI: " + req.Instruction
+		}
 	}
 	sg, err := s.createSuggestion(r.Context(), identityFrom(r.Context()), n, sreq)
 	if err != nil {
@@ -110,25 +129,23 @@ func (s *Server) aiAllowed(w http.ResponseWriter, r *http.Request) bool {
 	return false
 }
 
-// aiPrompt records what was asked of the model, for the timeline.
-func (s *Server) aiPrompt(r ai.Request) string {
+func (s *Server) aiPreset(id string) (ai.Preset, bool) {
+	for _, p := range s.aiPresets {
+		if p.ID == id {
+			return p, true
+		}
+	}
+	return ai.Preset{}, false
+}
+
+// aiPrompt records what was asked of the model, for the timeline: the action, the person's words, and the messages.
+func (s *Server) aiPrompt(r ai.Request, label, words string) string {
 	messages, err := s.ai.Messages(r)
 	if err != nil {
 		return ""
 	}
-	b, _ := json.Marshal(map[string]any{"action": r.Action, "instruction": r.Instruction, "model": s.ai.Model(), "messages": messages})
+	b, _ := json.Marshal(map[string]any{"action": r.Action, "label": label, "instruction": words, "model": s.ai.Model(), "messages": messages})
 	return string(b)
-}
-
-func aiReason(a ai.Action, instruction string) string {
-	switch a {
-	case ai.ActionPrompt:
-		return "AI: " + instruction
-	case ai.ActionDiagram:
-		return "AI: diagram"
-	default:
-		return "AI: " + string(a)
-	}
 }
 
 // handleReviseSuggestion asks the model to change a pending AI suggestion and replaces it with the answer.
@@ -172,7 +189,10 @@ func (s *Server) handleReviseSuggestion(w http.ResponseWriter, r *http.Request) 
 	doc := text[:a] + old.Proposed + text[b:]
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
 	defer cancel()
-	areq := ai.Request{Action: ai.ActionRevise, Instruction: req.Instruction, Document: doc, Selection: strings.TrimSpace(old.Proposed)}
+	areq := ai.Request{Action: "revise", Instruction: "Apply this request to the selection: " + req.Instruction, Output: ai.OutputReplace, Document: doc, Selection: strings.TrimSpace(old.Proposed)}
+	if strings.Contains(old.Proposed, "```mermaid") {
+		areq.Output = ai.OutputDiagram
+	}
 	out, err := s.ai.Run(ctx, areq)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "ai_failed", err.Error())
@@ -184,7 +204,7 @@ func (s *Server) handleReviseSuggestion(w http.ResponseWriter, r *http.Request) 
 	sg, err := s.createSuggestion(r.Context(), id, n, createSuggestionRequest{
 		AnchorStart: old.AnchorStart, AnchorEnd: old.AnchorEnd, Original: old.Original,
 		Proposed: lead + strings.TrimSpace(out) + trail, Reason: "AI: " + req.Instruction, Source: store.SourceAIAssisted,
-		AIPrompt: s.aiPrompt(areq),
+		AIPrompt: s.aiPrompt(areq, "Revise the suggestion", req.Instruction),
 	})
 	if err != nil {
 		s.writeHTTPError(w, err)
