@@ -47,9 +47,16 @@ type NewNote struct {
 	OwnerID string
 	Alias   string
 	Content string
-	// Groups are the initial group grants, for example the configured defaults.
+	// Groups and Users (by user ID) are the initial grants.
 	Groups map[string]permission.Level
-	Event  *Event
+	Users  map[string]permission.Level
+	// ExtraAliases are secondary addresses, for example an imported note's other IDs.
+	ExtraAliases []string
+	// CreatedAt and UpdatedAt keep an imported note's dates. Empty means now.
+	CreatedAt   string
+	UpdatedAt   string
+	AgentPolicy AgentPolicy
+	Event       *Event
 }
 
 // reservedAliases collide with UI routes and API prefixes.
@@ -58,7 +65,8 @@ var reservedAliases = []string{
 	"healthz", "login", "logout", "favicon.svg", ".well-known", "index.html", "settings",
 }
 
-var aliasPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
+// aliasPattern accepts HedgeDoc 1 note IDs, which are base64url and may start with - or _.
+var aliasPattern = regexp.MustCompile(`^[a-z0-9_-]{1,64}$`)
 
 var crockford = base32.NewEncoding("0123456789ABCDEFGHJKMNPQRSTVWXYZ").WithPadding(base32.NoPadding)
 
@@ -73,7 +81,7 @@ func GenerateRandomAlias() string {
 
 func NormalizeAlias(alias string) (string, error) {
 	a := strings.ToLower(strings.TrimSpace(alias))
-	if !aliasPattern.MatchString(a) || slices.Contains(reservedAliases, a) {
+	if !aliasPattern.MatchString(a) || strings.Trim(a, "-_") == "" || slices.Contains(reservedAliases, a) {
 		return "", ErrAliasForbidden
 	}
 	return a, nil
@@ -88,18 +96,52 @@ func (s *Store) CreateNote(ctx context.Context, nn NewNote) (*Note, error) {
 	if err != nil {
 		return nil, err
 	}
-	now := Now()
+	extra := make([]string, 0, len(nn.ExtraAliases))
+	for _, a := range nn.ExtraAliases {
+		na, err := NormalizeAlias(a)
+		if err != nil {
+			return nil, err
+		}
+		if na != alias && !slices.Contains(extra, na) {
+			extra = append(extra, na)
+		}
+	}
+	created, updated := Now(), ""
+	if nn.CreatedAt != "" {
+		created = nn.CreatedAt
+	}
+	updated = created
+	if nn.UpdatedAt != "" {
+		updated = nn.UpdatedAt
+	}
 	n := &Note{
 		ID: secrets.NewID(), PrimaryAlias: alias, OwnerID: nn.OwnerID, Content: nn.Content,
-		AgentPolicy: AgentSuggest, CreatedAt: now, UpdatedAt: now, Tags: []string{},
+		AgentPolicy: AgentSuggest, CreatedAt: created, UpdatedAt: updated, Tags: []string{},
+	}
+	if nn.AgentPolicy != "" {
+		n.AgentPolicy = nn.AgentPolicy
 	}
 	err = s.tx(ctx, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, s.q(`INSERT INTO note (id, owner_id, content, agent_policy, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?)`), n.ID, nullStr(n.OwnerID), n.Content, string(n.AgentPolicy), now, now); err != nil {
+			VALUES (?, ?, ?, ?, ?, ?)`), n.ID, nullStr(n.OwnerID), n.Content, string(n.AgentPolicy), created, updated); err != nil {
 			return err
 		}
 		if err := s.insertAlias(ctx, tx, n.ID, alias, true); err != nil {
 			return err
+		}
+		for _, a := range extra {
+			if err := s.insertAlias(ctx, tx, n.ID, a, false); err != nil {
+				return err
+			}
+		}
+		for uid, l := range nn.Users {
+			if l == permission.Deny {
+				continue
+			}
+			if _, err := tx.ExecContext(ctx, s.q(`INSERT INTO note_user_grant (note_id, user_id, level) VALUES (?, ?, ?)`),
+				n.ID, uid, l.String()); err != nil {
+				return err
+			}
 		}
 		for g, l := range nn.Groups {
 			if l == permission.Deny {
@@ -280,8 +322,10 @@ type NoteState struct {
 
 func (s *Store) SaveNoteState(ctx context.Context, id string, st NoteState) error {
 	return s.tx(ctx, func(tx *sql.Tx) error {
-		res, err := tx.ExecContext(ctx, s.q(`UPDATE note SET ystate = ?, content = ?, title = ?, description = ?, search_tags = ?, updated_at = ?
-			WHERE id = ?`), st.YState, st.Content, st.Title, st.Description, strings.Join(st.Tags, " "), Now(), id)
+		// updated_at follows text changes only, so opening a note, or an imported date, does not move it.
+		res, err := tx.ExecContext(ctx, s.q(`UPDATE note SET updated_at = CASE WHEN content <> ? THEN ? ELSE updated_at END,
+			ystate = ?, content = ?, title = ?, description = ?, search_tags = ? WHERE id = ?`),
+			st.Content, Now(), st.YState, st.Content, st.Title, st.Description, strings.Join(st.Tags, " "), id)
 		if err != nil {
 			return err
 		}
@@ -335,4 +379,10 @@ func (s *Store) AllNoteIDs(ctx context.Context) ([]string, error) {
 		ids = append(ids, id)
 	}
 	return ids, rows.Err()
+}
+
+// SetNoteTimes keeps an imported note's dates after its content was written.
+func (s *Store) SetNoteTimes(ctx context.Context, id, created, updated string) error {
+	_, err := s.db.ExecContext(ctx, s.q(`UPDATE note SET created_at = ?, updated_at = ? WHERE id = ?`), created, updated, id)
+	return err
 }

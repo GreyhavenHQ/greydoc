@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -43,10 +44,7 @@ func (s *Server) handleCreateNote(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "login_required", "sign in to create notes")
 		return
 	}
-	var req struct {
-		Content string `json:"content"`
-		Alias   string `json:"alias"`
-	}
+	var spec NoteSpec
 	ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if ct == "text/markdown" || ct == "text/plain" {
 		b, err := io.ReadAll(io.LimitReader(r.Body, int64(s.cfg.MaxNoteLength)*4+1))
@@ -54,14 +52,14 @@ func (s *Server) handleCreateNote(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "bad_request", "could not read body")
 			return
 		}
-		req.Content = string(b)
-		req.Alias = r.URL.Query().Get("alias")
-	} else if r.ContentLength != 0 && !readJSON(w, r, &req) {
+		spec.Content = string(b)
+		spec.Alias = r.URL.Query().Get("alias")
+	} else if r.ContentLength != 0 && !readJSON(w, r, &spec) {
 		return
 	}
-	n, err := s.createNote(r, id, req.Content, req.Alias)
+	n, err := s.createNote(r.Context(), id, spec)
 	if err != nil {
-		s.writeNoteError(w, err)
+		s.writeHTTPError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, noteView{Note: n, Level: permission.Full})
@@ -69,29 +67,37 @@ func (s *Server) handleCreateNote(w http.ResponseWriter, r *http.Request) {
 
 var errMaxLength = errors.New("note exceeds the maximum length")
 
-func (s *Server) createNote(r *http.Request, id *Identity, content, alias string) (*store.Note, error) {
-	if utf8.RuneCountInString(content) > s.cfg.MaxNoteLength {
+func (s *Server) createNote(ctx context.Context, id *Identity, spec NoteSpec) (*store.Note, error) {
+	if utf8.RuneCountInString(spec.Content) > s.cfg.MaxNoteLength {
 		return nil, errMaxLength
 	}
-	n, err := s.store.CreateNote(r.Context(), store.NewNote{
-		OwnerID: id.UserID(), Alias: alias, Groups: s.defaultGroups,
-		Event: id.event("", "note.create", nil),
-	})
+	nn, err := s.noteFromSpec(ctx, id, spec)
 	if err != nil {
 		return nil, err
 	}
-	if content != "" {
-		if _, err := s.hub.Edit(r.Context(), n.ID, collab.Author{UserID: id.UserID(), Name: id.displayName(), Source: string(id.source())},
-			func(collab.EditView) (string, error) { return content, nil }); err != nil {
+	n, err := s.store.CreateNote(ctx, nn)
+	if err != nil {
+		return nil, err
+	}
+	if spec.Content != "" {
+		if _, err := s.hub.Edit(ctx, n.ID, collab.Author{UserID: id.UserID(), Name: id.displayName(), Source: string(id.source())},
+			func(collab.EditView) (string, error) { return spec.Content, nil }); err != nil {
 			return nil, err
 		}
-		meta := notemeta.Extract(content)
-		if err := s.store.SaveNoteState(r.Context(), n.ID, store.NoteState{
-			Content: content, Title: meta.Title, Description: meta.Description, Tags: meta.Tags,
+		meta := notemeta.Extract(spec.Content)
+		if err := s.store.SaveNoteState(ctx, n.ID, store.NoteState{
+			Content: spec.Content, Title: meta.Title, Description: meta.Description, Tags: meta.Tags,
 		}); err != nil {
 			return nil, err
 		}
-		n.Title, n.Description, n.Tags = meta.Title, meta.Description, meta.Tags
+		if nn.CreatedAt != "" {
+			if err := s.store.SetNoteTimes(ctx, n.ID, nn.CreatedAt, nn.UpdatedAt); err != nil {
+				return nil, err
+			}
+		}
+		if n, err = s.store.NoteByID(ctx, n.ID); err != nil {
+			return nil, err
+		}
 	}
 	s.mirror.Touch(n.ID)
 	return n, nil
@@ -99,6 +105,8 @@ func (s *Server) createNote(r *http.Request, id *Identity, content, alias string
 
 func (s *Server) writeNoteError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, errBadSpec):
+		writeError(w, http.StatusBadRequest, "bad_settings", err.Error())
 	case errors.Is(err, errMaxLength):
 		writeError(w, http.StatusRequestEntityTooLarge, "max_length", err.Error())
 	case errors.Is(err, store.ErrAliasTaken):

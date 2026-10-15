@@ -163,9 +163,22 @@ type noteIn struct {
 	Note string `json:"note" jsonschema:"note alias or URL"`
 }
 
+type permissionsIn struct {
+	HedgeDocMode string            `json:"hedgedoc_mode,omitempty" jsonschema:"HedgeDoc 1 mode: freely, editable, limited, locked, protected or private"`
+	Everyone     string            `json:"everyone,omitempty" jsonschema:"level for anyone with the address: deny, read, comment or write"`
+	SignedIn     string            `json:"signed_in,omitempty" jsonschema:"level for signed-in users: deny, read, comment or write"`
+	Users        map[string]string `json:"users,omitempty" jsonschema:"username to level"`
+	Groups       map[string]string `json:"groups,omitempty" jsonschema:"OIDC group to level"`
+}
+
 type createNoteIn struct {
-	Content string `json:"content" jsonschema:"Markdown text. Front matter tags: [a, b] sets tags."`
-	Alias   string `json:"alias,omitempty" jsonschema:"optional readable address, lowercase letters, digits and dashes"`
+	Content      string         `json:"content" jsonschema:"Markdown text. Front matter tags: [a, b] sets tags."`
+	Alias        string         `json:"alias,omitempty" jsonschema:"address of the note, for example the ID it had in HedgeDoc so old links keep working. Letters, digits, - and _. Case is ignored."`
+	ExtraAliases []string       `json:"extra_aliases,omitempty" jsonschema:"more addresses, for example a HedgeDoc 1 short ID used in /s/ links"`
+	CreatedAt    string         `json:"created_at,omitempty" jsonschema:"original creation date, RFC 3339. Also the last update unless updated_at is given."`
+	UpdatedAt    string         `json:"updated_at,omitempty" jsonschema:"original last update, RFC 3339"`
+	Permissions  *permissionsIn `json:"permissions,omitempty" jsonschema:"initial access. Unset fields keep the server defaults."`
+	AgentPolicy  string         `json:"agent_policy,omitempty" jsonschema:"none, read, suggest or edit"`
 }
 
 type commentsIn struct {
@@ -261,7 +274,8 @@ func (s *Server) registerTools(srv *mcp.Server) {
 				"url": s.publicURL() + "/n/" + n.PrimaryAlias, "content": text,
 			})
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "create_note", Description: "Create a note owned by the signed-in user."},
+	mcp.AddTool(srv, &mcp.Tool{Name: "create_note", Description: "Create a note owned by the signed-in user. " +
+		"To import from HedgeDoc, pass the old note ID as alias, the short ID in extra_aliases, the original dates, and the permission mode."},
 		func(ctx context.Context, req *mcp.CallToolRequest, in createNoteIn) (*mcp.CallToolResult, any, error) {
 			id, err := s.mcpIdentity(req)
 			if err != nil {
@@ -270,12 +284,18 @@ func (s *Server) registerTools(srv *mcp.Server) {
 			if !id.canWriteScope() {
 				return nil, nil, errors.New("this token can only read")
 			}
-			r, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/", nil)
-			n, err := s.createNote(r, id, in.Content, in.Alias)
+			spec := NoteSpec{Content: in.Content, Alias: in.Alias, ExtraAliases: in.ExtraAliases, CreatedAt: in.CreatedAt,
+				UpdatedAt: in.UpdatedAt, AgentPolicy: in.AgentPolicy}
+			if in.Permissions != nil {
+				p := PermissionSpec(*in.Permissions)
+				spec.Permissions = &p
+			}
+			n, err := s.createNote(ctx, id, spec)
 			if err != nil {
 				return nil, nil, err
 			}
-			return jsonResult(map[string]any{"alias": n.PrimaryAlias, "title": n.Title, "url": s.publicURL() + "/n/" + n.PrimaryAlias})
+			return jsonResult(map[string]any{"alias": n.PrimaryAlias, "title": n.Title, "url": s.publicURL() + "/n/" + n.PrimaryAlias,
+				"created_at": n.CreatedAt, "updated_at": n.UpdatedAt})
 		})
 	mcp.AddTool(srv, &mcp.Tool{Name: "list_comments", Description: "List comment threads with the text they point at. detached means the text was deleted.", Annotations: ro},
 		func(ctx context.Context, req *mcp.CallToolRequest, in commentsIn) (*mcp.CallToolResult, any, error) {

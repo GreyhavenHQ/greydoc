@@ -152,3 +152,39 @@ func TestSaveNoteState(t *testing.T) {
 		}
 	})
 }
+
+func TestImportedTimesSurviveUnchangedSaves(t *testing.T) {
+	eachDialect(t, func(t *testing.T, st *Store) {
+		n, err := st.CreateNote(ctx, NewNote{Alias: "old", CreatedAt: "2021-03-04T10:00:00.000000Z", UpdatedAt: "2022-01-02T00:00:00.000000Z"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = st.SaveNoteState(ctx, n.ID, NoteState{Content: ""})
+		got, _ := st.NoteByID(ctx, n.ID)
+		if got.CreatedAt != "2021-03-04T10:00:00.000000Z" || got.UpdatedAt != "2022-01-02T00:00:00.000000Z" {
+			t.Fatalf("times changed without an edit: %+v", got)
+		}
+		_ = st.SaveNoteState(ctx, n.ID, NoteState{Content: "edited"})
+		got, _ = st.NoteByID(ctx, n.ID)
+		if got.UpdatedAt <= "2022-01-02T00:00:00.000000Z" {
+			t.Fatalf("an edit kept the old time: %s", got.UpdatedAt)
+		}
+	})
+}
+
+func TestHedgeDocStyleAliases(t *testing.T) {
+	eachDialect(t, func(t *testing.T, st *Store) {
+		n, err := st.CreateNote(ctx, NewNote{Alias: "-q8sZjE2S5mXJTTVyr4nqQ"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, a := range []string{"-q8sZjE2S5mXJTTVyr4nqQ", "-q8szje2s5mxjttvyr4nqq"} {
+			if got, err := st.NoteByAlias(ctx, a); err != nil || got.ID != n.ID {
+				t.Fatalf("%s: %v", a, err)
+			}
+		}
+		if _, err := st.CreateNote(ctx, NewNote{Alias: "--"}); err != ErrAliasForbidden {
+			t.Fatalf("dash-only alias: %v", err)
+		}
+	})
+}
