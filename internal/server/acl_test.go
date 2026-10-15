@@ -73,8 +73,15 @@ func TestShareLinkGrantsReadOnly(t *testing.T) {
 		URL  string                     `json:"url"`
 	}
 	_ = json.Unmarshal([]byte(body), &created)
-	if !strings.Contains(created.URL, "/s/"+alias+"?share=") {
+	if !strings.HasSuffix(created.URL, "/v/"+created.Link.Token) || len(created.Link.Token) != 16 {
 		t.Fatalf("url %q", created.URL)
+	}
+	code, body = e.do(nil, "GET", "/api/share/"+created.Link.Token, nil)
+	if code != 200 || !strings.Contains(body, `"alias":"`+alias+`"`) {
+		t.Fatalf("token lookup: %d %s", code, body)
+	}
+	if code, _ := e.do(nil, "GET", "/api/share/wrong", nil); code != 404 {
+		t.Fatalf("bad token lookup: %d", code)
 	}
 	code, body = e.do(nil, "GET", "/api/notes/"+alias+"?share="+created.Link.Token, nil)
 	if code != 200 || !strings.Contains(body, `"level":"read"`) || !strings.Contains(body, "client report") {
@@ -88,6 +95,9 @@ func TestShareLinkGrantsReadOnly(t *testing.T) {
 	}
 	if code, _ := e.do(nil, "GET", "/api/notes/"+alias+"?share="+created.Link.Token, nil); code != 401 {
 		t.Fatalf("revoked token still works: %d", code)
+	}
+	if code, _ := e.do(nil, "GET", "/api/share/"+created.Link.Token, nil); code != 404 {
+		t.Fatalf("revoked token still resolves: %d", code)
 	}
 }
 

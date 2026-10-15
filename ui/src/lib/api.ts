@@ -111,8 +111,10 @@ export interface TagCount {
 
 export const noteTitle = (n: { title: string; alias: string }) => n.title || 'Untitled'
 
+// shareParam is the view-only token: from a short /v/<token> address, or from ?share= in older links.
 export function shareParam(): string | null {
-  return new URLSearchParams(location.search).get('share')
+  const short = /^\/v\/([^/]+)/.exec(location.pathname)
+  return short ? decodeURIComponent(short[1]) : new URLSearchParams(location.search).get('share')
 }
 
 export function withShare(path: string): string {

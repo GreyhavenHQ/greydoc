@@ -217,7 +217,7 @@ func (s *Server) handleCreateShareLink(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"link": link, "url": s.baseURL(r) + "/s/" + n.PrimaryAlias + "?share=" + link.Token})
+	writeJSON(w, http.StatusCreated, map[string]any{"link": link, "url": s.baseURL(r) + "/v/" + link.Token})
 }
 
 func (s *Server) handleDeleteShareLink(w http.ResponseWriter, r *http.Request) {
@@ -250,4 +250,23 @@ func (s *Server) handleSearchUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"users": users, "groups": groups})
+}
+
+// handleResolveShare turns a short view-only link, /v/<token>, into the note it opens.
+func (s *Server) handleResolveShare(w http.ResponseWriter, r *http.Request) {
+	noteID, err := s.store.ShareLinkNote(r.Context(), r.PathValue("token"))
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "not_found", "this link does not exist or was revoked")
+		return
+	}
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	n, err := s.store.NoteByID(r.Context(), noteID)
+	if err != nil || n.DeletedAt != "" {
+		writeError(w, http.StatusNotFound, "not_found", "this link does not exist or was revoked")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"alias": n.PrimaryAlias})
 }

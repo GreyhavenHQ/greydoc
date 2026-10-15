@@ -5,7 +5,7 @@ import Home from '@/pages/Home'
 import NewNote from '@/pages/NewNote'
 import Editor from '@/pages/Editor'
 import Settings from '@/pages/Settings'
-import View from '@/pages/View'
+import View, { ShortShare } from '@/pages/View'
 import Trash from '@/pages/Trash'
 import Audit from '@/pages/Audit'
 import Login from '@/pages/Login'
@@ -25,6 +25,7 @@ export default function App() {
         <Route path="/trash" element={<Trash />} />
         <Route path="/audit" element={<Audit />} />
         <Route path="/s/:alias" element={<View />} />
+        <Route path="/v/:token" element={<ShortShare />} />
         <Route
           path="/features"
           element={

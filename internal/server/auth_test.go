@@ -129,7 +129,7 @@ func TestForwardedHostIsIgnored(t *testing.T) {
 	c := e.login(idp, map[string]any{"sub": "u-4", "preferred_username": "dan"})
 	alias := e.createNote(c, "x")
 	_, body := e.do(c, "POST", "/api/notes/"+alias+"/share-links", nil, "X-Forwarded-Host", "evil.example", "X-Forwarded-Proto", "https")
-	if !strings.Contains(body, `"url":"`+e.ts.URL+"/s/") {
+	if !strings.Contains(body, `"url":"`+e.ts.URL+"/v/") {
 		t.Fatalf("share link followed a forwarded host: %s", body)
 	}
 	_, body = e.get("/.well-known/oauth-authorization-server", "X-Forwarded-Host", "evil.example")

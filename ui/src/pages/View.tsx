@@ -8,11 +8,13 @@ import { download, fileName, standaloneHTML } from '@/export/html'
 import { hydrateMermaid } from '@/render/mermaid'
 import { renderMarkdown } from '@/render/markdown'
 import { Spinner } from '@/components/ui/spinner'
+import { api } from '@/lib/api'
 import { WithToc } from '@/components/TocSidebar'
 
 // View is the read-only page for clients: the rendered note and nothing else.
-export default function View() {
-  const { alias = '' } = useParams()
+export default function View({ alias: given }: { alias?: string } = {}) {
+  const params = useParams()
+  const alias = given ?? params.alias ?? ''
   const { note, text, error, synced } = useLiveNote(alias)
   const title = extractTitle(text) || note?.title || 'Untitled'
   const exported = useRef(false)
@@ -64,4 +66,25 @@ export default function View() {
       </WithToc>
     </main>
   )
+}
+
+// ShortShare opens a view-only link of the form /v/<token>. The token alone names the note.
+export function ShortShare() {
+  const { token = '' } = useParams()
+  const [alias, setAlias] = useState<string | null | undefined>(undefined)
+  useEffect(() => {
+    api
+      .get<{ alias: string }>('/api/share/' + encodeURIComponent(token))
+      .then((r) => setAlias(r.alias))
+      .catch(() => setAlias(null))
+  }, [token])
+  if (alias === null) return <div className="flex h-screen items-center justify-center text-muted-foreground">This link does not exist or was revoked.</div>
+  if (!alias) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Spinner />
+      </div>
+    )
+  }
+  return <View alias={alias} />
 }

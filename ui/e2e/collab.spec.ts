@@ -144,6 +144,18 @@ test('view-only page shows the note and nothing else', async ({ page }) => {
   await expect(page.locator('header')).toHaveCount(0)
 })
 
+test('a short view-only link opens the note', async ({ page }) => {
+  const alias = await noteWith(page, '# Short link\n\nFor a client.')
+  const r = await page.request.post(`/api/notes/${alias}/share-links`, { data: { label: 'client' } })
+  const { url, link } = await r.json()
+  expect(url).toMatch(/\/v\/[A-Za-z0-9_-]{16}$/)
+  await page.goto(new URL(url).pathname)
+  await expect(page.getByTestId('view-page').locator('h1')).toHaveText('Short link')
+  await page.request.delete(`/api/notes/${alias}/share-links/${link.id}`)
+  await page.reload()
+  await expect(page.getByText('This link does not exist or was revoked.')).toBeVisible()
+})
+
 test('slide mode splits on ---', async ({ page }) => {
   const alias = await noteWith(page, '# One\n\n---\n\n# Two\n\n----\n\n## Two down\n')
   await page.goto('/p/' + alias)
@@ -239,4 +251,14 @@ test('the help dialog renders Markdown examples', async ({ page }) => {
   await expect(help.locator('.mermaid-block svg').first()).toBeVisible({ timeout: 15_000 })
   await help.getByRole('tab', { name: 'Shortcuts' }).click()
   await expect(help).toContainText('Live mode')
+})
+
+test('the MCP setup shows opencode first, with Claude Code in its own tab', async ({ page }) => {
+  await page.goto('/settings')
+  const setup = page.getByTestId('mcp-setup')
+  await expect(setup.getByRole('tab')).toHaveText(['opencode', 'Claude Code', 'Other clients'])
+  await expect(setup.getByRole('tab', { name: 'opencode' })).toHaveAttribute('aria-selected', 'true')
+  await expect(setup).toContainText('opencode.json')
+  await setup.getByRole('tab', { name: 'Claude Code' }).click()
+  await expect(setup.locator('input').first()).toHaveValue(/^claude mcp add --transport http greydoc http/)
 })

@@ -99,7 +99,7 @@ export function ShareDialog({ alias, isOwner, open, onOpenChange }: { alias: str
     setPerm(await api.get<Permissions>(base + '/permissions'))
   }
 
-  const linkURL = (token: string) => `${location.origin}/s/${alias}?share=${token}`
+  const linkURL = (token: string) => `${location.origin}/v/${token}`
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

@@ -132,7 +132,7 @@ type ShareLink struct {
 }
 
 func (s *Store) CreateShareLink(ctx context.Context, noteID, label, createdBy string, ev *Event) (*ShareLink, error) {
-	l := &ShareLink{ID: secrets.NewID(), NoteID: noteID, Token: secrets.NewToken("")[:32], Label: label, CreatedAt: Now()}
+	l := &ShareLink{ID: secrets.NewID(), NoteID: noteID, Token: secrets.NewToken("")[:16], Label: label, CreatedAt: Now()}
 	err := s.tx(ctx, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, s.q(`INSERT INTO share_link (id, note_id, token, label, created_by, created_at)
 			VALUES (?, ?, ?, ?, ?, ?)`), l.ID, noteID, l.Token, label, nullStr(createdBy), l.CreatedAt); err != nil {
@@ -171,6 +171,16 @@ func (s *Store) DeleteShareLink(ctx context.Context, noteID, id string, ev *Even
 		}
 		return s.insertEvent(ctx, tx, ev)
 	})
+}
+
+// ShareLinkNote returns the note a view-only link opens, for the short /v/<token> address.
+func (s *Store) ShareLinkNote(ctx context.Context, token string) (string, error) {
+	var noteID string
+	err := s.db.QueryRowContext(ctx, s.q(`SELECT note_id FROM share_link WHERE token = ?`), token).Scan(&noteID)
+	if errors.Is(err, sql.ErrNoRows) || token == "" {
+		return "", ErrNotFound
+	}
+	return noteID, err
 }
 
 func (s *Store) ShareLinkValid(ctx context.Context, noteID, token string) (bool, error) {

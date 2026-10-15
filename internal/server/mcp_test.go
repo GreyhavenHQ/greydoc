@@ -449,3 +449,25 @@ func TestMCPUsageSummary(t *testing.T) {
 		t.Fatalf("%+v", v)
 	}
 }
+
+func TestMCPReadsAShortViewOnlyLink(t *testing.T) {
+	e, idp := newOIDCEnv(t)
+	owner := e.login(idp, map[string]any{"sub": "o", "preferred_username": "owner"})
+	bob := e.login(idp, map[string]any{"sub": "b", "preferred_username": "bob"})
+	alias := e.createNote(owner, "shared by link")
+	e.do(owner, "DELETE", "/api/notes/"+alias+"/permissions/groups/_signed_in", nil)
+	_, body := e.do(owner, "POST", "/api/notes/"+alias+"/share-links", nil)
+	var created struct{ URL string }
+	_ = json.Unmarshal([]byte(body), &created)
+	_, body = e.do(bob, "POST", "/api/tokens", map[string]string{"label": "laptop"})
+	var tok struct{ Token string }
+	_ = json.Unmarshal([]byte(body), &tok)
+	s := e.mcp(tok.Token)
+	out, isErr := call(t, s, "read_note", map[string]any{"note": created.URL})
+	if isErr || !strings.Contains(out, "shared by link") {
+		t.Fatalf("short link: %s", out)
+	}
+	if out, isErr := call(t, s, "read_note", map[string]any{"note": e.ts.URL + "/v/nosuchtoken"}); !isErr {
+		t.Fatalf("unknown link worked: %s", out)
+	}
+}

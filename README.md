@@ -44,7 +44,7 @@ docker compose up -d greydoc
 | Link to a note | Type `[[` in the editor and pick a note. It inserts `[[alias|Title]]`: the address, then the link text, which you can edit. `[[alias]]` alone shows the current title of the note. |
 | Table of contents | On wide screens, the view page and the preview-only mode show the headings on the right, as in HedgeDoc: top-level headings, the open section, and "Expand all". `[toc]` in the text inserts a table of contents too. |
 | Protect a note | "Share" in the editor: people, groups, signed-in users, anyone with the address. Levels are view, comment and edit. |
-| Share with a client | "Share", then "New link". The link opens `/s/<alias>`: the rendered note with no editor, comments or toolbar. |
+| Share with a client | "Share", then "New link". The short link `/v/<token>` opens the rendered note with no editor, comments or toolbar. Older `/s/<alias>?share=<token>` links keep working. |
 | Comment | Select text, press "Comment". |
 | Suggest | Select text, press "Suggest". People with comment access suggest each time they type. |
 | AI | Select text, press "AI": refine, shorten, fix, diagram, continue, or ask. The answer is a suggestion. |

@@ -100,12 +100,15 @@ func (s *Server) mcpCaller(extra *mcp.RequestExtra, session *mcp.ServerSession) 
 	return &cp, nil
 }
 
-// noteRef accepts an alias, a path such as /n/alias, or a full note URL.
+// noteRef accepts an alias, a path such as /n/alias, or a full note URL. A short view-only link, /v/<token>, has no alias.
 func noteRef(ref string) (alias, share string) {
 	ref = strings.TrimSpace(ref)
 	if u, err := url.Parse(ref); err == nil && (u.Scheme != "" || strings.HasPrefix(ref, "/")) {
 		share = u.Query().Get("share")
 		parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+		if len(parts) == 2 && parts[0] == "v" {
+			return "", parts[1]
+		}
 		return parts[len(parts)-1], share
 	}
 	return ref, ""
@@ -113,6 +116,20 @@ func noteRef(ref string) (alias, share string) {
 
 func (s *Server) mcpNote(ctx context.Context, id *Identity, ref string, need permission.Level) (*store.Note, permission.Level, error) {
 	alias, share := noteRef(ref)
+	if alias == "" && share != "" {
+		noteID, err := s.store.ShareLinkNote(ctx, share)
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, 0, errors.New("this view-only link does not exist or was revoked")
+		}
+		if err != nil {
+			return nil, 0, err
+		}
+		n, err := s.store.NoteByID(ctx, noteID)
+		if err != nil {
+			return nil, 0, err
+		}
+		alias = n.PrimaryAlias
+	}
 	n, err := s.store.NoteByAlias(ctx, alias)
 	if errors.Is(err, store.ErrNotFound) {
 		return nil, 0, fmt.Errorf("no note %q", alias)

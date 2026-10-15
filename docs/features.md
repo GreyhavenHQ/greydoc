@@ -118,7 +118,7 @@ The **Share** dialog sets who can read, comment or edit. You can give access to 
 | protected | Only the owner edits, signed-in users can read |
 | private | Only the owner |
 
-A **view-only link** gives a client the rendered note, with no editor and no comments. You can revoke it at any time.
+A **view-only link** gives a client the rendered note, with no editor and no comments. The link is short, such as `https://notes.example.com/v/k3J9xQ2mT7aB1cD4`. You can revoke it at any time.
 
 ## Notes
 

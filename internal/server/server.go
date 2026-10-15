@@ -195,6 +195,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/notes/{alias}/restore", s.handleRestoreNote)
 	s.mux.HandleFunc("POST /api/notes", s.handleCreateNote)
 	s.mux.HandleFunc("POST /api/notes/import", s.handleImportBundle)
+	s.mux.HandleFunc("GET /api/share/{token}", s.handleResolveShare)
 	s.mux.HandleFunc("POST /new", s.handleHedgeDocNew)
 	s.mux.HandleFunc("POST /new/{alias}", s.handleHedgeDocNew)
 	s.mux.HandleFunc("PUT /api/notes/{alias}/pin", s.handlePin)

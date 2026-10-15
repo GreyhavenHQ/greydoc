@@ -64,7 +64,7 @@ type NewNote struct {
 var reservedAliases = []string{
 	"new", "n", "s", "p", "api", "auth", "ws", "mcp", "oauth", "assets", "fonts", "uploads",
 	"healthz", "login", "logout", "favicon.svg", ".well-known", "index.html", "settings",
-	"trash", "audit", "features",
+	"trash", "audit", "features", "v",
 }
 
 // aliasPattern accepts HedgeDoc 1 note IDs, which are base64url and may start with - or _.
