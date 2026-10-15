@@ -62,6 +62,8 @@ Each note has an agent policy. The owner sets it in the Share dialog.
 | `suggest` (default) | Also comment and suggest. `edit_note` creates a suggestion instead of editing. |
 | `edit` | Also edit the text directly. |
 
+A note that a person creates starts at `suggest`. A note that an agent creates with `create_note` starts at `edit`, so the agent can keep working on its own draft in the same session. Pass `agent_policy` to `create_note` to choose another level.
+
 Agents cannot delete a note for good. They can move it to the trash, where a person can restore it.
 
 The policy only lowers access. An agent never gets more than the person it acts for. A token with only the `notes:read` scope is limited to reading.

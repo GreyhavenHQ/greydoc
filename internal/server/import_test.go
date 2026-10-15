@@ -105,3 +105,19 @@ func TestImportValidation(t *testing.T) {
 		t.Fatalf("rest import: %d %s", code, body)
 	}
 }
+
+func TestAgentPolicyDependsOnCreator(t *testing.T) {
+	e := newTestEnv(t)
+	human := e.createNote(nil, "by a person")
+	out, isErr := call(t, e.mcp(""), "create_note", map[string]any{"content": "by an agent", "alias": "agent-made"})
+	if isErr {
+		t.Fatal(out)
+	}
+	_, explicit := call(t, e.mcp(""), "create_note", map[string]any{"content": "x", "alias": "agent-asked", "agent_policy": "suggest"})
+	_ = explicit
+	for alias, want := range map[string]string{human: "suggest", "agent-made": "edit", "agent-asked": "suggest"} {
+		if _, body := e.do(nil, "GET", "/api/notes/"+alias, nil); !strings.Contains(body, `"agent_policy":"`+want+`"`) {
+			t.Errorf("%s: want %s in %s", alias, want, body)
+		}
+	}
+}

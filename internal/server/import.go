@@ -151,5 +151,9 @@ func (s *Server) noteFromSpec(ctx context.Context, id *Identity, spec NoteSpec) 
 		return nn, badSpec("agent_policy must be none, read, suggest or edit")
 	}
 	nn.AgentPolicy = store.AgentPolicy(spec.AgentPolicy)
+	// A note an agent creates is its working space: it may edit it. A person's note starts at suggest.
+	if nn.AgentPolicy == "" && id.isAgent() {
+		nn.AgentPolicy = store.AgentEdit
+	}
 	return nn, nil
 }
