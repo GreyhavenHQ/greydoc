@@ -13,7 +13,7 @@ import (
 	"github.com/greyhavenhq/greydoc/internal/permission"
 )
 
-var ErrNoteNotFound = errors.New("note not found")
+var ErrNoteNotFound = errors.New("document not found")
 
 // RoomState is what a room loads: the last snapshot, updates logged after it, and seed text.
 type RoomState struct {
@@ -91,7 +91,7 @@ func (h *Hub) acquire(ctx context.Context, noteID string) (*Room, func(), error)
 			select {
 			case <-ch:
 				if d := time.Since(start); d > slowRoom {
-					slog.Warn("slow note open: waited for the room to close", "note", noteID, "waited", d)
+					slog.Warn("slow document open: waited for the room to close", "note", noteID, "waited", d)
 				}
 				continue
 			case <-ctx.Done():
@@ -107,7 +107,7 @@ func (h *Hub) acquire(ctx context.Context, noteID string) (*Room, func(), error)
 			loadStart := time.Now()
 			err := r.load(ctx)
 			if d := time.Since(loadStart); d > slowRoom {
-				slog.Warn("slow note open: loading the room", "note", noteID, "took", d, "error", err)
+				slog.Warn("slow document open: loading the room", "note", noteID, "took", d, "error", err)
 			}
 			close(r.ready)
 			if err != nil {
@@ -130,7 +130,7 @@ func (h *Hub) acquire(ctx context.Context, noteID string) (*Room, func(), error)
 		waitStart := time.Now()
 		<-r.ready
 		if d := time.Since(waitStart); d > slowRoom {
-			slog.Warn("slow note open: waited for another request to load the room", "note", noteID, "waited", d)
+			slog.Warn("slow document open: waited for another request to load the room", "note", noteID, "waited", d)
 		}
 		if r.loadErr != nil {
 			return nil, nil, r.loadErr
@@ -305,7 +305,7 @@ func (h *Hub) Serve(ctx context.Context, ws *websocket.Conn, noteID string, p Pe
 	r, release, err := h.acquire(ctx, noteID)
 	if err != nil {
 		slog.Warn("room load failed", "note", noteID, "error", err)
-		_ = ws.Close(websocket.StatusInternalError, "could not open note")
+		_ = ws.Close(websocket.StatusInternalError, "could not open document")
 		return
 	}
 	defer release()

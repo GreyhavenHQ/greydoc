@@ -52,7 +52,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 	n, err := s.store.NoteByAlias(r.Context(), r.PathValue("alias"))
 	if errors.Is(err, store.ErrNotFound) {
-		s.refuseWebsocket(w, r, wsNotFound, "this note does not exist")
+		s.refuseWebsocket(w, r, wsNotFound, "this document does not exist")
 		return
 	}
 	if err != nil {
@@ -60,7 +60,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if n.DeletedAt != "" {
-		s.refuseWebsocket(w, r, wsInTrash, "this note is in the trash")
+		s.refuseWebsocket(w, r, wsInTrash, "this document is in the trash")
 		return
 	}
 	level, err := s.noteLevel(r.Context(), identityFrom(r.Context()), n, shareToken(r))
@@ -70,9 +70,9 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 	if level < permission.Read {
 		if identityFrom(r.Context()) == nil {
-			s.refuseWebsocket(w, r, wsSignIn, "sign in to open this note")
+			s.refuseWebsocket(w, r, wsSignIn, "sign in to open this document")
 		} else {
-			s.refuseWebsocket(w, r, wsForbidden, "you do not have access to this note")
+			s.refuseWebsocket(w, r, wsForbidden, "you do not have access to this document")
 		}
 		return
 	}

@@ -24,7 +24,7 @@ func (s *Server) viewer(id *Identity) store.Viewer {
 func (s *Server) handleListNotes(w http.ResponseWriter, r *http.Request) {
 	id := identityFrom(r.Context())
 	if id == nil {
-		writeError(w, http.StatusUnauthorized, "login_required", "sign in to list notes")
+		writeError(w, http.StatusUnauthorized, "login_required", "sign in to list documents")
 		return
 	}
 	q := r.URL.Query()

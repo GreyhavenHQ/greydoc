@@ -20,7 +20,7 @@ import (
 const uploadTicketTTL = 10 * time.Minute
 
 type uploadIn struct {
-	Note     string `json:"note" jsonschema:"note alias or URL"`
+	Note     string `json:"note" jsonschema:"document alias or URL"`
 	Filename string `json:"filename,omitempty" jsonschema:"path or name of the file to upload, used in the curl command"`
 }
 
@@ -50,7 +50,7 @@ func (s *Server) mcpCreateUpload(ctx context.Context, req *mcp.CallToolRequest, 
 		"command":    `curl -sS -F "file=@` + path + `" ` + url,
 		"expires_at": store.FormatTime(expires),
 		"next": "Run the command with the path of the file. It prints JSON with \"markdown\", for example ![chart.png](/uploads/…). " +
-			"Put that Markdown in the note with edit_note, or propose it with suggest_edit. The URL works once. Images and PDF files only.",
+			"Put that Markdown in the document with edit_note, or propose it with suggest_edit. The URL works once. Images and PDF files only.",
 	})
 }
 

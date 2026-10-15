@@ -145,7 +145,7 @@ type bundleFile struct {
 func (s *Server) handleImportBundle(w http.ResponseWriter, r *http.Request) {
 	id := identityFrom(r.Context())
 	if id == nil {
-		writeError(w, http.StatusUnauthorized, "login_required", "sign in to import notes")
+		writeError(w, http.StatusUnauthorized, "login_required", "sign in to import documents")
 		return
 	}
 	limit := int64(s.cfg.MaxNoteLength)*4 + 20*s.cfg.MaxUploadBytes

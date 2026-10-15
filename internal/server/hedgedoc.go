@@ -68,7 +68,7 @@ func (s *Server) handleHedgeDocInfo(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleHedgeDocNew(w http.ResponseWriter, r *http.Request) {
 	id := identityFrom(r.Context())
 	if id == nil {
-		writeError(w, http.StatusUnauthorized, "login_required", "sign in to create notes")
+		writeError(w, http.StatusUnauthorized, "login_required", "sign in to create documents")
 		return
 	}
 	body, err := io.ReadAll(io.LimitReader(r.Body, int64(s.cfg.MaxNoteLength)*4+1))

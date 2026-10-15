@@ -14,7 +14,7 @@ import (
 func (s *Server) noteAny(w http.ResponseWriter, r *http.Request) (*store.Note, bool) {
 	n, err := s.store.NoteByAlias(r.Context(), r.PathValue("alias"))
 	if errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "not_found", "no such note")
+		writeError(w, http.StatusNotFound, "not_found", "no such document")
 		return nil, false
 	}
 	if err != nil {
@@ -69,11 +69,11 @@ func (s *Server) handleDeleteNote(w http.ResponseWriter, r *http.Request) {
 	id := identityFrom(r.Context())
 	if r.URL.Query().Get("permanent") == "1" {
 		if n.DeletedAt == "" {
-			writeError(w, http.StatusConflict, "not_in_trash", "move the note to the trash first")
+			writeError(w, http.StatusConflict, "not_in_trash", "move the document to the trash first")
 			return
 		}
 		if id.isAgent() {
-			writeError(w, http.StatusForbidden, "forbidden", "agents cannot delete notes for good")
+			writeError(w, http.StatusForbidden, "forbidden", "agents cannot delete documents for good")
 			return
 		}
 		if err := s.purgeNote(r.Context(), id.event(n.ID, "note.delete", noteData(n)), n); err != nil {
@@ -84,7 +84,7 @@ func (s *Server) handleDeleteNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if n.DeletedAt != "" {
-		writeError(w, http.StatusGone, "in_trash", "this note is already in the trash")
+		writeError(w, http.StatusGone, "in_trash", "this document is already in the trash")
 		return
 	}
 	if err := s.trashNote(r.Context(), id, n); err != nil {
@@ -100,7 +100,7 @@ func (s *Server) handleRestoreNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if n.DeletedAt == "" {
-		writeError(w, http.StatusConflict, "not_in_trash", "this note is not in the trash")
+		writeError(w, http.StatusConflict, "not_in_trash", "this document is not in the trash")
 		return
 	}
 	if err := s.restoreNote(r.Context(), identityFrom(r.Context()), n); err != nil {

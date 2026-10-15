@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-var errQuoteNotFound = errors.New("the quoted text is not in the note")
+var errQuoteNotFound = errors.New("the quoted text is not in the document")
 
 // findQuote locates the occurrence-th (1-based) exact match of quote. With occurrence 0, the quote MUST be unique.
 func findQuote(text, quote string, occurrence int) (int, int, error) {

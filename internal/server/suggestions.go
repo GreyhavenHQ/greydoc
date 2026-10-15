@@ -115,7 +115,7 @@ func (s *Server) createSuggestion(ctx context.Context, id *Identity, n *store.No
 			return nil, err
 		}
 		if !oks[0] || !oks[1] || offs[0] > offs[1] {
-			return nil, &httpError{http.StatusUnprocessableEntity, "bad_anchor", errors.New("the anchors do not resolve in this note")}
+			return nil, &httpError{http.StatusUnprocessableEntity, "bad_anchor", errors.New("the anchors do not resolve in this document")}
 		}
 		if text[offs[0]:offs[1]] != req.Original {
 			return nil, &httpError{http.StatusConflict, "stale", errStale}

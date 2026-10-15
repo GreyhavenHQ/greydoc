@@ -43,7 +43,7 @@ func versionString(version, gitCommit, buildTime string) string {
 var loopbackHosts = map[string]bool{"127.0.0.1": true, "::1": true, "localhost": true}
 
 const nonlocalWarning = `!! WARNING: local mode (no OIDC) is bound to a non-loopback interface.
-!! Anyone who can reach this address can read and edit every note.`
+!! Anyone who can reach this address can read and edit every document.`
 
 func main() {
 	if len(os.Args) < 2 {

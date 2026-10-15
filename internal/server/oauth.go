@@ -401,8 +401,8 @@ button.primary{background:#d95e2a;border-color:#d95e2a!important;color:#f9f9f7}
 <div class="head">{{.Logo}}<div class="name">greydoc</div></div>
 <p><strong>{{.Client}}</strong> wants to use greydoc as <strong>{{.User}}</strong>.</p>
 <ul>
-<li>Read notes you can read</li>
-{{if .Write}}<li>Comment, suggest changes, and edit notes whose agent policy allows it</li>{{end}}
+<li>Read documents you can read</li>
+{{if .Write}}<li>Comment, suggest changes, and edit documents whose agent policy allows it</li>{{end}}
 </ul>
 <p class="muted">Its changes are marked as made by an agent. You can disconnect it in Settings.</p>
 <input type="hidden" name="consent" value="{{.Consent}}">

@@ -31,7 +31,7 @@ func (s *Store) CopyFrom(ctx context.Context, src *Store) error {
 		return err
 	}
 	if n > 0 {
-		return errors.New("the destination database already has notes; copy into an empty database")
+		return errors.New("the destination database already has documents; copy into an empty database")
 	}
 	return s.tx(ctx, func(tx *sql.Tx) error {
 		for _, table := range copyTables() {

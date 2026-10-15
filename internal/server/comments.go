@@ -107,7 +107,7 @@ func (s *Server) createThread(ctx context.Context, id *Identity, n *store.Note, 
 			return nil, http.StatusInternalServerError, err
 		}
 		if !oks[0] || !oks[1] {
-			return nil, http.StatusUnprocessableEntity, errors.New("the anchors do not resolve in this note")
+			return nil, http.StatusUnprocessableEntity, errors.New("the anchors do not resolve in this document")
 		}
 		th.AnchorStart, th.AnchorEnd = req.AnchorStart, req.AnchorEnd
 		th.Quote = req.Quote

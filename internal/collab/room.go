@@ -197,7 +197,7 @@ func (r *Room) save() {
 	start := time.Now()
 	err := r.hub.store.SaveRoom(ctx, r.noteID, r.doc.state(), r.doc.text())
 	if d := time.Since(start); d > slowRoom {
-		slog.Warn("slow note save", "note", r.noteID, "took", d, "error", err)
+		slog.Warn("slow document save", "note", r.noteID, "took", d, "error", err)
 	}
 	if err != nil {
 		slog.Error("save room failed", "note", r.noteID, "error", err)

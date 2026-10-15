@@ -41,7 +41,7 @@ type noteView struct {
 func (s *Server) handleCreateNote(w http.ResponseWriter, r *http.Request) {
 	id := identityFrom(r.Context())
 	if id == nil {
-		writeError(w, http.StatusUnauthorized, "login_required", "sign in to create notes")
+		writeError(w, http.StatusUnauthorized, "login_required", "sign in to create documents")
 		return
 	}
 	var spec NoteSpec
@@ -65,7 +65,7 @@ func (s *Server) handleCreateNote(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, noteView{Note: n, Level: permission.Full})
 }
 
-var errMaxLength = errors.New("note exceeds the maximum length")
+var errMaxLength = errors.New("document exceeds the maximum length")
 
 func (s *Server) createNote(ctx context.Context, id *Identity, spec NoteSpec) (*store.Note, error) {
 	if utf8.RuneCountInString(spec.Content) > s.cfg.MaxNoteLength {
@@ -207,7 +207,7 @@ func (s *Server) handleAliases(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		name := r.PathValue("name")
 		if a, _ := s.store.NoteByAlias(r.Context(), name); a == nil || a.ID != n.ID {
-			writeError(w, http.StatusNotFound, "not_found", "no such alias on this note")
+			writeError(w, http.StatusNotFound, "not_found", "no such alias on this document")
 			return
 		}
 		if err := s.store.RemoveAlias(r.Context(), name); err != nil {

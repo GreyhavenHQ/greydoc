@@ -32,7 +32,7 @@ type PermissionSpec struct {
 	Groups       map[string]string `json:"groups,omitempty"`
 }
 
-var errBadSpec = errors.New("invalid note settings")
+var errBadSpec = errors.New("invalid document settings")
 
 func badSpec(format string, args ...any) error {
 	return fmt.Errorf("%w: %s", errBadSpec, fmt.Sprintf(format, args...))

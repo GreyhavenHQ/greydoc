@@ -99,7 +99,7 @@ func shareToken(r *http.Request) string {
 func (s *Server) noteFor(w http.ResponseWriter, r *http.Request, need permission.Level) (*store.Note, permission.Level, bool) {
 	n, err := s.store.NoteByAlias(r.Context(), r.PathValue("alias"))
 	if errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "not_found", "no such note")
+		writeError(w, http.StatusNotFound, "not_found", "no such document")
 		return nil, 0, false
 	}
 	if err != nil {
@@ -107,7 +107,7 @@ func (s *Server) noteFor(w http.ResponseWriter, r *http.Request, need permission
 		return nil, 0, false
 	}
 	if n.DeletedAt != "" {
-		writeError(w, http.StatusGone, "in_trash", "this note is in the trash")
+		writeError(w, http.StatusGone, "in_trash", "this document is in the trash")
 		return nil, 0, false
 	}
 	id := identityFrom(r.Context())
@@ -119,9 +119,9 @@ func (s *Server) noteFor(w http.ResponseWriter, r *http.Request, need permission
 	if l < need {
 		if l == permission.Deny && id == nil {
 			w.Header().Set("WWW-Authenticate", s.wwwAuthenticate(r))
-			writeError(w, http.StatusUnauthorized, "login_required", "sign in to open this note")
+			writeError(w, http.StatusUnauthorized, "login_required", "sign in to open this document")
 		} else if l == permission.Deny {
-			writeError(w, http.StatusForbidden, "forbidden", "you do not have access to this note")
+			writeError(w, http.StatusForbidden, "forbidden", "you do not have access to this document")
 		} else {
 			writeError(w, http.StatusForbidden, "forbidden", "this action needs "+need.String()+" access")
 		}
@@ -130,7 +130,7 @@ func (s *Server) noteFor(w http.ResponseWriter, r *http.Request, need permission
 	return n, l, true
 }
 
-var errNotOwner = errors.New("only the owner can move this note to the trash or restore it")
+var errNotOwner = errors.New("only the owner can move this document to the trash or restore it")
 
 // canTrash decides who may trash, restore or purge a note: its owner, or an admin. An agent also needs the edit policy.
 func (s *Server) canTrash(id *Identity, n *store.Note) error {
@@ -140,7 +140,7 @@ func (s *Server) canTrash(id *Identity, n *store.Note) error {
 	owner := id.Local || (n.OwnerID != "" && n.OwnerID == id.UserID())
 	if id.isAgent() {
 		if !owner || n.AgentPolicy != store.AgentEdit {
-			return fmt.Errorf("agents can trash or restore a note only for its owner, with agent policy \"edit\" (this note: %q)", n.AgentPolicy)
+			return fmt.Errorf("agents can trash or restore a document only for its owner, with agent policy \"edit\" (this document: %q)", n.AgentPolicy)
 		}
 		if !id.canWriteScope() {
 			return errors.New("this token can only read")

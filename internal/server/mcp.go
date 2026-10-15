@@ -18,11 +18,11 @@ import (
 	"github.com/greyhavenhq/greydoc/internal/store"
 )
 
-const mcpInstructions = `greydoc is a shared Markdown notes server.
-Every note has an agent policy set by its owner: none, read, suggest or edit.
+const mcpInstructions = `greydoc is a shared Markdown document server.
+Every document has an agent policy set by its owner: none, read, suggest or edit.
 Under "suggest", edit_note creates a suggestion that a person accepts or rejects; the text does not change until then.
 Quote text exactly (old_text, quote) to target a range. If the quote is not unique, quote more context or pass occurrence.
-Everything you do is recorded in the note timeline as done by an agent on behalf of the signed-in user.`
+Everything you do is recorded in the document timeline as done by an agent on behalf of the signed-in user.`
 
 // mcpHandler serves the MCP Streamable HTTP endpoint. In OIDC mode it needs a bearer token.
 func (s *Server) mcpHandler() http.Handler {
@@ -132,13 +132,13 @@ func (s *Server) mcpNote(ctx context.Context, id *Identity, ref string, need per
 	}
 	n, err := s.store.NoteByAlias(ctx, alias)
 	if errors.Is(err, store.ErrNotFound) {
-		return nil, 0, fmt.Errorf("no note %q", alias)
+		return nil, 0, fmt.Errorf("no document %q", alias)
 	}
 	if err != nil {
 		return nil, 0, err
 	}
 	if n.DeletedAt != "" {
-		return nil, 0, fmt.Errorf("note %q is in the trash; restore_note brings it back", alias)
+		return nil, 0, fmt.Errorf("document %q is in the trash; restore_note brings it back", alias)
 	}
 	l, err := s.noteLevel(ctx, id, n, share)
 	if err != nil {
@@ -146,7 +146,7 @@ func (s *Server) mcpNote(ctx context.Context, id *Identity, ref string, need per
 	}
 	if l < need {
 		if l == permission.Deny {
-			return nil, l, fmt.Errorf("no access to note %q (agent policy %q)", alias, n.AgentPolicy)
+			return nil, l, fmt.Errorf("no access to document %q (agent policy %q)", alias, n.AgentPolicy)
 		}
 		return nil, l, fmt.Errorf("this needs %s access; you have %s on %q (agent policy %q)", need, l, alias, n.AgentPolicy)
 	}
@@ -167,21 +167,21 @@ func textResult(s string) (*mcp.CallToolResult, any, error) {
 
 type listNotesIn struct {
 	Scope  string `json:"scope,omitempty" jsonschema:"recent, mine, shared or all (default all)"`
-	Tag    string `json:"tag,omitempty" jsonschema:"only notes with this tag"`
-	Limit  int    `json:"limit,omitempty" jsonschema:"notes per page, 1 to 200 (default 50)"`
-	Offset int    `json:"offset,omitempty" jsonschema:"notes to skip: the next_offset of the previous page"`
+	Tag    string `json:"tag,omitempty" jsonschema:"only documents with this tag"`
+	Limit  int    `json:"limit,omitempty" jsonschema:"documents per page, 1 to 200 (default 50)"`
+	Offset int    `json:"offset,omitempty" jsonschema:"documents to skip: the next_offset of the previous page"`
 }
 
 type searchIn struct {
 	Query  string `json:"query" jsonschema:"words to find in titles, tags and text"`
 	Scope  string `json:"scope,omitempty" jsonschema:"recent, mine, shared or all (default all)"`
-	Tag    string `json:"tag,omitempty" jsonschema:"only notes with this tag"`
-	Limit  int    `json:"limit,omitempty" jsonschema:"notes per page, 1 to 200 (default 20)"`
-	Offset int    `json:"offset,omitempty" jsonschema:"notes to skip: the next_offset of the previous page"`
+	Tag    string `json:"tag,omitempty" jsonschema:"only documents with this tag"`
+	Limit  int    `json:"limit,omitempty" jsonschema:"documents per page, 1 to 200 (default 20)"`
+	Offset int    `json:"offset,omitempty" jsonschema:"documents to skip: the next_offset of the previous page"`
 }
 
 type noteIn struct {
-	Note string `json:"note" jsonschema:"note alias or URL"`
+	Note string `json:"note" jsonschema:"document alias or URL"`
 }
 
 type permissionsIn struct {
@@ -194,7 +194,7 @@ type permissionsIn struct {
 
 type createNoteIn struct {
 	Content      string         `json:"content" jsonschema:"Markdown text. Front matter tags: [a, b] sets tags."`
-	Alias        string         `json:"alias,omitempty" jsonschema:"address of the note, for example the ID it had in HedgeDoc so old links keep working. Letters, digits, - and _. Case is ignored."`
+	Alias        string         `json:"alias,omitempty" jsonschema:"address of the document, for example the ID it had in HedgeDoc so old links keep working. Letters, digits, - and _. Case is ignored."`
 	ExtraAliases []string       `json:"extra_aliases,omitempty" jsonschema:"more addresses, for example a HedgeDoc 1 short ID used in /s/ links"`
 	CreatedAt    string         `json:"created_at,omitempty" jsonschema:"original creation date, RFC 3339. Also the last update unless updated_at is given."`
 	UpdatedAt    string         `json:"updated_at,omitempty" jsonschema:"original last update, RFC 3339"`
@@ -203,47 +203,47 @@ type createNoteIn struct {
 }
 
 type commentsIn struct {
-	Note            string `json:"note" jsonschema:"note alias or URL"`
+	Note            string `json:"note" jsonschema:"document alias or URL"`
 	IncludeResolved bool   `json:"include_resolved,omitempty" jsonschema:"also list resolved threads"`
 }
 
 type addCommentIn struct {
-	Note       string `json:"note" jsonschema:"note alias or URL"`
-	Quote      string `json:"quote" jsonschema:"exact text in the note the comment is about"`
+	Note       string `json:"note" jsonschema:"document alias or URL"`
+	Quote      string `json:"quote" jsonschema:"exact text in the document the comment is about"`
 	Occurrence int    `json:"occurrence,omitempty" jsonschema:"which match of quote, from 1, when it appears more than once"`
 	Body       string `json:"body" jsonschema:"the comment, Markdown allowed"`
 }
 
 type replyIn struct {
-	Note     string `json:"note" jsonschema:"note alias or URL"`
+	Note     string `json:"note" jsonschema:"document alias or URL"`
 	ThreadID string `json:"thread_id" jsonschema:"thread id from list_comments"`
 	Body     string `json:"body" jsonschema:"the reply"`
 }
 
 type resolveIn struct {
-	Note     string `json:"note" jsonschema:"note alias or URL"`
+	Note     string `json:"note" jsonschema:"document alias or URL"`
 	ThreadID string `json:"thread_id" jsonschema:"thread id from list_comments"`
 	Reopen   bool   `json:"reopen,omitempty" jsonschema:"reopen instead of resolve"`
 }
 
 type editIn struct {
-	Note       string `json:"note" jsonschema:"note alias or URL"`
-	OldText    string `json:"old_text,omitempty" jsonschema:"exact text to replace. Leave empty with content to replace the whole note."`
+	Note       string `json:"note" jsonschema:"document alias or URL"`
+	OldText    string `json:"old_text,omitempty" jsonschema:"exact text to replace. Leave empty with content to replace the whole document."`
 	NewText    string `json:"new_text,omitempty" jsonschema:"replacement text"`
 	Occurrence int    `json:"occurrence,omitempty" jsonschema:"which match of old_text, from 1, when it appears more than once"`
-	Content    string `json:"content,omitempty" jsonschema:"full new text of the note, used when old_text is empty"`
+	Content    string `json:"content,omitempty" jsonschema:"full new text of the document, used when old_text is empty"`
 	Reason     string `json:"reason,omitempty" jsonschema:"why, shown to the people reviewing"`
 }
 
 type historyIn struct {
-	Note       string `json:"note" jsonschema:"note alias or URL"`
+	Note       string `json:"note" jsonschema:"document alias or URL"`
 	Limit      int    `json:"limit,omitempty" jsonschema:"maximum number of entries (default 30)"`
 	RevisionID int64  `json:"revision_id,omitempty" jsonschema:"return the full text and diff of this revision"`
 }
 
 func (s *Server) registerTools(srv *mcp.Server) {
 	ro := &mcp.ToolAnnotations{ReadOnlyHint: true}
-	mcp.AddTool(srv, &mcp.Tool{Name: "list_notes", Description: "List notes you can read, last updated first. A full page returns next_offset: pass it as offset to get the next page.", Annotations: ro},
+	mcp.AddTool(srv, &mcp.Tool{Name: "list_notes", Description: "List documents you can read, last updated first. A full page returns next_offset: pass it as offset to get the next page.", Annotations: ro},
 		func(ctx context.Context, req *mcp.CallToolRequest, in listNotesIn) (*mcp.CallToolResult, any, error) {
 			id, err := s.mcpIdentity(req)
 			if err != nil {
@@ -252,7 +252,7 @@ func (s *Server) registerTools(srv *mcp.Server) {
 			return s.mcpList(ctx, id, store.ListFilter{Viewer: s.viewer(id), Scope: mcpScope(in.Scope), Tag: in.Tag,
 				Limit: defaultLimit(in.Limit, 50), Offset: in.Offset}, "")
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "search_notes", Description: "Search notes by words in title, tags and text, best match first, with an excerpt around the match. A full page returns next_offset: pass it as offset to get the next page.", Annotations: ro},
+	mcp.AddTool(srv, &mcp.Tool{Name: "search_notes", Description: "Search documents by words in title, tags and text, best match first, with an excerpt around the match. A full page returns next_offset: pass it as offset to get the next page.", Annotations: ro},
 		func(ctx context.Context, req *mcp.CallToolRequest, in searchIn) (*mcp.CallToolResult, any, error) {
 			id, err := s.mcpIdentity(req)
 			if err != nil {
@@ -265,7 +265,7 @@ func (s *Server) registerTools(srv *mcp.Server) {
 			return s.mcpList(ctx, id, store.ListFilter{Viewer: s.viewer(id), Scope: mcpScope(in.Scope), Tag: in.Tag, IDs: ids,
 				Limit: defaultLimit(in.Limit, 20), Offset: in.Offset}, in.Query)
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "read_note", Description: "Read a note: Markdown text, title, tags, your access level and the agent policy.", Annotations: ro},
+	mcp.AddTool(srv, &mcp.Tool{Name: "read_note", Description: "Read a document: Markdown text, title, tags, your access level and the agent policy.", Annotations: ro},
 		func(ctx context.Context, req *mcp.CallToolRequest, in noteIn) (*mcp.CallToolResult, any, error) {
 			id, err := s.mcpIdentity(req)
 			if err != nil {
@@ -293,8 +293,8 @@ func (s *Server) registerTools(srv *mcp.Server) {
 				"url": s.publicURL() + "/n/" + n.PrimaryAlias, "content": text,
 			})
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "create_note", Description: "Create a note owned by the signed-in user. " +
-		"To import from HedgeDoc, pass the old note ID as alias, the short ID in extra_aliases, the original dates, and the permission mode."},
+	mcp.AddTool(srv, &mcp.Tool{Name: "create_note", Description: "Create a document owned by the signed-in user. " +
+		"To import from HedgeDoc, pass the old document ID as alias, the short ID in extra_aliases, the original dates, and the permission mode."},
 		func(ctx context.Context, req *mcp.CallToolRequest, in createNoteIn) (*mcp.CallToolResult, any, error) {
 			id, err := s.mcpIdentity(req)
 			if err != nil {
@@ -361,7 +361,7 @@ func (s *Server) registerTools(srv *mcp.Server) {
 			}
 			return jsonResult(map[string]any{"threads": list})
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "add_comment", Description: "Start a comment thread on a quoted part of a note."},
+	mcp.AddTool(srv, &mcp.Tool{Name: "add_comment", Description: "Start a comment thread on a quoted part of a document."},
 		func(ctx context.Context, req *mcp.CallToolRequest, in addCommentIn) (*mcp.CallToolResult, any, error) {
 			id, err := s.mcpIdentity(req)
 			if err != nil {
@@ -417,7 +417,7 @@ func (s *Server) registerTools(srv *mcp.Server) {
 			s.commentsChanged(n.ID)
 			return textResult(status)
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "suggest_edit", Description: "Propose replacing old_text with new_text. People review it in the editor; the note does not change until accepted."},
+	mcp.AddTool(srv, &mcp.Tool{Name: "suggest_edit", Description: "Propose replacing old_text with new_text. People review it in the editor; the document does not change until accepted."},
 		func(ctx context.Context, req *mcp.CallToolRequest, in editIn) (*mcp.CallToolResult, any, error) {
 			id, err := s.mcpIdentity(req)
 			if err != nil {
@@ -429,8 +429,8 @@ func (s *Server) registerTools(srv *mcp.Server) {
 			}
 			return s.mcpSuggest(ctx, id, n, in)
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "edit_note", Description: "Replace old_text with new_text, or the whole note with content. " +
-		"Applies directly when the note's agent policy is edit; under suggest it creates a suggestion instead."},
+	mcp.AddTool(srv, &mcp.Tool{Name: "edit_note", Description: "Replace old_text with new_text, or the whole document with content. " +
+		"Applies directly when the document's agent policy is edit; under suggest it creates a suggestion instead."},
 		func(ctx context.Context, req *mcp.CallToolRequest, in editIn) (*mcp.CallToolResult, any, error) {
 			id, err := s.mcpIdentity(req)
 			if err != nil {
@@ -470,16 +470,16 @@ func (s *Server) registerTools(srv *mcp.Server) {
 			alias, _ := noteRef(in.Note)
 			n, err := s.store.NoteByAlias(ctx, alias)
 			if err != nil {
-				return nil, nil, fmt.Errorf("no note %q", alias)
+				return nil, nil, fmt.Errorf("no document %q", alias)
 			}
 			if err := s.canTrash(id, n); err != nil {
 				return nil, nil, err
 			}
 			switch {
 			case restore && n.DeletedAt == "":
-				return nil, nil, fmt.Errorf("note %q is not in the trash", alias)
+				return nil, nil, fmt.Errorf("document %q is not in the trash", alias)
 			case !restore && n.DeletedAt != "":
-				return nil, nil, fmt.Errorf("note %q is already in the trash", alias)
+				return nil, nil, fmt.Errorf("document %q is already in the trash", alias)
 			case restore:
 				err = s.restoreNote(ctx, id, n)
 			default:
@@ -494,13 +494,13 @@ func (s *Server) registerTools(srv *mcp.Server) {
 			return textResult(fmt.Sprintf("moved %q to the trash; restore_note brings it back for %d days", alias, int(s.cfg.TrashRetention.Hours()/24)))
 		}
 	}
-	mcp.AddTool(srv, &mcp.Tool{Name: "trash_note", Description: "Move a note to the trash. Only for notes the user owns, with agent policy edit. " +
-		"It can be restored until the trash retention ends. Agents cannot delete notes for good."}, trash(false))
-	mcp.AddTool(srv, &mcp.Tool{Name: "restore_note", Description: "Bring a note back from the trash. Same rules as trash_note."}, trash(true))
-	mcp.AddTool(srv, &mcp.Tool{Name: "create_upload", Description: "Get a one-time URL to upload a local image or PDF file to a note. " +
-		"Run the returned curl command with the file path: it prints the Markdown to put in the note with edit_note or suggest_edit. " +
+	mcp.AddTool(srv, &mcp.Tool{Name: "trash_note", Description: "Move a document to the trash. Only for documents the user owns, with agent policy edit. " +
+		"It can be restored until the trash retention ends. Agents cannot delete documents for good."}, trash(false))
+	mcp.AddTool(srv, &mcp.Tool{Name: "restore_note", Description: "Bring a document back from the trash. Same rules as trash_note."}, trash(true))
+	mcp.AddTool(srv, &mcp.Tool{Name: "create_upload", Description: "Get a one-time URL to upload a local image or PDF file to a document. " +
+		"Run the returned curl command with the file path: it prints the Markdown to put in the document with edit_note or suggest_edit. " +
 		"The URL works once and expires after 10 minutes."}, s.mcpCreateUpload)
-	mcp.AddTool(srv, &mcp.Tool{Name: "get_history", Description: "Timeline of a note: edit sessions with authors and sources, comments, suggestions and permission changes.", Annotations: ro},
+	mcp.AddTool(srv, &mcp.Tool{Name: "get_history", Description: "Timeline of a document: edit sessions with authors and sources, comments, suggestions and permission changes.", Annotations: ro},
 		func(ctx context.Context, req *mcp.CallToolRequest, in historyIn) (*mcp.CallToolResult, any, error) {
 			id, err := s.mcpIdentity(req)
 			if err != nil {
@@ -601,7 +601,7 @@ func (s *Server) mcpSuggest(ctx context.Context, id *Identity, n *store.Note, in
 	}
 	return jsonResult(map[string]any{
 		"suggestion": sg.ID, "status": "pending",
-		"message": fmt.Sprintf("The note's agent policy is %q, so this was saved as a suggestion for a person to accept.", n.AgentPolicy),
+		"message": fmt.Sprintf("The document's agent policy is %q, so this was saved as a suggestion for a person to accept.", n.AgentPolicy),
 	})
 }
 
