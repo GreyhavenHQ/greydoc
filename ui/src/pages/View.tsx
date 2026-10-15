@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Preview } from '@/render/Preview'
-import { useLiveNote } from '@/lib/useLiveNote'
+import { useNote } from '@/lib/useNote'
 import { extractTitle } from '@/lib/meta'
 import { loginHref } from '@/lib/me'
 import { download, fileName, standaloneHTML } from '@/export/html'
@@ -15,7 +15,7 @@ import { WithToc } from '@/components/TocSidebar'
 export default function View({ alias: given }: { alias?: string } = {}) {
   const params = useParams()
   const alias = given ?? params.alias ?? ''
-  const { note, text, error, synced } = useLiveNote(alias)
+  const { note, text, error } = useNote(alias)
   const title = extractTitle(text) || note?.title || 'Untitled'
   const exported = useRef(false)
   const [exporting, setExporting] = useState(false)
@@ -26,7 +26,7 @@ export default function View({ alias: given }: { alias?: string } = {}) {
 
   useEffect(() => {
     const wantsExport = new URLSearchParams(location.search).get('export') === 'html'
-    if (!wantsExport || !note || !synced || exported.current) return
+    if (!wantsExport || !note || exported.current) return
     exported.current = true
     setExporting(true)
     const box = document.createElement('article')
@@ -40,7 +40,7 @@ export default function View({ alias: given }: { alias?: string } = {}) {
         box.remove()
         setExporting(false)
       })
-  }, [note, synced, text, title])
+  }, [note, text, title])
 
   if (error) {
     if (error.status === 401) {

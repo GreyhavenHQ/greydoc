@@ -308,3 +308,15 @@ test('the note shows as a page to read while the live copy connects', async ({ p
   await page.waitForTimeout(4500)
   await expect(page.getByTestId('connecting-view')).toBeVisible()
 })
+
+test('the view page and slide mode load the note once, with no live connection', async ({ page }) => {
+  const alias = await noteWith(page, '# Snapshot\n\n---\n\n## Second')
+  let sockets = 0
+  page.on('websocket', () => sockets++)
+  await page.goto('/s/' + alias)
+  await expect(page.getByTestId('view-page').locator('h1')).toHaveText('Snapshot')
+  await page.goto('/p/' + alias)
+  await expect(page.locator('.reveal .slides > section')).toHaveCount(2)
+  await page.waitForTimeout(500)
+  expect(sockets).toBe(0)
+})

@@ -5,7 +5,7 @@ import RevealNotes from 'reveal.js/plugin/notes'
 import 'reveal.js/reveal.css'
 import 'reveal.js/theme/white.css'
 import 'katex/dist/katex.min.css'
-import { useLiveNote } from '@/lib/useLiveNote'
+import { useNote } from '@/lib/useNote'
 import { deckTheme, splitSlides } from '@/render/slides'
 import { renderMarkdown } from '@/render/markdown'
 import { hydrateMermaid } from '@/render/mermaid'
@@ -28,7 +28,7 @@ function slideHTML(src: string) {
 // Slides renders the note as a reveal.js deck, like HedgeDoc's slide mode.
 export default function Slides() {
   const { alias = '' } = useParams()
-  const { note, text, error } = useLiveNote(alias)
+  const { note, text, error } = useNote(alias)
   const host = useRef<HTMLDivElement>(null)
   const deck = useRef<InstanceType<typeof Reveal> | null>(null)
   const { resolvedTheme } = useTheme()
