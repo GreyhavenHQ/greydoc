@@ -192,18 +192,26 @@ test('every common diagram type renders', async ({ page }) => {
   await expect(page.locator('.mermaid-error')).toHaveCount(0)
 })
 
-test('the home page shows two lines of tags and expands on demand', async ({ page }) => {
+test('the home page shows one uncut row of tags and lists all of them on demand', async ({ page }) => {
   const tags = Array.from({ length: 60 }, (_, i) => `topic-${i}`)
   await page.request.post('/api/notes', { data: { content: `---\ntags: [${tags.join(', ')}]\n---\n# Many tags` } })
   await page.goto('/?scope=all')
   const filter = page.getByTestId('tag-filter')
   await expect(filter.getByRole('button').first()).toBeVisible()
-  const collapsed = (await filter.boundingBox())!.height
-  expect(collapsed).toBeLessThan(60)
+  const row = (await filter.boundingBox())!
+  const chips = await filter.getByRole('button').evaluateAll((els) => els.map((e) => e.getBoundingClientRect()).map((r) => ({ top: r.top, bottom: r.bottom })))
+  for (const c of chips) {
+    const inside = c.top >= row.y - 0.5 && c.bottom <= row.y + row.height + 0.5
+    const below = c.top >= row.y + row.height
+    expect(inside || below).toBe(true)
+  }
   await page.getByRole('button', { name: /^All \d+ tags$/ }).click()
-  await expect.poll(async () => (await filter.boundingBox())!.height).toBeGreaterThan(collapsed + 20)
-  await page.getByRole('button', { name: 'Show fewer' }).click()
-  await expect.poll(async () => (await filter.boundingBox())!.height).toBeLessThan(60)
+  const list = page.getByTestId('tag-list')
+  await list.getByPlaceholder('Filter tags').fill('topic-59')
+  await expect(list.getByRole('button')).toHaveCount(1)
+  await list.getByRole('button', { name: /topic-59/ }).click()
+  await expect(page).toHaveURL(/tag=topic-59/)
+  await expect(filter.getByRole('button').first()).toHaveAttribute('aria-pressed', 'true')
 })
 
 test('task boxes in the preview change the text', async ({ page }) => {

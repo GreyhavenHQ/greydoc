@@ -1,9 +1,10 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Eye, FileText, Pin, PinOff, Search, X } from 'lucide-react'
+import { ChevronDown, Eye, FileText, Pin, PinOff, Search, Tag, X } from 'lucide-react'
 import { AppHeader, NewNoteButton } from '@/components/AppHeader'
 import { SignInCard } from '@/pages/Login'
 import { Input } from '@/components/ui/input'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -176,9 +177,10 @@ export default function Home() {
                           e.preventDefault()
                           update({ tag: t })
                         }}
-                        className="rounded bg-muted px-1.5 py-0.5 hover:text-primary"
+                        className="rounded-md bg-muted/70 px-1.5 py-0.5 text-foreground/80 hover:text-primary"
                       >
-                        #{t}
+                        <span className="text-muted-foreground">#</span>
+                        {t}
                       </span>
                     ))}
                   </div>
@@ -220,65 +222,77 @@ export default function Home() {
   )
 }
 
-// TagFilter shows two lines of tags, most used first, and expands on demand. The selected tag stays in view.
+// TagFilter shows one row of the most used tags. "All tags" opens a searchable list. The selected tag stays in view.
 function TagFilter({ tags, selected, onSelect }: { tags: TagCount[]; selected: string; onSelect: (tag: string) => void }) {
-  const [expanded, setExpanded] = useState(false)
-  const [overflows, setOverflows] = useState(false)
-  const box = useRef<HTMLDivElement>(null)
+  const [open, setOpen] = useState(false)
+  const [filter, setFilter] = useState('')
   const ordered = useMemo(() => {
     const sel = tags.find((t) => t.tag === selected)
     return sel ? [sel, ...tags.filter((t) => t !== sel)] : tags
   }, [tags, selected])
-
-  useLayoutEffect(() => {
-    const el = box.current
-    if (!el) return
-    const check = () => setOverflows(el.scrollHeight > el.clientHeight + 1)
-    check()
-    const ro = new ResizeObserver(check)
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [ordered, expanded])
+  const matches = tags.filter((t) => t.tag.toLowerCase().includes(filter.trim().toLowerCase()))
+  const pick = (tag: string) => {
+    onSelect(selected === tag ? '' : tag)
+    setOpen(false)
+  }
 
   return (
-    <div className="mb-6 flex items-start gap-2">
-      <div
-        ref={box}
-        className={cn('flex flex-1 flex-wrap gap-1.5 overflow-hidden', !expanded && 'max-h-[3.25rem]')}
-        data-testid="tag-filter"
-      >
+    <div className="mb-6 flex items-center gap-2">
+      <Tag className="size-3.5 shrink-0 text-muted-foreground" />
+      {/* One row only: tags that do not fit wrap to a hidden second row. */}
+      <div className="flex h-6 min-w-0 flex-1 flex-wrap gap-1.5 overflow-hidden" data-testid="tag-filter">
         {ordered.map((t) => (
-          <button
-            key={t.tag}
-            onClick={() => onSelect(selected === t.tag ? '' : t.tag)}
-            aria-pressed={selected === t.tag}
-            className={cn(
-              'group inline-flex h-6 items-center gap-1.5 rounded-full border bg-card py-0 pr-1 pl-2.5 text-xs transition-colors hover:border-primary/60',
-              selected === t.tag && 'border-primary bg-primary text-primary-foreground hover:border-primary',
-            )}
-          >
-            <span>{t.tag}</span>
-            <span
-              className={cn(
-                'min-w-[1.25rem] rounded-full bg-muted px-1.5 text-center text-[10px] leading-4 font-semibold tabular-nums text-muted-foreground',
-                'group-hover:bg-primary/15 group-hover:text-primary',
-                selected === t.tag && 'bg-primary-foreground/25 text-primary-foreground group-hover:bg-primary-foreground/25 group-hover:text-primary-foreground',
-              )}
-            >
-              {t.count}
-            </span>
-          </button>
+          <TagChip key={t.tag} tag={t} selected={selected === t.tag} onClick={() => pick(t.tag)} />
         ))}
       </div>
-      {(overflows || expanded) && (
-        <button
-          className="shrink-0 rounded-full px-2 py-0.5 text-xs whitespace-nowrap text-muted-foreground hover:text-foreground"
-          onClick={() => setExpanded(!expanded)}
-          aria-expanded={expanded}
-        >
-          {expanded ? 'Show fewer' : `All ${tags.length} tags`}
-        </button>
-      )}
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button className="flex h-6 shrink-0 items-center gap-1 rounded-md px-2 text-xs whitespace-nowrap text-muted-foreground hover:bg-muted hover:text-foreground">
+            All {tags.length} tags <ChevronDown className="size-3" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-72 p-2" data-testid="tag-list">
+          <Input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter tags" className="mb-2 h-8" autoFocus />
+          <div className="max-h-72 overflow-y-auto">
+            {matches.map((t) => (
+              <button
+                key={t.tag}
+                onClick={() => pick(t.tag)}
+                aria-label={`${t.tag}, ${t.count} ${t.count === 1 ? 'note' : 'notes'}`}
+                className={cn(
+                  'flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-muted',
+                  selected === t.tag && 'font-medium text-primary',
+                )}
+              >
+                <span className="text-muted-foreground">#</span>
+                <span className="min-w-0 flex-1 truncate">{t.tag}</span>
+                <span className="text-xs tabular-nums text-muted-foreground">{t.count}</span>
+              </button>
+            ))}
+            {matches.length === 0 && <p className="px-2 py-3 text-center text-sm text-muted-foreground">No tag matches.</p>}
+          </div>
+        </PopoverContent>
+      </Popover>
     </div>
+  )
+}
+
+function TagChip({ tag, selected, onClick }: { tag: TagCount; selected: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={selected}
+      aria-label={`${tag.tag}, ${tag.count} ${tag.count === 1 ? 'note' : 'notes'}`}
+      className={cn(
+        'inline-flex h-6 items-center rounded-md border px-2 text-xs transition-colors',
+        selected
+          ? 'border-primary bg-primary text-primary-foreground hover:bg-primary/90'
+          : 'border-border/70 bg-card text-foreground/80 hover:border-primary/60 hover:text-foreground',
+      )}
+    >
+      <span className={selected ? 'opacity-70' : 'text-muted-foreground'}>#</span>
+      {tag.tag}
+      <span className={cn('ml-1.5 tabular-nums', selected ? 'opacity-70' : 'text-muted-foreground')}>{tag.count}</span>
+    </button>
   )
 }
