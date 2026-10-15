@@ -1,18 +1,18 @@
 # Import from HedgeDoc 1
 
-greydoc can take over a HedgeDoc 1 server's notes with their links, dates and permissions. Every old link keeps working, as long as the greydoc server answers on the same host name.
+greydoc can take over a HedgeDoc 1 server's documents with their links, dates and permissions. Every old link keeps working, as long as the greydoc server answers on the same host name.
 
 ## Links that keep working
 
-A HedgeDoc 1 note answers to three IDs:
+A HedgeDoc 1 document answers to three IDs:
 
 | ID | Where it comes from | Example |
 |---|---|---|
-| Free alias | `Notes.alias`, only for notes created with a free URL | `team-standup` |
-| Note ID | `Notes.id` (a UUID), as base64url | `s3BkeGgqTH-gU5UXqMZdag` |
+| Free alias | `Notes.alias`, only for documents created with a free URL | `team-standup` |
+| Document ID | `Notes.id` (a UUID), as base64url | `s3BkeGgqTH-gU5UXqMZdag` |
 | Short ID | `Notes.shortid` | `SyJdkz5Jx` |
 
-Import each note with the alias if it has one, else the note ID, as `alias`, and put the other IDs in `extra_aliases`. Then these addresses work in greydoc:
+Import each document with the alias if it has one, else the document ID, as `alias`, and put the other IDs in `extra_aliases`. Then these addresses work in greydoc:
 
 | HedgeDoc 1 address | greydoc |
 |---|---|
@@ -21,13 +21,13 @@ Import each note with the alias if it has one, else the note ID, as `alias`, and
 | `/<id>/slide`, `/p/<shortid>` | Slide mode. |
 | `/<id>/download` | The Markdown text. |
 | `/<id>/info` | JSON with `title`, `description`, `viewcount`, `createtime`, `updatetime`. |
-| `POST /new`, `POST /new/<alias>` | Creates a note from a Markdown body and redirects to it. |
+| `POST /new`, `POST /new/<alias>` | Creates a document from a Markdown body and redirects to it. |
 
-IDs are case-insensitive in greydoc. An alias with characters other than letters, digits, `-` and `_` is refused. Import such a note with its note ID instead. Very old HedgeDoc links with LZString IDs are not supported.
+IDs are case-insensitive in greydoc. An alias with characters other than letters, digits, `-` and `_` is refused. Import such a document with its document ID instead. Very old HedgeDoc links with LZString IDs are not supported.
 
-## The note ID
+## The document ID
 
-HedgeDoc 1 shows a note's UUID as base64url of its 16 bytes, without padding:
+HedgeDoc 1 shows a document's UUID as base64url of its 16 bytes, without padding:
 
 ```python
 import base64, uuid
@@ -48,7 +48,7 @@ WHERE n."deletedAt" IS NULL;
 
 ## Import
 
-Create a personal access token in greydoc (Settings), then send each note to `POST /api/notes`. An agent can do the same with the MCP tool `create_note`, which takes the same fields.
+Create a personal access token in greydoc (Settings), then send each document to `POST /api/notes`. An agent can do the same with the MCP tool `create_note`, which takes the same fields.
 
 ```python
 import json, urllib.request
@@ -81,10 +81,10 @@ Permission modes map like this. The owner always edits.
 | `protected` | none | read |
 | `private` | none | none |
 
-"Anyone with the address" is capped by `GREYDOC_GUEST_MAX` (default read). Set it to `write` before the import if `freely` notes must stay editable without sign-in.
+"Anyone with the address" is capped by `GREYDOC_GUEST_MAX` (default read). Set it to `write` before the import if `freely` documents must stay editable without sign-in.
 
 ## Limits
 
-- The imported note belongs to the user whose token runs the import.
-- The note's edit history starts at the import. HedgeDoc revisions are not imported.
-- `created_at` and `updated_at` keep the HedgeDoc dates until someone edits the note.
+- The imported document belongs to the user whose token runs the import.
+- The document's edit history starts at the import. HedgeDoc revisions are not imported.
+- `created_at` and `updated_at` keep the HedgeDoc dates until someone edits the document.

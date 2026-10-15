@@ -9,7 +9,7 @@ greydoc reads environment variables. All have defaults. The server needs none of
 | `GREYDOC_HOST` | `127.0.0.1` | Bind address. The Docker image uses `0.0.0.0`. |
 | `GREYDOC_PORT` | `3000` | Bind port. |
 | `GREYDOC_BASE_URL` | derived from the request in local mode | Public origin, for example `https://notes.example.com`. Required with OIDC. OAuth metadata, login redirects and share links use it. Request headers such as `X-Forwarded-Host` are never trusted. |
-| `GREYDOC_ALLOW_NONLOCAL` | `false` | Allow local mode on an address other than loopback. Local mode has no login, so anyone who can reach the server can edit every note. |
+| `GREYDOC_ALLOW_NONLOCAL` | `false` | Allow local mode on an address other than loopback. Local mode has no login, so anyone who can reach the server can edit every document. |
 | `GREYDOC_DATABASE_URL` | `greydoc.db` | SQLite file path, or a `postgres://` URL. |
 | `GREYDOC_DATA_DIR` | `data` | Uploads go to `uploads/`. Smaller copies of wide images go to `uploads/.w1600/`. greydoc makes them again if they are lost. |
 | `GREYDOC_SECRET` | empty | Secret for cookies and token hashes. If empty, greydoc creates `GREYDOC_SECRET_FILE`. |
@@ -35,7 +35,7 @@ When `GREYDOC_OIDC_ISSUER` is empty, greydoc runs in local mode: no login, full 
 | `GREYDOC_OIDC_CLIENT_SECRET` | empty | Client secret. The login also uses PKCE (S256). |
 | `GREYDOC_OIDC_REDIRECT_URL` | `<base>/auth/callback` | Register this URL at the provider. |
 | `GREYDOC_OIDC_SCOPES` | `openid profile email` | Requested scopes. Add the scope that returns groups if your provider needs one. |
-| `GREYDOC_OIDC_GROUPS_CLAIM` | `groups` | Userinfo claim with the user's groups. Groups can receive note access. |
+| `GREYDOC_OIDC_GROUPS_CLAIM` | `groups` | Userinfo claim with the user's groups. Groups can receive document access. |
 | `GREYDOC_SESSION_TTL` | `168h` | Browser session lifetime. A session in use is extended, so it ends after this long without use. |
 | `GREYDOC_REFRESH_REUSE_GRACE` | `24h` | How long an MCP client may still use a refresh token after it was rotated. Sessions of one client that share stored tokens need it. A reuse after this time revokes all of the client's tokens. `0` turns it off. |
 
@@ -45,9 +45,9 @@ Levels are `deny`, `read`, `comment` and `write`. The owner always has full acce
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `GREYDOC_DEFAULT_EVERYONE` | `deny` | What anyone with the address gets on a new note, without sign-in. |
-| `GREYDOC_DEFAULT_SIGNED_IN` | `write` | What signed-in users get on a new note. |
-| `GREYDOC_GUEST_MAX` | `read` | The most a person without sign-in can get on any note. |
+| `GREYDOC_DEFAULT_EVERYONE` | `deny` | What anyone with the address gets on a new document, without sign-in. |
+| `GREYDOC_DEFAULT_SIGNED_IN` | `write` | What signed-in users get on a new document. |
+| `GREYDOC_GUEST_MAX` | `read` | The most a person without sign-in can get on any document. |
 
 View-only links work for guests whatever these values are.
 
@@ -55,17 +55,17 @@ View-only links work for guests whatever these values are.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `GREYDOC_ADMIN_GROUP` | empty | OIDC group whose members see the whole audit log and every note in the trash, and can restore or delete any trashed note. In local mode everyone has these rights. |
-| `GREYDOC_TRASH_RETENTION` | `720h` | How long a note stays in the trash before it is deleted for good. The deletion is recorded in the audit log. |
+| `GREYDOC_ADMIN_GROUP` | empty | OIDC group whose members see the whole audit log and every document in the trash, and can restore or delete any trashed document. In local mode everyone has these rights. |
+| `GREYDOC_TRASH_RETENTION` | `720h` | How long a document stays in the trash before it is deleted for good. The deletion is recorded in the audit log. |
 
 ## Limits
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `GREYDOC_MAX_NOTE_LENGTH` | `1000000` | Characters per note, for notes created through the API. |
+| `GREYDOC_MAX_NOTE_LENGTH` | `1000000` | Characters per document, for documents created through the API. |
 | `GREYDOC_MAX_UPLOAD_BYTES` | `10485760` | Largest upload. Images and PDF files only. |
-| `GREYDOC_ROOM_SAVE_INTERVAL` | `5s` | How often an open note is saved while people type. |
-| `GREYDOC_ROOM_IDLE_GRACE` | `10s` | How long a note stays loaded after the last person leaves. |
+| `GREYDOC_ROOM_SAVE_INTERVAL` | `5s` | How often an open document is saved while people type. |
+| `GREYDOC_ROOM_IDLE_GRACE` | `10s` | How long a document stays loaded after the last person leaves. |
 
 ## AI
 

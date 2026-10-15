@@ -15,7 +15,7 @@ greydoc signs people in with OpenID Connect. These steps connect it to authentik
    - **Subject mode**: `Based on the User's UUID`. greydoc uses the subject as the stable user ID, so do not change it later.
 5. Copy the **Client ID** and **Client Secret**.
 6. To limit who can sign in, open the application, go to **Policy / Group / User Bindings**, and bind the groups that may use greydoc. Without a binding, every authentik user can sign in.
-7. Optional: create a group, for example `greydoc-admins`, for people who may see the whole audit log and every note in the trash.
+7. Optional: create a group, for example `greydoc-admins`, for people who may see the whole audit log and every document in the trash.
 
 ## In greydoc
 
@@ -42,7 +42,7 @@ Restart greydoc: `docker compose up -d`. Open greydoc and press **Sign in**.
 ## Things to know
 
 - Groups come from authentik at each sign-in. A group change applies at the next sign-in.
-- When OIDC is on, local mode is off: pages need sign-in, except view-only links and notes open to anyone with the address.
-- In local mode, every note belongs to the user `local`. After you turn on OIDC, these notes have no real owner. Admins still see them in the audit log.
+- When OIDC is on, local mode is off: pages need sign-in, except view-only links and documents open to anyone with the address.
+- In local mode, every document belongs to the user `local`. After you turn on OIDC, these documents have no real owner. Admins still see them in the audit log.
 - MCP clients need no setup in authentik. They sign in through greydoc, which sends people to authentik.
 - Sign-out ends the greydoc session only. The authentik session stays.

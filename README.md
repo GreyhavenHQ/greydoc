@@ -1,6 +1,6 @@
 # greydoc
 
-greydoc is a collaborative Markdown editor in one Go binary, in the style of HedgeDoc. Open the site, press "New note" and type. Other people who open the same address edit with you in real time.
+greydoc is a collaborative Markdown editor in one Go binary, in the style of HedgeDoc. Open the site, press "New document" and type. Other people who open the same address edit with you in real time.
 
 It adds what HedgeDoc does not have:
 
@@ -8,8 +8,8 @@ It adds what HedgeDoc does not have:
 - An authors view that marks each part of the text with its writer, and AI-assisted text as such.
 - Comments on a text range, with replies, resolve and reopen.
 - Suggestions: proposed changes that a writer accepts or rejects. AI output is always a suggestion.
-- An MCP endpoint, so AI agents can read, comment, suggest and, if the note allows it, edit.
-- A note list with the owner and a view counter for each note, as in HedgeDoc.
+- An MCP endpoint, so AI agents can read, comment, suggest and, if the document allows it, edit.
+- A document list with the owner and a view counter for each document, as in HedgeDoc.
 
 It keeps what HedgeDoc users expect: split editor and preview, Mermaid diagrams, KaTeX math, tags in front matter, slide mode, a view-only page, and Markdown and HTML download.
 
@@ -37,26 +37,26 @@ docker compose up -d greydoc
 
 | Task | How |
 |---|---|
-| New note | Press "New note", or open `/new`. `/new?alias=standup` picks the address. |
-| Short address | `/<alias>` opens `/n/<alias>`. HedgeDoc 1 links work for imported notes; see [docs/import-hedgedoc.md](docs/import-hedgedoc.md). |
-| Read and edit in one view | Notes open in split view: editor and preview side by side, as in HedgeDoc. Live mode (the notebook button, Ctrl+Alt+L) renders the note in place: the line you edit shows its Markdown, and a click on a diagram, table or formula edits its source. The pencil and eye buttons give the editor alone and the preview alone. Your browser remembers the last mode you chose. |
+| New document | Press "New document", or open `/new`. `/new?alias=standup` picks the address. |
+| Short address | `/<alias>` opens `/n/<alias>`. HedgeDoc 1 links work for imported documents; see [docs/import-hedgedoc.md](docs/import-hedgedoc.md). |
+| Read and edit in one view | Documents open in split view: editor and preview side by side, as in HedgeDoc. Live mode (the notebook button, Ctrl+Alt+L) renders the document in place: the line you edit shows its Markdown, and a click on a diagram, table or formula edits its source. The pencil and eye buttons give the editor alone and the preview alone. Your browser remembers the last mode you chose. |
 | Tags | Add `tags: [design, q4]` to the front matter. Click a tag on the home page to filter. |
-| Link to a note | Type `[[` in the editor and pick a note. It inserts `[[alias|Title]]`: the address, then the link text, which you can edit. `[[alias]]` alone shows the current title of the note. |
+| Link to a document | Type `[[` in the editor and pick a document. It inserts `[[alias|Title]]`: the address, then the link text, which you can edit. `[[alias]]` alone shows the current title of the document. |
 | Table of contents | On wide screens, the view page and the preview-only mode show the headings on the right, as in HedgeDoc: top-level headings, the open section, and "Expand all". `[toc]` in the text inserts a table of contents too. |
-| Protect a note | "Share" in the editor: people, groups, signed-in users, anyone with the address. Levels are view, comment and edit. |
-| Share with a client | "Share", then "New link". The short link `/v/<token>` opens the rendered note with no editor, comments or toolbar. Older `/s/<alias>?share=<token>` links keep working. |
+| Protect a document | "Share" in the editor: people, groups, signed-in users, anyone with the address. Levels are view, comment and edit. |
+| Share with a client | "Share", then "New link". The short link `/v/<token>` opens the rendered document with no editor, comments or toolbar. Older `/s/<alias>?share=<token>` links keep working. |
 | Comment | Select text, press "Comment". |
 | Suggest | Select text, press "Suggest". People with comment access suggest each time they type. |
 | AI | Select text, press "AI", and type what to do, or pick a preset: fix spelling and grammar, make it clearer, make it shorter, make a diagram. Presets are set server-wide with `GREYDOC_AI_ACTIONS`. The answer is a suggestion. |
-| History | The clock button opens the timeline. Open a revision to see its diff or restore it. Open a suggestion or comment event to see it, accept or reject it, or jump to it in the note. An AI suggestion shows the request and, on demand, the full prompt sent to the model. |
+| History | The clock button opens the timeline. Open a revision to see its diff or restore it. Open a suggestion or comment event to see it, accept or reject it, or jump to it in the document. An AI suggestion shows the request and, on demand, the full prompt sent to the model. |
 | Who wrote what | The people button colors text by author. Dashed underline means AI-assisted. Dotted means agent. |
 | Slides | Menu, "Slide mode". `---` starts a slide, `----` a vertical slide, `note:` starts speaker notes. Escape shows all slides, D switches between light and dark. |
 | Download | Menu, "Download Markdown" or "Download HTML". The HTML file has no scripts and includes the diagrams. |
-| Move a note | Menu, "Download with uploads (.zip)": the Markdown at the root, its files in `uploads/`, and `note.json`. Drop the zip on the note list of another greydoc to import it. `POST /api/notes/import` takes the same zip. |
-| Import Markdown | Drop `.md` files on the note list. |
+| Move a document | Menu, "Download with uploads (.zip)": the Markdown at the root, its files in `uploads/`, and `note.json`. Drop the zip on the document list of another greydoc to import it. `POST /api/notes/import` takes the same zip. |
+| Import Markdown | Drop `.md` files on the document list. |
 | Images | Paste or drop an image in the editor. |
-| Delete | Menu, "Move to trash". The trash (account menu) restores notes for 30 days. "Delete for good" removes a note at once. |
-| Audit | Account menu, "Audit log": every action on notes and accounts, with filters, and Restore for trashed notes. |
+| Delete | Menu, "Move to trash". The trash (account menu) restores documents for 30 days. "Delete for good" removes a document at once. |
+| Audit | Account menu, "Audit log": every action on documents and accounts, with filters, and Restore for trashed documents. |
 
 ## Compatibility with HedgeDoc 1
 
@@ -67,19 +67,19 @@ docker compose up -d greydoc
 | HedgeDoc 1 | greydoc | Notes |
 |---|---|---|
 | `/new` | Same | `/new?alias=<name>` picks the address. |
-| `/<id>` (alias, note ID or short ID) | Same | IDs are case-insensitive. Import notes with all their IDs, see [import](docs/import-hedgedoc.md). |
+| `/<id>` (alias, document ID or short ID) | Same | IDs are case-insensitive. Import documents with all their IDs, see [import](docs/import-hedgedoc.md). |
 | `?edit`, `?view`, `?both` | Same | greydoc adds a live mode and remembers the last mode. |
 | `/<id>/publish`, `/s/<shortid>` | Same | |
 | `/<id>/slide`, `/p/<shortid>` | Same | |
 | `/<id>/download` | Same | |
-| `/<id>/info` | Same | `viewcount` counts people who opened the note. |
+| `/<id>/info` | Same | `viewcount` counts people who opened the document. |
 | `/features` | Same | greydoc's own guide. The source is [docs/features.md](docs/features.md). |
 | `POST /new`, `POST /new/<alias>` | Same | Needs sign-in in OIDC mode. |
 | Free URL: opening an unknown `/<name>` creates it | Missing | Use `/new?alias=<name>`. |
 | `/<id>/revision`, `/history`, `/me`, `/status` | Different | greydoc has its own JSON API under `/api`. |
-| LZString note IDs from early versions | Missing | |
+| LZString document IDs from early versions | Missing | |
 
-### Notes and permissions
+### Documents and permissions
 
 | HedgeDoc 1 | greydoc | Notes |
 |---|---|---|
@@ -88,8 +88,8 @@ docker compose up -d greydoc
 | Guest editing | Different | Off by default. `GREYDOC_GUEST_MAX=write` allows it. |
 | Real-time collaboration and cursors | Same | Yjs instead of OT. |
 | Revision history and revert | Same | Timeline with diffs, authors and restore. |
-| Recent notes and pins | Same | Home page, "Recent". |
-| Delete | Different | Notes go to a trash for 30 days. |
+| Recent documents and pins | Same | Home page, "Recent". |
+| Delete | Different | Documents go to a trash for 30 days. |
 | Sign-in: GitHub, GitLab, LDAP, SAML, email | Missing | OIDC only, or local mode with no sign-in. Most of these providers can sit behind an OIDC server. |
 | Image upload | Different | Stored in the data directory. S3, imgur and similar backends are missing. |
 | Export to Gist or Dropbox, import from them | Missing | |
@@ -138,7 +138,7 @@ opencode, in `opencode.json`:
 }
 ```
 
-The client signs you in through the browser. In opencode, `opencode mcp auth greydoc` starts the sign-in. Each note's owner sets what agents may do on it: nothing, read, suggest (the default) or edit. See [docs/mcp.md](docs/mcp.md).
+The client signs you in through the browser. In opencode, `opencode mcp auth greydoc` starts the sign-in. Each document's owner sets what agents may do on it: nothing, read, suggest (the default) or edit. See [docs/mcp.md](docs/mcp.md).
 
 ## Data
 

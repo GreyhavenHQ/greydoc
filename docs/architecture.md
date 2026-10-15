@@ -18,9 +18,9 @@ flowchart LR
 
 ## Live editing
 
-Notes are Yjs documents. The browser uses the standard Yjs stack (yjs, y-websocket, y-codemirror.next). The server uses [ygo](https://github.com/Deln0r/ygo), a pure Go port of Yjs, so the binary needs no JavaScript runtime and no cgo. Only `internal/collab/crdt.go` imports ygo.
+Each document is a Yjs document. The browser uses the standard Yjs stack (yjs, y-websocket, y-codemirror.next). The server uses [ygo](https://github.com/Deln0r/ygo), a pure Go port of Yjs, so the binary needs no JavaScript runtime and no cgo. Only `internal/collab/crdt.go` imports ygo.
 
-A room loads when the first person opens a note and closes ten seconds after the last one leaves. While open, it logs updates every second and saves a snapshot every five seconds.
+A room loads when the first person opens a document and closes ten seconds after the last one leaves. While open, it logs updates every second and saves a snapshot every five seconds.
 
 ## Authorship
 
@@ -46,13 +46,13 @@ AI actions in the editor never change text. They create suggestions with source 
 
 ## Access
 
-Levels are deny, read, comment, write and full (owner). A person gets the highest of their own grant, their groups' grants, the signed-in grant, and the everyone grant. Guests get the everyone grant, capped by `GREYDOC_GUEST_MAX`. A view-only link gives read. Agents are also capped by the note's agent policy. In local mode every request has full access.
+Levels are deny, read, comment, write and full (owner). A person gets the highest of their own grant, their groups' grants, the signed-in grant, and the everyone grant. Guests get the everyone grant, capped by `GREYDOC_GUEST_MAX`. A view-only link gives read. Agents are also capped by the document's agent policy. In local mode every request has full access.
 
 ## Trash and audit
 
-Deleting a note moves it to the trash: it leaves lists and search, and its live room closes. The owner, or an admin, restores it or deletes it for good. A background job deletes notes older than the retention period. Agents can trash and restore but never delete for good.
+Deleting a document moves it to the trash: it leaves lists and search, and its live room closes. The owner, or an admin, restores it or deletes it for good. A background job deletes documents older than the retention period. Agents can trash and restore but never delete for good.
 
-The audit log is the `audit_event` table. It holds note events (creation, trash, restore, deletion, permissions, comments, suggestions, restored versions) account events (sign-ins, access tokens, connected agents), and every MCP tool call and session. Events outlive their notes. Text edits are recorded as revisions in each note's timeline.
+The audit log is the `audit_event` table. It holds document events (creation, trash, restore, deletion, permissions, comments, suggestions, restored versions) account events (sign-ins, access tokens, connected agents), and every MCP tool call and session. Events outlive their documents. Text edits are recorded as revisions in each document's timeline.
 
 ## Files
 
