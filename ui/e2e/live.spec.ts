@@ -117,3 +117,17 @@ test('HedgeDoc 1 mode parameters choose the view', async ({ page }) => {
   await expect(page.getByTestId('preview')).toHaveCount(0)
   await expect(page.getByTestId('editor').locator('.cm-gutters')).toHaveCount(1)
 })
+
+test('front matter collapses to one line in live mode', async ({ page }) => {
+  const alias = await noteWith(page, '---\ntitle: Plan\ntags: [design, q4]\nlang: en\n---\n# Body\n\ntext')
+  await page.goto('/n/' + alias)
+  const editor = page.getByTestId('editor')
+  const props = editor.getByTestId('front-matter')
+  await expect(props).toContainText('Plan')
+  await expect(props.locator('.cm-lp-props-tag')).toHaveText(['design', 'q4'])
+  await expect(props).toContainText('+1 more')
+  await expect(editor.locator('.cm-line', { hasText: 'tags:' })).toHaveCount(0)
+  await props.click()
+  await expect(editor.getByTestId('front-matter')).toHaveCount(0)
+  await expect(editor.locator('.cm-line', { hasText: 'tags: [design, q4]' })).toHaveCount(1)
+})

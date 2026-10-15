@@ -4,6 +4,7 @@ import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemir
 import katex from 'katex'
 import { renderMarkdown } from '@/render/markdown'
 import { naturalSize, renderMermaid, themeMode } from '@/render/mermaid'
+import { splitFrontMatter } from '@/lib/meta'
 
 // Live preview: Markdown that renders in place, like Obsidian. Lines and blocks under a selection show their source.
 
@@ -174,6 +175,54 @@ class RuleWidget extends WidgetType {
   }
 }
 
+// FrontMatterWidget shows the front matter as one line: the title and the tags. Click to edit the YAML.
+class FrontMatterWidget extends WidgetType {
+  constructor(
+    readonly title: string,
+    readonly tags: string[],
+    readonly keys: number,
+  ) {
+    super()
+  }
+  eq(o: FrontMatterWidget) {
+    return o.title === this.title && o.tags.join('\n') === this.tags.join('\n') && o.keys === this.keys
+  }
+  toDOM(view: EditorView) {
+    const el = document.createElement('div')
+    el.className = 'cm-lp-props'
+    el.title = 'Front matter. Click to edit.'
+    el.setAttribute('data-testid', 'front-matter')
+    if (this.title) {
+      const t = document.createElement('span')
+      t.className = 'cm-lp-props-title'
+      t.textContent = this.title
+      el.appendChild(t)
+    }
+    for (const tag of this.tags) {
+      const chip = document.createElement('span')
+      chip.className = 'cm-lp-props-tag'
+      chip.textContent = tag
+      el.appendChild(chip)
+    }
+    const rest = this.keys - (this.title ? 1 : 0) - (this.tags.length ? 1 : 0)
+    if (rest > 0 || el.childElementCount === 0) {
+      const more = document.createElement('span')
+      more.className = 'cm-lp-props-more'
+      more.textContent = el.childElementCount === 0 ? 'Front matter' : `+${rest} more`
+      el.appendChild(more)
+    }
+    el.onmousedown = (e) => {
+      e.preventDefault()
+      view.dispatch({ selection: { anchor: view.state.doc.line(2).from } })
+      view.focus()
+    }
+    return el
+  }
+  ignoreEvent() {
+    return false
+  }
+}
+
 function frontMatterEnd(state: EditorState): number {
   const doc = state.doc
   if (doc.lines < 2 || !/^-{3,}$/.test(doc.line(1).text)) return -1
@@ -206,7 +255,17 @@ export function liveDecorations(state: EditorState): DecorationSet {
   const code: [number, number][] = []
 
   const fmEnd = frontMatterEnd(state)
-  if (fmEnd > 0) lineClass(0, fmEnd, 'cm-lp-fm')
+  if (fmEnd > 0) {
+    if (touches(0, fmEnd)) {
+      lineClass(0, fmEnd, 'cm-lp-fm')
+    } else {
+      const { data } = splitFrontMatter(doc.sliceString(0, fmEnd) + '\n')
+      const tags = Array.isArray(data?.tags) ? data.tags.map(String) : []
+      const title = typeof data?.title === 'string' ? data.title : ''
+      const keys = data ? Object.keys(data).length : 0
+      out.push(Decoration.replace({ widget: new FrontMatterWidget(title, tags, keys), block: true }).range(0, fmEnd))
+    }
+  }
 
   tree.iterate({
     enter(node) {
@@ -416,6 +475,14 @@ const liveTheme = EditorView.theme({
   '.cm-lp-codeblock': { fontFamily: 'var(--font-mono)', fontSize: '0.85em', backgroundColor: 'rgb(var(--muted))', padding: '0 0.9em !important' },
   '.cm-lp-fence': { color: 'rgb(var(--muted-foreground) / 0.7)' },
   '.cm-lp-table-src': { fontFamily: 'var(--font-mono)', fontSize: '0.85em' },
+  '.cm-lp-props': {
+    display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px', padding: '4px 0 10px', cursor: 'pointer',
+    fontSize: '12px', color: 'rgb(var(--muted-foreground))', whiteSpace: 'normal',
+  },
+  '.cm-lp-props-title': { fontWeight: '600', color: 'rgb(var(--foreground))', marginRight: '4px' },
+  '.cm-lp-props-tag': { border: '1px solid rgb(var(--border))', borderRadius: '9999px', padding: '0 8px', lineHeight: '20px', backgroundColor: 'rgb(var(--card))' },
+  '.cm-lp-props-more': { fontStyle: 'italic' },
+  '.cm-lp-props:hover .cm-lp-props-tag': { borderColor: 'rgb(var(--primary) / 0.5)' },
   '.cm-lp-fm': { fontFamily: 'var(--font-mono)', fontSize: '0.8em', color: 'rgb(var(--muted-foreground))' },
   '.cm-lp-bullet': { color: 'rgb(var(--muted-foreground))', display: 'inline-block', width: '0.9em' },
   '.cm-lp-check': { margin: '0 0.45em 0 0', verticalAlign: '-0.1em', accentColor: 'rgb(var(--primary))', cursor: 'pointer' },
