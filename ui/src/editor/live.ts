@@ -1,5 +1,5 @@
 import { ensureSyntaxTree, syntaxTree } from '@codemirror/language'
-import { EditorState, StateEffect, StateField, type Extension, type Range } from '@codemirror/state'
+import { EditorState, Facet, StateEffect, StateField, type Extension, type Range } from '@codemirror/state'
 import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemirror/view'
 import katex from 'katex'
 import { renderMarkdown } from '@/render/markdown'
@@ -130,6 +130,11 @@ class BulletWidget extends WidgetType {
   }
 }
 
+// canToggleTasks says whether this user may tick task boxes. People who can only comment or read cannot.
+export const canToggleTasks = Facet.define<() => boolean, () => boolean>({
+  combine: (v) => v[0] ?? (() => true),
+})
+
 class CheckboxWidget extends WidgetType {
   constructor(readonly checked: boolean) {
     super()
@@ -142,10 +147,12 @@ class CheckboxWidget extends WidgetType {
     box.type = 'checkbox'
     box.className = 'cm-lp-check'
     box.checked = this.checked
+    const allowed = () => !view.state.readOnly && view.state.facet(canToggleTasks)()
+    box.disabled = !allowed()
     box.onmousedown = (e) => e.preventDefault()
     box.onclick = (e) => {
       e.preventDefault()
-      if (view.state.readOnly) return
+      if (!allowed()) return
       const pos = view.posAtDOM(box)
       view.dispatch({ changes: { from: pos + 1, to: pos + 2, insert: this.checked ? ' ' : 'x' }, userEvent: 'input.toggle' })
     }
@@ -412,6 +419,7 @@ const liveTheme = EditorView.theme({
   '.cm-lp-fm': { fontFamily: 'var(--font-mono)', fontSize: '0.8em', color: 'rgb(var(--muted-foreground))' },
   '.cm-lp-bullet': { color: 'rgb(var(--muted-foreground))', display: 'inline-block', width: '0.9em' },
   '.cm-lp-check': { margin: '0 0.45em 0 0', verticalAlign: '-0.1em', accentColor: 'rgb(var(--primary))', cursor: 'pointer' },
+  '.cm-lp-check:disabled': { cursor: 'default' },
   '.cm-lp-hr': { display: 'inline-block', width: '100%', borderTop: '1px solid rgb(var(--border))', verticalAlign: 'middle' },
   '.cm-lp-img': { maxWidth: '100%', borderRadius: 'var(--radius)', verticalAlign: 'top' },
   '.cm-lp-block': { cursor: 'pointer', margin: '0.4em 0', whiteSpace: 'normal' },

@@ -39,6 +39,8 @@ import { CommentsPanel, type Draft, type Suggestion, type Thread } from '@/compo
 import { SuggestComposer, type SuggestDraft } from '@/components/SuggestComposer'
 import { AiMenu } from '@/components/AiMenu'
 import { imageUpload } from '@/editor/upload'
+import { canToggleTasks } from '@/editor/live'
+import { taskToggle } from '@/lib/tasks'
 import { captureEdits, setSuggestionRanges, suggestionDecorations, type SuggestionAction } from '@/editor/suggestions'
 import { anchorRange, resolvePoint, resolveRange } from '@/editor/anchors'
 import { setThreadRanges, threadDecorations } from '@/editor/threads'
@@ -390,6 +392,7 @@ export default function Editor() {
           setCommentsOpen(true)
         } else decideRef.current(sg, a === 'accept')
       }),
+      canToggleTasks.of(() => canEditRef.current),
       captureEdits(
         () => suggestingRef.current,
         (e) => {
@@ -403,6 +406,19 @@ export default function Editor() {
       ),
     ],
     [],
+  )
+
+  const toggleTask = useCallback(
+    (line: number) => {
+      if (!session) return
+      const edit = taskToggle(session.text.toString(), line)
+      if (!edit) return
+      session.doc.transact(() => {
+        session.text.delete(edit.offset, 1)
+        session.text.insert(edit.offset, edit.insert)
+      })
+    },
+    [session],
   )
 
   const startSuggest = () => {
@@ -760,7 +776,7 @@ export default function Editor() {
               className={cn('relative min-w-0 overflow-y-auto bg-background', showEditor ? 'w-1/2' : 'w-full')}
             >
               <div className="mx-auto max-w-3xl px-8 py-8">
-                <Preview source={text} ref={article} />
+                <Preview source={text} ref={article} onToggleTask={canEdit && !suggesting ? toggleTask : undefined} />
               </div>
             </section>
           )}

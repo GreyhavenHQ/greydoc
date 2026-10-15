@@ -12,7 +12,9 @@ export function slugify(s: string): string {
 export function sourceLines(md: MarkdownIt, offset: () => number) {
   md.core.ruler.push('source_lines', (state: StateCore) => {
     for (const t of state.tokens) {
-      if (t.map && t.level === 0 && (t.nesting === 1 || t.type === 'fence' || t.type === 'code_block' || t.type === 'hr' || t.type === 'html_block')) {
+      const block = t.level === 0 && (t.nesting === 1 || t.type === 'fence' || t.type === 'code_block' || t.type === 'hr' || t.type === 'html_block')
+      // List items at any depth carry their line too, so a task box can be toggled in the source.
+      if (t.map && (block || t.type === 'list_item_open')) {
         t.attrSet('data-line', String(t.map[0] + offset()))
       }
     }

@@ -8,16 +8,26 @@ interface PreviewProps {
   source: string
   className?: string
   onRendered?: (root: HTMLElement) => void
+  // onToggleTask makes task boxes clickable. It gets the box's zero-based source line.
+  onToggleTask?: (line: number) => void
 }
 
-export const Preview = forwardRef<HTMLElement, PreviewProps>(function Preview({ source, className, onRendered }, ref) {
+export const Preview = forwardRef<HTMLElement, PreviewProps>(function Preview({ source, className, onRendered, onToggleTask }, ref) {
   const root = useRef<HTMLElement | null>(null)
+  const toggle = useRef(onToggleTask)
+  toggle.current = onToggleTask
   const { resolvedTheme } = useTheme()
 
   useLayoutEffect(() => {
     const el = root.current
     if (!el) return
     el.innerHTML = renderMarkdown(source).html
+    if (toggle.current) {
+      el.querySelectorAll<HTMLInputElement>('li[data-line] > input[type=checkbox], li[data-line] > label > input[type=checkbox]').forEach((b) => {
+        b.disabled = false
+        b.classList.add('task-toggle')
+      })
+    }
     void hydrateMermaid(el, { mode: resolvedTheme }).then(() => onRendered?.(el))
     onRendered?.(el)
   }, [source, resolvedTheme, onRendered])
@@ -25,9 +35,13 @@ export const Preview = forwardRef<HTMLElement, PreviewProps>(function Preview({ 
   useEffect(() => {
     const el = root.current
     if (!el) return
-    // Rendered task list checkboxes are display only.
+    // A task box changes the source, not the rendered page: the new text renders the new state.
     const stop = (e: Event) => {
-      if ((e.target as HTMLElement).matches('input[type=checkbox]')) e.preventDefault()
+      const box = e.target as HTMLElement
+      if (!box.matches('input[type=checkbox]')) return
+      e.preventDefault()
+      const line = box.closest('li[data-line]')?.getAttribute('data-line')
+      if (toggle.current && line != null) toggle.current(Number(line))
     }
     el.addEventListener('click', stop)
     return () => el.removeEventListener('click', stop)

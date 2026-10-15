@@ -244,12 +244,22 @@ function TagFilter({ tags, selected, onSelect }: { tags: TagCount[]; selected: s
           <button
             key={t.tag}
             onClick={() => onSelect(selected === t.tag ? '' : t.tag)}
+            aria-pressed={selected === t.tag}
             className={cn(
-              'rounded-full border px-2.5 py-0.5 text-xs transition-colors hover:border-primary hover:text-primary',
-              selected === t.tag && 'border-primary bg-primary text-primary-foreground hover:text-primary-foreground',
+              'group inline-flex h-6 items-center gap-1.5 rounded-full border bg-card py-0 pr-1 pl-2.5 text-xs transition-colors hover:border-primary/60',
+              selected === t.tag && 'border-primary bg-primary text-primary-foreground hover:border-primary',
             )}
           >
-            #{t.tag} <span className="opacity-60">{t.count}</span>
+            <span>{t.tag}</span>
+            <span
+              className={cn(
+                'min-w-[1.25rem] rounded-full bg-muted px-1.5 text-center text-[10px] leading-4 font-semibold tabular-nums text-muted-foreground',
+                'group-hover:bg-primary/15 group-hover:text-primary',
+                selected === t.tag && 'bg-primary-foreground/25 text-primary-foreground group-hover:bg-primary-foreground/25 group-hover:text-primary-foreground',
+              )}
+            >
+              {t.count}
+            </span>
           </button>
         ))}
       </div>

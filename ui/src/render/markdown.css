@@ -28,6 +28,7 @@
 .markdown-body li::marker { color: rgb(var(--muted-foreground)); }
 .markdown-body .task-list-item { list-style: none; margin-left: -1.4em; }
 .markdown-body .task-list-item input { margin-right: 0.5em; accent-color: rgb(var(--primary)); vertical-align: -0.1em; }
+.markdown-body .task-list-item input.task-toggle { cursor: pointer; }
 .markdown-body blockquote { padding: 0.1em 0 0.1em 1em; border-left: 3px solid rgb(var(--border)); color: rgb(var(--muted-foreground)); }
 .markdown-body hr { border: none; border-top: 1px solid rgb(var(--border)); margin: 2em 0; }
 .markdown-body img { max-width: 100%; border-radius: var(--radius); }

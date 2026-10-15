@@ -51,7 +51,7 @@ test('home lists notes and filters by tag', async ({ page }) => {
   await page.waitForTimeout(600)
   await page.goto('/?scope=all')
   await expect(page.getByTestId('note-list')).toContainText('Tagged note')
-  await page.getByTestId('tag-filter').getByRole('button', { name: /#q4/ }).click()
+  await page.getByTestId('tag-filter').getByRole('button', { name: /^q4/ }).click()
   await expect(page.getByTestId('note-list').locator('li')).toHaveCount(1)
 })
 
@@ -202,4 +202,24 @@ test('the home page shows two lines of tags and expands on demand', async ({ pag
   await expect.poll(async () => (await filter.boundingBox())!.height).toBeGreaterThan(collapsed + 20)
   await page.getByRole('button', { name: 'Show fewer' }).click()
   await expect.poll(async () => (await filter.boundingBox())!.height).toBeLessThan(60)
+})
+
+test('task boxes in the preview change the text', async ({ page }) => {
+  const resp = await page.request.post('/api/notes', { data: { content: '# Todo\n\n- [ ] write\n- [x] read\n' } })
+  const alias = (await resp.json()).alias
+  await page.goto('/n/' + alias)
+  const boxes = page.getByTestId('preview').locator('input[type=checkbox]')
+  await expect(boxes).toHaveCount(2)
+  await boxes.first().click()
+  await expect(boxes.first()).toBeChecked()
+  await boxes.nth(1).click()
+  await expect(boxes.nth(1)).not.toBeChecked()
+  await expect.poll(async () => (await page.request.get(`/api/notes/${alias}/content`)).text()).toBe('# Todo\n\n- [x] write\n- [ ] read\n')
+})
+
+test('task boxes are read-only on the view page', async ({ page }) => {
+  const resp = await page.request.post('/api/notes', { data: { content: '- [ ] write\n' } })
+  const alias = (await resp.json()).alias
+  await page.goto('/s/' + alias)
+  await expect(page.getByTestId('view-page').locator('input[type=checkbox]')).toBeDisabled()
 })
