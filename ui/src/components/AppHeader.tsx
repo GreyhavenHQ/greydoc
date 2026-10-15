@@ -114,9 +114,9 @@ export function NewNoteButton({ size = 'sm' }: { size?: 'sm' | 'default' | 'lg' 
 
 export function AppHeader({ children }: { children?: React.ReactNode }) {
   return (
-    <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur">
+    <header className="sticky top-0 z-20 flex h-12 shrink-0 items-center gap-3 border-b bg-background/95 px-3 backdrop-blur">
       <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight">
-        <Logo className="h-6 text-foreground" />
+        <Logo className="h-5 text-foreground" />
         <span>greydoc</span>
       </Link>
       <div className="flex flex-1 items-center gap-2">{children}</div>

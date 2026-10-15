@@ -18,6 +18,8 @@ function pick(opts: Record<string, unknown>, keys: string[]) {
   return Object.fromEntries(keys.filter((k) => opts[k] !== undefined).map((k) => [k, opts[k]]))
 }
 
+const slideNumberFormats = ['h.v', 'h/v', 'c', 'c/t']
+
 function slideHTML(src: string) {
   return renderMarkdown(src).html
 }
@@ -66,7 +68,8 @@ export default function Slides() {
         hash: true,
         embedded: false,
         transition: (opts.transition as 'slide') ?? 'slide',
-        slideNumber: Boolean(opts.slideNumber),
+        // HedgeDoc accepts true or a format such as c/t.
+        slideNumber: slideNumberFormats.includes(opts.slideNumber as string) ? (opts.slideNumber as 'c/t') : Boolean(opts.slideNumber),
         ...pick(opts, ['width', 'height', 'margin', 'center', 'controls', 'progress', 'backgroundTransition']),
         plugins: [RevealNotes],
         // D switches between the light and the dark deck.

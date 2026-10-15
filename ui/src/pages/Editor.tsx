@@ -2,17 +2,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import type { EditorView } from '@codemirror/view'
 import {
-  BookOpen,
+  CircleHelp,
   Columns2,
   Download,
   Eye,
+  FilePenLine,
   FileCode,
   History,
-  FilePenLine,
   MessageSquare,
   MessageSquarePlus,
   Users,
   MoreHorizontal,
+  NotebookPen,
   Pencil,
   Presentation,
   ScrollText,
@@ -21,11 +22,13 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Logo } from '@/components/Logo'
+import { SyntaxHelp } from '@/components/SyntaxHelp'
 import { ThemeToggle, UserMenu } from '@/components/AppHeader'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -149,6 +152,7 @@ export default function Editor() {
   const [selection, setSelection] = useState<SelectionInfo | null>(null)
   const [rawSuggestions, setRawSuggestions] = useState<Suggestion[]>([])
   const [suggesting, setSuggesting] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
   const [suggestDraft, setSuggestDraft] = useState<SuggestDraft | null>(null)
   const viewRef = useRef<EditorView | null>(null)
   const sessionRef = useRef<NoteSession | null>(null)
@@ -237,7 +241,7 @@ export default function Editor() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey) || !e.altKey) return
-      const next = ({ l: 'live', e: 'edit', b: 'both', v: 'view' } as Record<string, Mode>)[e.key.toLowerCase()]
+      const next = ({ KeyL: 'live', KeyE: 'edit', KeyB: 'both', KeyV: 'view' } as Record<string, Mode>)[e.code]
       if (next) {
         e.preventDefault()
         setMode(next)
@@ -553,6 +557,15 @@ export default function Editor() {
               {level === 'comment' ? 'Suggesting' : 'Read only'}
             </span>
           )}
+          {canEdit && suggesting && (
+            <button
+              className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary hover:bg-primary/20"
+              onClick={() => setSuggesting(false)}
+              title="Back to editing"
+            >
+              Suggesting ×
+            </button>
+          )}
           <div className="flex-1" />
           <div className="mr-1 hidden -space-x-1.5 sm:flex" data-testid="presence">
             {presence.slice(0, 6).map((u) => (
@@ -570,26 +583,10 @@ export default function Editor() {
             ))}
             {presence.length > 6 && <span className="pl-2 text-xs text-muted-foreground">+{presence.length - 6}</span>}
           </div>
-          {canEdit && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={suggesting ? 'secondary' : 'ghost'}
-                  size="sm"
-                  className="gap-1 px-2"
-                  aria-pressed={suggesting}
-                  onClick={() => setSuggesting(!suggesting)}
-                >
-                  <FilePenLine className="size-4" /> <span className="hidden text-xs lg:inline">{suggesting ? 'Suggesting' : 'Editing'}</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Suggest changes instead of editing</TooltipContent>
-            </Tooltip>
-          )}
           {atLeast(level, 'comment') && (
             <ToggleGroup type="single" value={mode} onValueChange={(v) => v && setMode(v as Mode)} size="sm" variant="outline">
               <ToggleGroupItem value="live" aria-label="Live (Ctrl+Alt+L)">
-                <BookOpen className="size-4" />
+                <NotebookPen className="size-4" />
               </ToggleGroupItem>
               <ToggleGroupItem value="edit" aria-label="Editor only (Ctrl+Alt+E)">
                 <Pencil className="size-4" />
@@ -639,10 +636,23 @@ export default function Editor() {
             </TooltipTrigger>
             <TooltipContent>Timeline</TooltipContent>
           </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" aria-label="Markdown help" onClick={() => setHelpOpen(true)}>
+                <CircleHelp className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Markdown help</TooltipContent>
+          </Tooltip>
           {me?.authenticated && (
-            <Button variant="outline" size="sm" onClick={() => setShareOpen(true)}>
-              <Share2 className="size-4" /> Share
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label="Share" onClick={() => setShareOpen(true)}>
+                  <Share2 className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Share and protect</TooltipContent>
+            </Tooltip>
           )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -650,7 +660,15 @@ export default function Editor() {
                 <MoreHorizontal className="size-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuContent align="end" className="w-56">
+              {canEdit && (
+                <>
+                  <DropdownMenuCheckboxItem checked={suggesting} onCheckedChange={(v) => setSuggesting(Boolean(v))}>
+                    Suggest instead of editing
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
               <DropdownMenuItem asChild>
                 <a href={withShare(`/p/${note.alias}`)} target="_blank" rel="noreferrer">
                   <Presentation className="size-4" /> Slide mode
@@ -805,6 +823,7 @@ export default function Editor() {
             />
           )}
         </main>
+        <SyntaxHelp open={helpOpen} onOpenChange={setHelpOpen} />
         <ShareDialog alias={note.alias} isOwner={isOwner} open={shareOpen} onOpenChange={setShareOpen} />
         <Timeline
           alias={note.alias}

@@ -99,7 +99,9 @@ test('suggest mode turns typing into a tracked change', async ({ page }) => {
   await page.goto('/new')
   await expect(page).toHaveURL(/\/n\//)
   await page.keyboard.type('The plan is bad.')
-  await page.getByRole('button', { name: /Editing/ }).click()
+  await page.getByRole('button', { name: 'More' }).click()
+  await page.getByRole('menuitemcheckbox', { name: 'Suggest instead of editing' }).click()
+  await expect(page.getByRole('button', { name: /Suggesting/ })).toBeVisible()
   await page.locator('[data-testid=editor] .cm-content').click()
   await page.keyboard.press('End')
   await page.keyboard.press('ArrowLeft')
@@ -222,4 +224,16 @@ test('task boxes are read-only on the view page', async ({ page }) => {
   const alias = (await resp.json()).alias
   await page.goto('/s/' + alias)
   await expect(page.getByTestId('view-page').locator('input[type=checkbox]')).toBeDisabled()
+})
+
+test('the help dialog renders Markdown examples', async ({ page }) => {
+  await page.goto('/new')
+  await expect(page).toHaveURL(/\/n\//)
+  await page.getByRole('button', { name: 'Markdown help' }).click()
+  const help = page.getByTestId('syntax-help')
+  await expect(help.locator('.markdown-body h1').first()).toHaveText('Title')
+  await help.getByRole('tab', { name: 'Blocks' }).click()
+  await expect(help.locator('.mermaid-block svg').first()).toBeVisible({ timeout: 15_000 })
+  await help.getByRole('tab', { name: 'Shortcuts' }).click()
+  await expect(help).toContainText('Live mode')
 })
