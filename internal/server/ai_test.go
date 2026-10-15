@@ -53,6 +53,21 @@ func TestAIRefineCreatesAISuggestion(t *testing.T) {
 	}
 }
 
+func TestAIRateLimitPerUser(t *testing.T) {
+	llm := fakeLLM(t, "Better.")
+	e := newTestEnv(t, func(c *config.Config) { c.LLMBaseURL = llm.URL; c.AIRatePerMinute = 2 })
+	alias := e.createNote(nil, "one two three")
+	for i := range 2 {
+		if code, body := e.do(nil, "POST", "/api/notes/"+alias+"/ai", map[string]any{"action": "refine", "quote": "one"}); code != 201 {
+			t.Fatalf("call %d: %d %s", i, code, body)
+		}
+	}
+	code, body := e.do(nil, "POST", "/api/notes/"+alias+"/ai", map[string]any{"action": "refine", "quote": "two"})
+	if code != 429 || !strings.Contains(body, "rate_limited") {
+		t.Fatalf("third call: %d %s", code, body)
+	}
+}
+
 func TestAIDisabledWithoutEndpoint(t *testing.T) {
 	e := newTestEnv(t)
 	alias := e.createNote(nil, "x")

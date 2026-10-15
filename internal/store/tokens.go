@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"time"
 
 	"github.com/greyhavenhq/greydoc/internal/secrets"
 )
@@ -116,13 +117,14 @@ func (s *Store) DeleteTokenByHash(ctx context.Context, hash string) error {
 	return err
 }
 
-// ConsumeToken deletes one token by hash and reports whether it existed, for refresh token rotation.
-func (s *Store) ConsumeToken(ctx context.Context, kind, hash string) (*Token, error) {
-	t, err := s.TokenByHash(ctx, kind, hash)
+// RotateRefreshToken returns a live refresh token and expires it. The row stays until the purge,
+// so a later reuse of the same token can be recognized and revoke its family.
+func (s *Store) RotateRefreshToken(ctx context.Context, hash string) (*Token, error) {
+	t, err := s.TokenByHash(ctx, TokenRefresh, hash)
 	if err != nil {
 		return nil, err
 	}
-	res, err := s.db.ExecContext(ctx, s.q(`DELETE FROM api_token WHERE id = ?`), t.ID)
+	res, err := s.db.ExecContext(ctx, s.q(`UPDATE api_token SET expires_at = ? WHERE id = ? AND expires_at > ?`), Now(), t.ID, Now())
 	if err != nil {
 		return nil, err
 	}
@@ -132,8 +134,25 @@ func (s *Store) ConsumeToken(ctx context.Context, kind, hash string) (*Token, er
 	return t, nil
 }
 
+// RevokeFamilyByHash deletes every token of the family a refresh token belongs to, live or expired.
+// It reports whether the token was known.
+func (s *Store) RevokeFamilyByHash(ctx context.Context, hash string) (bool, error) {
+	var family string
+	err := s.db.QueryRowContext(ctx, s.q(`SELECT family FROM api_token WHERE token_hash = ? AND kind = ?`), hash, TokenRefresh).Scan(&family)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	_, err = s.db.ExecContext(ctx, s.q(`DELETE FROM api_token WHERE family = ?`), family)
+	return true, err
+}
+
+// PurgeExpiredTokens deletes tokens and codes that expired more than a day ago. Rotated refresh tokens
+// stay for that day so that a reuse is still detected.
 func (s *Store) PurgeExpiredTokens(ctx context.Context) error {
-	_, err := s.db.ExecContext(ctx, s.q(`DELETE FROM api_token WHERE expires_at IS NOT NULL AND expires_at < ?`), Now())
+	_, err := s.db.ExecContext(ctx, s.q(`DELETE FROM api_token WHERE expires_at IS NOT NULL AND expires_at < ?`), FormatTime(time.Now().Add(-24*time.Hour)))
 	if err == nil {
 		_, err = s.db.ExecContext(ctx, s.q(`DELETE FROM oauth_code WHERE expires_at < ?`), Now())
 	}

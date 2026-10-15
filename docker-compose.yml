@@ -1,5 +1,6 @@
 # Run greydoc with Postgres. Without GREYDOC_OIDC_ISSUER it starts in local mode: no login, everyone can edit.
 # Local mode is published on 127.0.0.1 only. Configure OIDC before you expose it to a network.
+# With OIDC, GREYDOC_BASE_URL is required: the public address, for example https://notes.example.com.
 # Set GREYDOC_POSTGRES_PASSWORD in .env. The database is not published outside this Compose network.
 services:
   postgres:

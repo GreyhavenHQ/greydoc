@@ -300,18 +300,38 @@ func TestOAuthFlow(t *testing.T) {
 		t.Fatalf("create with oauth token: %s", out)
 	}
 
-	code, tok2 := tokenReq(url.Values{"grant_type": {"refresh_token"}, "refresh_token": {tok["refresh_token"].(string)}, "client_id": {client.ClientID}})
-	if code != 200 || tok2["access_token"] == tok["access_token"] {
+	// A refresh can narrow the scope but never widen it.
+	code, tok2 := tokenReq(url.Values{"grant_type": {"refresh_token"}, "refresh_token": {tok["refresh_token"].(string)},
+		"client_id": {client.ClientID}, "scope": {"notes:read"}})
+	if code != 200 || tok2["access_token"] == tok["access_token"] || tok2["scope"] != "notes:read" {
 		t.Fatalf("refresh: %d %v", code, tok2)
 	}
-	if code, _ := tokenReq(url.Values{"grant_type": {"refresh_token"}, "refresh_token": {tok["refresh_token"].(string)}, "client_id": {client.ClientID}}); code != 400 {
-		t.Fatalf("refresh token reused: %d", code)
+	if code, res := tokenReq(url.Values{"grant_type": {"refresh_token"}, "refresh_token": {tok2["refresh_token"].(string)},
+		"client_id": {client.ClientID}, "scope": {"notes:read notes:write"}}); code != 400 || res["error"] != "invalid_scope" {
+		t.Fatalf("scope widened on refresh: %d %v", code, res)
+	}
+	if out, isErr := call(t, e.mcp(tok2["access_token"].(string)), "create_note", map[string]any{"content": "x"}); !isErr {
+		t.Fatalf("read-only token wrote: %s", out)
 	}
 
 	// The connected client shows in the user's token list and can be revoked there.
 	_, body = e.do(user, "GET", "/api/tokens", nil)
 	if !strings.Contains(body, "Claude") {
 		t.Fatalf("tokens: %s", body)
+	}
+
+	// Reuse of a rotated refresh token revokes the whole family, including the live tokens.
+	if code, _ := tokenReq(url.Values{"grant_type": {"refresh_token"}, "refresh_token": {tok["refresh_token"].(string)}, "client_id": {client.ClientID}}); code != 400 {
+		t.Fatalf("refresh token reused: %d", code)
+	}
+	if code, _ := tokenReq(url.Values{"grant_type": {"refresh_token"}, "refresh_token": {tok2["refresh_token"].(string)}, "client_id": {client.ClientID}}); code != 400 {
+		t.Fatalf("family survived a reuse: %d", code)
+	}
+	if code, _ := e.do(nil, "GET", "/api/me", nil, "Authorization", "Bearer "+tok2["access_token"].(string)); code != 401 {
+		t.Fatalf("access token survived a reuse: %d", code)
+	}
+	if _, body = e.do(user, "GET", "/api/tokens", nil); strings.Contains(body, "Claude") {
+		t.Fatalf("revoked client still listed: %s", body)
 	}
 }
 

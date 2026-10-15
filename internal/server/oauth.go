@@ -326,14 +326,34 @@ func (s *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 		}
 		s.issueTokens(w, r, c, code.UserID, code.Scope, "")
 	case "refresh_token":
-		old, err := s.store.ConsumeToken(r.Context(), store.TokenRefresh, secrets.Hash(s.secret, r.PostFormValue("refresh_token")))
+		hash := secrets.Hash(s.secret, r.PostFormValue("refresh_token"))
+		old, err := s.store.TokenByHash(r.Context(), store.TokenRefresh, hash)
+		if errors.Is(err, store.ErrNotFound) {
+			// A rotated token presented again means it leaked. Every token of the family goes.
+			if known, err := s.store.RevokeFamilyByHash(r.Context(), hash); err == nil && known {
+				slog.Warn("refresh token reused, family revoked", "client", c.Name)
+			}
+			oauthError(w, http.StatusBadRequest, "invalid_grant", "the refresh token is invalid or expired")
+			return
+		}
 		if err != nil || old.ClientID != c.ID {
 			oauthError(w, http.StatusBadRequest, "invalid_grant", "the refresh token is invalid or expired")
 			return
 		}
 		scope := old.Scope
 		if req := r.PostFormValue("scope"); req != "" {
+			granted := strings.Fields(old.Scope)
+			for _, sc := range strings.Fields(req) {
+				if !slices.Contains(granted, sc) {
+					oauthError(w, http.StatusBadRequest, "invalid_scope", "a refresh cannot add the scope "+sc)
+					return
+				}
+			}
 			scope = normalizeScope(req)
+		}
+		if _, err := s.store.RotateRefreshToken(r.Context(), hash); err != nil {
+			oauthError(w, http.StatusBadRequest, "invalid_grant", "the refresh token is invalid or expired")
+			return
 		}
 		s.issueTokens(w, r, c, old.UserID, scope, old.Family)
 	default:

@@ -3,6 +3,8 @@ package oidc
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -65,13 +67,21 @@ func Discover(ctx context.Context, cfg Config) (*Client, error) {
 		userinfoURL: doc.UserinfoEndpoint, http: httpClient}, nil
 }
 
-func (c *Client) AuthCodeURL(state, redirectURL string) string {
+// PKCEChallenge is the S256 code challenge for a verifier.
+func PKCEChallenge(verifier string) string {
+	sum := sha256.Sum256([]byte(verifier))
+	return base64.RawURLEncoding.EncodeToString(sum[:])
+}
+
+func (c *Client) AuthCodeURL(state, redirectURL, challenge string) string {
 	q := url.Values{
-		"response_type": {"code"},
-		"client_id":     {c.cfg.ClientID},
-		"redirect_uri":  {redirectURL},
-		"scope":         {c.cfg.Scopes},
-		"state":         {state},
+		"response_type":         {"code"},
+		"client_id":             {c.cfg.ClientID},
+		"redirect_uri":          {redirectURL},
+		"scope":                 {c.cfg.Scopes},
+		"state":                 {state},
+		"code_challenge":        {challenge},
+		"code_challenge_method": {"S256"},
 	}
 	sep := "?"
 	if strings.Contains(c.authorizeURL, "?") {
@@ -80,13 +90,14 @@ func (c *Client) AuthCodeURL(state, redirectURL string) string {
 	return c.authorizeURL + sep + q.Encode()
 }
 
-func (c *Client) Exchange(ctx context.Context, code, redirectURL string) (string, error) {
+func (c *Client) Exchange(ctx context.Context, code, redirectURL, verifier string) (string, error) {
 	form := url.Values{
 		"grant_type":    {"authorization_code"},
 		"code":          {code},
 		"redirect_uri":  {redirectURL},
 		"client_id":     {c.cfg.ClientID},
 		"client_secret": {c.cfg.ClientSecret},
+		"code_verifier": {verifier},
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.tokenURL, strings.NewReader(form.Encode()))
 	if err != nil {

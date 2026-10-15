@@ -245,6 +245,10 @@ func (s *Server) handleEditComment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	threadID, commentID := r.PathValue("thread"), r.PathValue("comment")
+	if _, err := s.store.Thread(r.Context(), n.ID, threadID); err != nil {
+		s.writeNoteError(w, err)
+		return
+	}
 	author, err := s.store.CommentAuthor(r.Context(), threadID, commentID)
 	if err != nil {
 		s.writeNoteError(w, err)

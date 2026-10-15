@@ -51,6 +51,8 @@ type Config struct {
 	LLMBaseURL string
 	LLMAPIKey  string
 	LLMModel   string
+	// AIRatePerMinute caps AI requests per user.
+	AIRatePerMinute int
 
 	LogLevel string
 }
@@ -88,6 +90,7 @@ func FromEnv() Config {
 		LLMBaseURL:       strings.TrimRight(envStr("LLM_API_BASEURL", ""), "/"),
 		LLMAPIKey:        envStr("LLM_API_KEY", ""),
 		LLMModel:         envStr("LLM_MODEL", ""),
+		AIRatePerMinute:  envInt("GREYDOC_AI_RATE_PER_MINUTE", 20),
 		LogLevel:         envStr("GREYDOC_LOG_LEVEL", "info"),
 	}
 }

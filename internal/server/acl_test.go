@@ -49,6 +49,15 @@ func TestNotePermissionsFlow(t *testing.T) {
 	if code, _ := e.do(owner, "PUT", "/api/notes/"+alias+"/permissions/users/bob", map[string]string{"level": "full"}); code != 400 {
 		t.Fatalf("full grant: %d", code)
 	}
+	// Only the owner sees who else has access.
+	_, body = e.do(owner, "GET", "/api/notes/"+alias+"/permissions", nil)
+	if !strings.Contains(body, `"username":"bob"`) || !strings.Contains(body, `"group":"sales"`) {
+		t.Fatalf("owner view: %s", body)
+	}
+	_, body = e.do(bob, "GET", "/api/notes/"+alias+"/permissions", nil)
+	if strings.Contains(body, `"username":"bob"`) || strings.Contains(body, `"sales"`) || !strings.Contains(body, `"agent_policy"`) {
+		t.Fatalf("non-owner view leaks grants: %s", body)
+	}
 }
 
 func TestShareLinkGrantsReadOnly(t *testing.T) {

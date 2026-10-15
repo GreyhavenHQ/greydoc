@@ -25,6 +25,9 @@ func (s *Server) handleAI(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if !s.aiAllowed(w, r) {
+		return
+	}
 	var req struct {
 		Action      ai.Action `json:"action"`
 		Instruction string    `json:"instruction"`
@@ -97,6 +100,16 @@ func (s *Server) handleAI(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, sg)
 }
 
+// aiAllowed applies the per-user AI rate limit and writes the 429 itself.
+func (s *Server) aiAllowed(w http.ResponseWriter, r *http.Request) bool {
+	if s.aiLimit.allow(identityFrom(r.Context()).UserID()) {
+		return true
+	}
+	w.Header().Set("Retry-After", "60")
+	writeError(w, http.StatusTooManyRequests, "rate_limited", "too many AI requests; wait a minute")
+	return false
+}
+
 // aiPrompt records what was asked of the model, for the timeline.
 func (s *Server) aiPrompt(r ai.Request) string {
 	messages, err := s.ai.Messages(r)
@@ -126,6 +139,9 @@ func (s *Server) handleReviseSuggestion(w http.ResponseWriter, r *http.Request) 
 	}
 	n, _, ok := s.noteFor(w, r, permission.Comment)
 	if !ok {
+		return
+	}
+	if !s.aiAllowed(w, r) {
 		return
 	}
 	var req struct {

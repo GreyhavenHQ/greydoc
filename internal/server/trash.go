@@ -154,6 +154,9 @@ func (s *Server) trashLoop() {
 		if err := s.PurgeTrash(ctx); err != nil {
 			slog.Error("trash purge failed", "error", err)
 		}
+		if err := s.store.PurgeExpiredTokens(ctx); err != nil {
+			slog.Error("token purge failed", "error", err)
+		}
 		cancel()
 		select {
 		case <-s.stop:

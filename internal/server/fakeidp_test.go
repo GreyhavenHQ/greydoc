@@ -1,6 +1,8 @@
 package server_test
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,14 +13,15 @@ import (
 
 // fakeIdP is a minimal OIDC provider that logs in whoever is set as next user.
 type fakeIdP struct {
-	ts    *httptest.Server
-	mu    sync.Mutex
-	user  map[string]any
-	codes map[string]map[string]any
+	ts         *httptest.Server
+	mu         sync.Mutex
+	user       map[string]any
+	codes      map[string]map[string]any
+	challenges map[string]string
 }
 
 func newFakeIdP(t *testing.T) *fakeIdP {
-	idp := &fakeIdP{codes: map[string]map[string]any{}}
+	idp := &fakeIdP{codes: map[string]map[string]any{}, challenges: map[string]string{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]string{
@@ -29,9 +32,14 @@ func newFakeIdP(t *testing.T) *fakeIdP {
 		})
 	})
 	mux.HandleFunc("/authorize", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("code_challenge_method") != "S256" || r.URL.Query().Get("code_challenge") == "" {
+			http.Error(w, "PKCE required", http.StatusBadRequest)
+			return
+		}
 		idp.mu.Lock()
 		code := "code-" + r.URL.Query().Get("state")
 		idp.codes[code] = idp.user
+		idp.challenges[code] = r.URL.Query().Get("code_challenge")
 		idp.mu.Unlock()
 		u, _ := url.Parse(r.URL.Query().Get("redirect_uri"))
 		q := u.Query()
@@ -42,6 +50,14 @@ func newFakeIdP(t *testing.T) *fakeIdP {
 	})
 	mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
 		_ = r.ParseForm()
+		sum := sha256.Sum256([]byte(r.Form.Get("code_verifier")))
+		idp.mu.Lock()
+		want := idp.challenges[r.Form.Get("code")]
+		idp.mu.Unlock()
+		if want == "" || base64.RawURLEncoding.EncodeToString(sum[:]) != want {
+			http.Error(w, "PKCE verification failed", http.StatusBadRequest)
+			return
+		}
 		_ = json.NewEncoder(w).Encode(map[string]string{"access_token": "at-" + r.Form.Get("code"), "token_type": "Bearer"})
 	})
 	mux.HandleFunc("/userinfo", func(w http.ResponseWriter, r *http.Request) {

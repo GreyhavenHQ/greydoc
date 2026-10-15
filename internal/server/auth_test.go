@@ -4,10 +4,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/cookiejar"
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/greyhavenhq/greydoc/internal/config"
+	"github.com/greyhavenhq/greydoc/internal/server"
 )
 
 type meView struct {
@@ -107,6 +110,31 @@ func TestLogoutDeletesSession(t *testing.T) {
 	_ = json.NewDecoder(r.Body).Decode(&me)
 	if me.Authenticated {
 		t.Fatal("still authenticated after logout")
+	}
+}
+
+func TestOIDCModeRequiresBaseURL(t *testing.T) {
+	idp := newFakeIdP(t)
+	cfg := config.FromEnv()
+	cfg.DatabaseURL = filepath.Join(t.TempDir(), "greydoc.db")
+	cfg.SecretFile = filepath.Join(t.TempDir(), "secret")
+	cfg.OIDCIssuer, cfg.OIDCClientID = idp.ts.URL, "greydoc"
+	if _, err := server.Open(cfg); err == nil || !strings.Contains(err.Error(), "GREYDOC_BASE_URL") {
+		t.Fatalf("started without a base URL: %v", err)
+	}
+}
+
+func TestForwardedHostIsIgnored(t *testing.T) {
+	e, idp := newOIDCEnv(t)
+	c := e.login(idp, map[string]any{"sub": "u-4", "preferred_username": "dan"})
+	alias := e.createNote(c, "x")
+	_, body := e.do(c, "POST", "/api/notes/"+alias+"/share-links", nil, "X-Forwarded-Host", "evil.example", "X-Forwarded-Proto", "https")
+	if !strings.Contains(body, `"url":"`+e.ts.URL+"/s/") {
+		t.Fatalf("share link followed a forwarded host: %s", body)
+	}
+	_, body = e.get("/.well-known/oauth-authorization-server", "X-Forwarded-Host", "evil.example")
+	if !strings.Contains(body, `"issuer":"`+e.ts.URL+`"`) {
+		t.Fatalf("issuer followed a forwarded host: %s", body)
 	}
 }
 

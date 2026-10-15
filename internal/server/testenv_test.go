@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -32,11 +33,23 @@ func newTestEnv(t *testing.T, mutate ...func(*config.Config)) *testEnv {
 	for _, m := range mutate {
 		m(&cfg)
 	}
-	srv, err := server.Open(cfg)
+	// The listener comes first so OIDC mode can get the base URL it requires.
+	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	ts := httptest.NewServer(srv.Handler())
+	if cfg.OIDCIssuer != "" && cfg.BaseURL == "" {
+		cfg.BaseURL = "http://" + l.Addr().String()
+	}
+	srv, err := server.Open(cfg)
+	if err != nil {
+		_ = l.Close()
+		t.Fatal(err)
+	}
+	ts := httptest.NewUnstartedServer(srv.Handler())
+	_ = ts.Listener.Close()
+	ts.Listener = l
+	ts.Start()
 	t.Cleanup(func() {
 		ts.Close()
 		srv.Close()

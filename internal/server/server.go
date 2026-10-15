@@ -39,6 +39,7 @@ type Server struct {
 	closeErr      error
 	noteLocks     sync.Map
 	ai            *ai.Client
+	aiLimit       *rateLimiter
 	seenBase      atomic.Value
 }
 
@@ -76,6 +77,11 @@ func Open(cfg config.Config) (*Server, error) {
 			return nil, err
 		}
 	} else {
+		// OAuth metadata and login redirects must not follow request headers.
+		if cfg.BaseURL == "" {
+			st.Close()
+			return nil, fmt.Errorf("GREYDOC_BASE_URL is required when GREYDOC_OIDC_ISSUER is set")
+		}
 		s.sso, err = oidc.Discover(ctx, oidc.Config{Issuer: cfg.OIDCIssuer, ClientID: cfg.OIDCClientID,
 			ClientSecret: cfg.OIDCClientSecret, Scopes: cfg.OIDCScopes, GroupsClaim: cfg.OIDCGroupsClaim})
 		if err != nil {
@@ -86,6 +92,7 @@ func Open(cfg config.Config) (*Server, error) {
 	s.history = &history.Processor{Store: st}
 	if cfg.AIEnabled() {
 		s.ai = ai.New(cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.LLMModel)
+		s.aiLimit = newRateLimiter(cfg.AIRatePerMinute, time.Minute)
 	}
 	s.stop = make(chan struct{})
 	s.hub = collab.NewHub(roomStore{st: st}, collab.Options{IdleGrace: cfg.RoomIdleGrace, SaveInterval: cfg.RoomSaveEvery,

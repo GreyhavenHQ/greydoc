@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/greyhavenhq/greydoc/internal/oidc"
 	"github.com/greyhavenhq/greydoc/internal/secrets"
 	"github.com/greyhavenhq/greydoc/internal/store"
 )
@@ -23,15 +24,12 @@ func (s *Server) baseURL(r *http.Request) string {
 	if s.cfg.BaseURL != "" {
 		return s.cfg.BaseURL
 	}
+	// Local mode only: OIDC mode requires GREYDOC_BASE_URL, so forwarded headers are never trusted.
 	scheme := "http"
 	if requestIsHTTPS(r) {
 		scheme = "https"
 	}
-	host := r.Host
-	if fh := r.Header.Get("X-Forwarded-Host"); fh != "" {
-		host = fh
-	}
-	return scheme + "://" + host
+	return scheme + "://" + r.Host
 }
 
 func (s *Server) redirectURL(r *http.Request) string {
@@ -48,8 +46,9 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	state := secrets.NewID()
-	s.setCookie(w, r, stateCookieName, s.makeToken(state+" "+next, 10*time.Minute), 10*time.Minute)
-	http.Redirect(w, r, s.sso.AuthCodeURL(state, s.redirectURL(r)), http.StatusFound)
+	verifier := secrets.NewToken("")
+	s.setCookie(w, r, stateCookieName, s.makeToken(state+" "+verifier+" "+next, 10*time.Minute), 10*time.Minute)
+	http.Redirect(w, r, s.sso.AuthCodeURL(state, s.redirectURL(r), oidc.PKCEChallenge(verifier)), http.StatusFound)
 }
 
 func (s *Server) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
@@ -61,18 +60,20 @@ func (s *Server) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "sso_denied", "the identity provider reported: "+e)
 		return
 	}
-	var expected, next string
+	var expected, verifier, next string
 	if c, err := r.Cookie(stateCookieName); err == nil {
 		if v, ok := s.verifyToken(c.Value); ok {
-			expected, next, _ = strings.Cut(v, " ")
+			var rest string
+			expected, rest, _ = strings.Cut(v, " ")
+			verifier, next, _ = strings.Cut(rest, " ")
 		}
 	}
 	received := r.URL.Query().Get("state")
-	if expected == "" || subtle.ConstantTimeCompare([]byte(expected), []byte(received)) != 1 {
+	if expected == "" || verifier == "" || subtle.ConstantTimeCompare([]byte(expected), []byte(received)) != 1 {
 		writeError(w, http.StatusBadRequest, "sso_state_mismatch", "login state did not match; start again from /auth/login")
 		return
 	}
-	accessToken, err := s.sso.Exchange(r.Context(), r.URL.Query().Get("code"), s.redirectURL(r))
+	accessToken, err := s.sso.Exchange(r.Context(), r.URL.Query().Get("code"), s.redirectURL(r), verifier)
 	if err != nil {
 		slog.Error("oidc code exchange failed", "error", err)
 		writeError(w, http.StatusBadGateway, "sso_exchange_failed", "could not exchange the authorization code")
