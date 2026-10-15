@@ -132,3 +132,34 @@
 .reveal.greydoc-deck .columns img { margin: 0; max-height: 80vh; box-shadow: 0 4px 24px rgb(0 0 0 / 0.08); }
 .greydoc-deck h1, .greydoc-deck h2 { letter-spacing: -0.01em; }
 .reveal.greydoc-deck em { color: #d95e2a; font-style: normal; }
+
+/* Tailwind's base layer hides [hidden] with !important. reveal.js marks slides it still places as hidden. */
+@layer base {
+  .reveal .slides section[hidden]:not([style*="display: none"]) { display: block !important; }
+}
+/* Zoom between a slide and the overview. reveal.js turns these transitions off. */
+.reveal.greydoc-deck.overview .slides, .reveal.greydoc-deck.overview-deactivating .slides,
+.reveal.greydoc-deck.overview .slides section, .reveal.greydoc-deck.overview-deactivating .slides section {
+  transition: transform 0.5s cubic-bezier(0.26, 0.86, 0.44, 0.985), opacity 0.5s;
+}
+
+/* Dark deck, from the Greyhaven dark palette. */
+.greydoc-deck-dark { --r-background-color: #161614; }
+.greydoc-deck-dark .greydoc-deck { --r-main-color: #f9f9f7; --r-heading-color: #f9f9f7; --r-link-color: #e8743f;
+  --r-link-color-hover: #f39a6e; --r-selection-background-color: #d95e2a; --r-selection-color: #f9f9f7; }
+.greydoc-deck-dark .reveal .controls { color: #e8743f; }
+.greydoc-deck-dark .reveal .progress { color: #e8743f; background: rgb(255 255 255 / 0.1); }
+.greydoc-deck-dark .reveal .slide-number { background: rgb(255 255 255 / 0.1); color: #c4c4bd; }
+.greydoc-deck-dark .reveal.overview .slides section { background: #161614; }
+.greydoc-deck-dark .reveal .columns img, .greydoc-deck-dark .reveal img { border-color: rgb(255 255 255 / 0.14); }
+.greydoc-deck-dark .reveal pre { box-shadow: none; background: #2f2f2c; }
+.greydoc-deck-dark .reveal code { color: #f9f9f7; }
+.greydoc-deck-dark .reveal table th, .greydoc-deck-dark .reveal table td { border-color: #575753; }
+.greydoc-deck-dark .reveal blockquote { background: rgb(255 255 255 / 0.05); box-shadow: none; }
+/* The deck theme, not the app theme, picks code colors. */
+.greydoc-deck .hljs-string, .greydoc-deck .hljs-attr, .greydoc-deck .hljs-addition { color: #2a8a5f; }
+.greydoc-deck .hljs-number, .greydoc-deck .hljs-built_in, .greydoc-deck .hljs-type { color: #2a6fbf; }
+.greydoc-deck .hljs-title, .greydoc-deck .hljs-name { color: #8a3fbf; }
+.greydoc-deck-dark .greydoc-deck .hljs-string, .greydoc-deck-dark .greydoc-deck .hljs-attr, .greydoc-deck-dark .greydoc-deck .hljs-addition { color: #6fcf9f; }
+.greydoc-deck-dark .greydoc-deck .hljs-number, .greydoc-deck-dark .greydoc-deck .hljs-built_in, .greydoc-deck-dark .greydoc-deck .hljs-type { color: #79b4f2; }
+.greydoc-deck-dark .greydoc-deck .hljs-title, .greydoc-deck-dark .greydoc-deck .hljs-name { color: #c69af0; }

@@ -48,7 +48,7 @@ docker compose up -d greydoc
 | AI | Select text, press "AI": refine, shorten, fix, diagram, continue, or ask. The answer is a suggestion. |
 | History | The clock button opens the timeline. Open a revision to see its diff or restore it. Open a suggestion or comment event to see it, accept or reject it, or jump to it in the note. |
 | Who wrote what | The people button colors text by author. Dashed underline means AI-assisted. Dotted means agent. |
-| Slides | Menu, "Slide mode". `---` starts a slide, `----` a vertical slide, `note:` starts speaker notes. |
+| Slides | Menu, "Slide mode". `---` starts a slide, `----` a vertical slide, `note:` starts speaker notes. Escape shows all slides, D switches between light and dark. |
 | Download | Menu, "Download Markdown" or "Download HTML". The HTML file has no scripts and includes the diagrams. |
 | Images | Paste or drop an image in the editor. |
 | Delete | Menu, "Move to trash". The trash (account menu) restores notes for 30 days. "Delete for good" removes a note at once. |
@@ -107,7 +107,7 @@ docker compose up -d greydoc
 | Graphviz, PlantUML, flowchart.js, js-sequence, abc, Vega-Lite, fretboard | Missing | |
 | Embeds: `{%youtube %}`, Vimeo, Gist, SlideShare, Speaker Deck, PDF | Missing | |
 | Front matter `type: slide` | Missing | Use slide mode from the menu. |
-| `slideOptions` | Different | `transition` and `slideNumber` only. Themes are missing. |
+| `slideOptions` | Different | `transition`, `slideNumber`, `width`, `height`, `margin`, `center`, `controls`, `progress`, `backgroundTransition`. `theme` picks the light or dark Greyhaven deck: dark for `black`, `night`, `league`, `blood`, `moon`, `dracula`. Without it, the deck follows the app theme. |
 | `breaks: false`, `lang`, `dir`, `robots`, `GA`, `disqus`, `opengraph` | Missing | Line breaks are always on. `opengraph.title` sets the title. |
 
 ### Not in HedgeDoc 1

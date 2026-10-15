@@ -41,3 +41,12 @@ export function splitSlides(text: string): Slide[] {
   flush()
   return slides
 }
+
+const darkThemes = ['black', 'night', 'league', 'blood', 'moon', 'dracula', 'dark']
+const lightThemes = ['white', 'beige', 'sky', 'serif', 'simple', 'solarized', 'light']
+
+// deckTheme reads HedgeDoc's slideOptions.theme. Unknown or missing themes follow the app.
+export function deckTheme(theme: unknown): 'light' | 'dark' | null {
+  const t = String(theme ?? '').toLowerCase()
+  return darkThemes.includes(t) ? 'dark' : lightThemes.includes(t) ? 'light' : null
+}
