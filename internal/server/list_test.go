@@ -25,6 +25,10 @@ func TestListNotesAndTags(t *testing.T) {
 	if !strings.Contains(body, `{"tag":"design","count":1}`) {
 		t.Fatalf("tags: %s", body)
 	}
+	_, body = e.do(nil, "GET", "/api/notes?limit=1", nil)
+	if strings.Count(body, `"alias"`) != 1 {
+		t.Fatalf("limit: %s", body)
+	}
 	e.do(nil, "GET", "/api/notes/"+beta+"?visit=1", nil)
 	_, body = e.do(nil, "GET", "/api/notes?scope=recent", nil)
 	if !strings.Contains(body, "Beta") || strings.Contains(body, "Alpha") {

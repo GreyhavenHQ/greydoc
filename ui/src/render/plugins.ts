@@ -137,3 +137,24 @@ export function parseCSV(text: string, delimiter = ','): string[][] {
   }
   return rows
 }
+
+// noteLinks reads [[alias]] and [[alias|label]] as links to other notes. [[toc]] stays a table of contents.
+export function noteLinks(md: MarkdownIt) {
+  const re = /^\[\[([A-Za-z0-9_-]{1,64})(?:\|([^\]\n]+))?\]\]/
+  md.inline.ruler.before('link', 'note_link', (state: StateInline, silent: boolean) => {
+    if (state.src.charCodeAt(state.pos) !== 0x5b || state.src.charCodeAt(state.pos + 1) !== 0x5b) return false
+    const m = re.exec(state.src.slice(state.pos))
+    if (!m || m[1].toLowerCase() === 'toc') return false
+    if (!silent) {
+      const alias = m[1].toLowerCase()
+      const open = state.push('link_open', 'a', 1) as Token
+      open.attrs = [['href', '/n/' + alias], ['class', 'note-link'], ['data-alias', alias]]
+      if (m[2]?.trim()) open.attrPush(['data-label', '1'])
+      const text = state.push('text', '', 0) as Token
+      text.content = m[2]?.trim() || alias
+      state.push('link_close', 'a', -1)
+    }
+    state.pos += m[0].length
+    return true
+  })
+}

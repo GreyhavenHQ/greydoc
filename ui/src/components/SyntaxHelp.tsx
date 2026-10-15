@@ -17,6 +17,7 @@ const sections: { id: string; label: string; entries: Entry[] }[] = [
       { label: 'Lists', src: '- item\n  - nested item\n1. first\n2. second' },
       { label: 'Tasks', src: '- [x] done\n- [ ] to do' },
       { label: 'Links', src: '[greydoc](https://example.com)\n<https://example.com>' },
+      { label: 'Other notes', src: '[[q4-roadmap]]\n[[q4-roadmap|the roadmap]]\n\nType [[ in the editor to search notes.' },
       { label: 'Images', src: '![alt text](/favicon.svg)\n![wider](/favicon.svg =64x)' },
       { label: 'Quote', src: '> Text from someone else.' },
       { label: 'Code', src: 'Inline `code`.\n\n```js\nconst answer = 42\n```' },

@@ -23,6 +23,8 @@ import {
 import { toast } from 'sonner'
 import { Logo } from '@/components/Logo'
 import { SyntaxHelp } from '@/components/SyntaxHelp'
+import { WithToc } from '@/components/TocSidebar'
+import { noteLinkCompletion, type NoteHit } from '@/editor/noteLinks'
 import { ThemeToggle, UserMenu } from '@/components/AppHeader'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
@@ -121,6 +123,16 @@ function usePresence(session: NoteSession | null): PresenceUser[] {
   return users
 }
 
+// searchNotes feeds the [[ note picker: recent notes first, search results once the user types.
+async function searchNotes(query: string): Promise<NoteHit[]> {
+  const q = query.trim()
+  const sp = new URLSearchParams({ scope: q ? 'all' : 'recent', limit: '20' })
+  if (q) sp.set('q', q)
+  let { notes } = await api.get<{ notes: NoteHit[] }>('/api/notes?' + sp)
+  if (!q && notes.length === 0) notes = (await api.get<{ notes: NoteHit[] }>('/api/notes?scope=all&limit=20')).notes
+  return notes
+}
+
 export default function Editor() {
   const { alias = '' } = useParams()
   const navigate = useNavigate()
@@ -156,6 +168,7 @@ export default function Editor() {
   const sessionRef = useRef<NoteSession | null>(null)
   const previewPane = useRef<HTMLElement | null>(null)
   const article = useRef<HTMLElement | null>(null)
+  const [previewEl, setPreviewEl] = useState<HTMLElement | null>(null)
   const text = useYText(session)
   const presence = usePresence(session)
 
@@ -377,6 +390,7 @@ export default function Editor() {
         setCommentsOpen(true)
       }),
       selectionListener(setSelection),
+      noteLinkCompletion(searchNotes, () => aliasRef.current),
       imageUpload(
         () => aliasRef.current,
         () => canEditRef.current,
@@ -777,12 +791,17 @@ export default function Editor() {
           )}
           {showPreview && (
             <section
-              ref={previewPane}
+              ref={(el) => {
+                previewPane.current = el
+                setPreviewEl(el)
+              }}
               className={cn('relative min-w-0 overflow-y-auto bg-background', showEditor ? 'w-1/2' : 'w-full')}
             >
-              <div className="mx-auto max-w-3xl px-8 py-8">
-                <Preview source={text} ref={article} onToggleTask={canEdit ? toggleTask : undefined} />
-              </div>
+              <WithToc show={!showEditor && !commentsOpen} scroller={previewEl}>
+                <div className="px-8 py-8">
+                  <Preview source={text} ref={article} onToggleTask={canEdit ? toggleTask : undefined} />
+                </div>
+              </WithToc>
             </section>
           )}
           {commentsOpen && (

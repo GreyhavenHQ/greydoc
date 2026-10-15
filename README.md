@@ -39,12 +39,14 @@ docker compose up -d greydoc
 |---|---|
 | New note | Press "New note", or open `/new`. `/new?alias=standup` picks the address. |
 | Short address | `/<alias>` opens `/n/<alias>`. HedgeDoc 1 links work for imported notes; see [docs/import-hedgedoc.md](docs/import-hedgedoc.md). |
-| Read and edit in one view | Notes open in split view: editor and preview side by side, as in HedgeDoc. Live mode (the book button, Ctrl+Alt+L) renders the note in place: the line you edit shows its Markdown, and a click on a diagram, table or formula edits its source. The pencil and eye buttons give the editor alone and the preview alone. Your browser remembers the last mode you chose. |
+| Read and edit in one view | Notes open in split view: editor and preview side by side, as in HedgeDoc. Live mode (the notebook button, Ctrl+Alt+L) renders the note in place: the line you edit shows its Markdown, and a click on a diagram, table or formula edits its source. The pencil and eye buttons give the editor alone and the preview alone. Your browser remembers the last mode you chose. |
 | Tags | Add `tags: [design, q4]` to the front matter. Click a tag on the home page to filter. |
+| Link to a note | Type `[[` in the editor and pick a note. The link `[[alias]]` shows the current title of the note. `[[alias|text]]` sets the text. |
+| Table of contents | On wide screens, the view page and the preview-only mode show the headings on the right. `[toc]` in the text inserts a table of contents too. |
 | Protect a note | "Share" in the editor: people, groups, signed-in users, anyone with the address. Levels are view, comment and edit. |
 | Share with a client | "Share", then "New link". The link opens `/s/<alias>`: the rendered note with no editor, comments or toolbar. |
 | Comment | Select text, press "Comment". |
-| Suggest | Select text, press "Suggest", or switch the editor to "Suggesting" and type. People with comment access always suggest. |
+| Suggest | Select text, press "Suggest". People with comment access suggest each time they type. |
 | AI | Select text, press "AI": refine, shorten, fix, diagram, continue, or ask. The answer is a suggestion. |
 | History | The clock button opens the timeline. Open a revision to see its diff or restore it. Open a suggestion or comment event to see it, accept or reject it, or jump to it in the note. |
 | Who wrote what | The people button colors text by author. Dashed underline means AI-assisted. Dotted means agent. |

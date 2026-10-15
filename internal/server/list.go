@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 	"sort"
+	"strconv"
 
 	"github.com/greyhavenhq/greydoc/internal/permission"
 	"github.com/greyhavenhq/greydoc/internal/store"
@@ -29,6 +30,7 @@ func (s *Server) handleListNotes(w http.ResponseWriter, r *http.Request) {
 	if f.Scope == "" {
 		f.Scope = store.ScopeAll
 	}
+	f.Limit, _ = strconv.Atoi(q.Get("limit"))
 	if text := q.Get("q"); text != "" {
 		ids, err := s.store.SearchNoteIDs(r.Context(), text, 200)
 		if err != nil {

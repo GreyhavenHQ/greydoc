@@ -5,6 +5,13 @@ import { diagramUsesElk, mermaidConfig } from '@/render/mermaidTheme'
 const html = (src: string) => renderMarkdown(src).html
 
 describe('markdown extensions', () => {
+  it('links to other notes with [[alias]] and [[alias|label]]', () => {
+    const out = html('See [[Q4-Roadmap]] and [[incident-search|the incident]].')
+    expect(out).toContain('<a href="/n/q4-roadmap" class="note-link" data-alias="q4-roadmap">q4-roadmap</a>')
+    expect(out).toContain('<a href="/n/incident-search" class="note-link" data-alias="incident-search" data-label="1">the incident</a>')
+    expect(html('[[toc]]\n\n# A')).toContain('class="toc"')
+    expect(html('[[not an alias]]')).not.toContain('note-link')
+  })
   it('keeps image width and height, which base CSS would override', () => {
     expect(html('<img src="/a.png" height="80px">')).toMatch(/style="height: ?80px;?"/)
     expect(html('<img src="/a.png" width="120" height="50%">')).toMatch(/style="width: ?120px; ?height: ?50%;?"/)

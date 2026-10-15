@@ -170,3 +170,9 @@
 .markdown-body.help-sample h2 { font-size: 1.25em; margin: 0.3em 0; }
 .markdown-body.help-sample h3 { font-size: 1.05em; margin: 0.3em 0; }
 .reveal.greydoc-deck p.lead { font-size: 0.8em; opacity: 0.75; }
+
+/* Links to other notes: [[alias]]. */
+.markdown-body a.note-link { text-decoration: none; border-bottom: 1px solid rgb(var(--primary) / 0.4); }
+.markdown-body a.note-link::before { content: '↗ '; font-size: 0.8em; opacity: 0.6; }
+.markdown-body a.note-link:hover { border-bottom-color: rgb(var(--primary)); }
+.markdown-body a.note-link-missing { color: rgb(var(--muted-foreground)); border-bottom-style: dashed; }

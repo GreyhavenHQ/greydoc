@@ -65,3 +65,25 @@ test('the editor shows the table of contents in preview-only mode', async ({ pag
   await expect(page.getByTestId('preview').locator('h2')).toHaveText('Two')
   await expect(page.getByTestId('toc-sidebar')).toHaveCount(0)
 })
+
+test('[[alias]] links to another note and the editor completes it', async ({ page }) => {
+  const target = (await (await page.request.post('/api/notes', { data: { content: '# Target note for links', alias: 'link-target' } })).json()).alias
+  const content = 'See [[link-target]], [[link-target|the target]] and [[no-such-note]].'
+  const alias = (await (await page.request.post('/api/notes', { data: { content } })).json()).alias
+  await page.goto('/s/' + alias)
+  const links = page.getByTestId('view-page').locator('a.note-link')
+  await expect(links.nth(0)).toHaveText('Target note for links')
+  await expect(links.nth(0)).toHaveAttribute('href', '/n/' + target)
+  await expect(links.nth(1)).toHaveText('the target')
+  await expect(links.nth(2)).toHaveClass(/note-link-missing/)
+
+  await page.goto('/n/' + alias + '?edit')
+  await page.locator('[data-testid=editor] .cm-content').click()
+  await page.keyboard.press('Control+End')
+  await page.keyboard.type(' Also [[Target note')
+  const option = page.locator('.cm-tooltip-autocomplete li', { hasText: 'Target note for links' })
+  await expect(option).toBeVisible()
+  await page.keyboard.press('Enter')
+  await expect(page.getByTestId('editor').locator('.cm-content')).toContainText('Also [[link-target]]')
+  await expect(page.getByTestId('editor').locator('.cm-content')).not.toContainText('[[link-target]]]')
+})

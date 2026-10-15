@@ -37,6 +37,15 @@ const theme = EditorView.theme({
     backgroundColor: 'rgb(var(--primary) / 0.18) !important',
   },
   '.cm-ySelectionInfo': { fontFamily: 'var(--font-sans)', fontSize: '11px', padding: '1px 4px', opacity: '1' },
+  '.cm-tooltip.cm-tooltip-autocomplete': {
+    border: '1px solid rgb(var(--border))', borderRadius: 'var(--radius)', backgroundColor: 'rgb(var(--popover))',
+    boxShadow: '0 8px 24px rgb(0 0 0 / 0.12)', padding: '4px', overflow: 'hidden',
+  },
+  '.cm-tooltip.cm-tooltip-autocomplete > ul': { fontFamily: 'var(--font-sans)', fontSize: '13px', maxHeight: '18em', minWidth: '260px' },
+  '.cm-tooltip.cm-tooltip-autocomplete > ul > li': { padding: '5px 8px', borderRadius: '4px', color: 'rgb(var(--popover-foreground))' },
+  '.cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]': { backgroundColor: 'rgb(var(--primary) / 0.12)', color: 'rgb(var(--foreground))' },
+  '.cm-completionIcon': { display: 'none' },
+  '.cm-completionDetail': { marginLeft: '12px', fontStyle: 'normal', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'rgb(var(--muted-foreground))' },
 })
 
 const markdownStyle = HighlightStyle.define([

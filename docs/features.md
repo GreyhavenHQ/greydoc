@@ -15,6 +15,8 @@ greydoc keeps the addresses and the Markdown of HedgeDoc 1, so old links and old
 
 ## Workspace
 
+On wide screens, a table of contents shows to the right of the note. You find it on the view page and in the preview-only mode of the editor. It marks the section that you read.
+
 ### Modes
 
 The buttons at the top of a note switch the mode:
@@ -49,6 +51,10 @@ Everyone who opens a note edits the same text. You see the cursors and the names
 ### Who wrote what
 
 The people button shows the authors view. Each part of the text gets the color of the person who wrote it. Text that came from an AI suggestion is marked as AI-assisted. Text that an agent wrote is marked as agent text.
+
+### Links to other notes
+
+Write `[[` in the editor. A list of notes opens, and the search narrows it as you type. Pick a note to insert a link such as `[[q4-roadmap]]`. The link shows the current title of the note. If the title changes, the link shows the new title. To choose the text, write `[[q4-roadmap|the roadmap]]`. A link to an address with no note shows as a dashed link.
 
 ### Images
 

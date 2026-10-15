@@ -13,7 +13,7 @@ import abbr from 'markdown-it-abbr'
 import ins from 'markdown-it-ins'
 import katex from '@vscode/markdown-it-katex'
 import hljs from 'highlight.js/lib/common'
-import { githubAlerts, imageSize, parseCSV, slugify, sourceLines, toc } from '@/render/plugins'
+import { githubAlerts, imageSize, noteLinks, parseCSV, slugify, sourceLines, toc } from '@/render/plugins'
 import { splitFrontMatter, type FrontMatter } from '@/lib/meta'
 
 let lineOffset = 0
@@ -48,6 +48,7 @@ md.use(abbr)
 md.use(ins)
 md.use(katex, { throwOnError: false })
 md.use(imageSize)
+md.use(noteLinks)
 md.use(githubAlerts)
 md.use(toc)
 sourceLines(md, () => lineOffset)

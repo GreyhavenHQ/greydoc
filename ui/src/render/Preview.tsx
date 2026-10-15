@@ -2,6 +2,7 @@ import { forwardRef, useEffect, useLayoutEffect, useRef } from 'react'
 import 'katex/dist/katex.min.css'
 import { renderMarkdown } from '@/render/markdown'
 import { hydrateMermaid } from '@/render/mermaid'
+import { hydrateNoteLinks } from '@/render/noteLinks'
 import { useTheme } from '@/lib/theme'
 
 interface PreviewProps {
@@ -28,6 +29,7 @@ export const Preview = forwardRef<HTMLElement, PreviewProps>(function Preview({ 
         b.classList.add('task-toggle')
       })
     }
+    void hydrateNoteLinks(el)
     void hydrateMermaid(el, { mode: resolvedTheme }).then(() => onRendered?.(el))
     onRendered?.(el)
   }, [source, resolvedTheme, onRendered])

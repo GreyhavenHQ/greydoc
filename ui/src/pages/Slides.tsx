@@ -9,6 +9,7 @@ import { useLiveNote } from '@/lib/useLiveNote'
 import { deckTheme, splitSlides } from '@/render/slides'
 import { renderMarkdown } from '@/render/markdown'
 import { hydrateMermaid } from '@/render/mermaid'
+import { hydrateNoteLinks } from '@/render/noteLinks'
 import { splitFrontMatter, extractTitle } from '@/lib/meta'
 import { Spinner } from '@/components/ui/spinner'
 import { useTheme } from '@/lib/theme'
@@ -62,6 +63,7 @@ export default function Slides() {
       })
       .join('')
     void hydrateMermaid(el, { interactive: false, mode: modeRef.current })
+    void hydrateNoteLinks(el)
     const opts = (splitFrontMatter(text).data?.slideOptions ?? {}) as Record<string, unknown>
     if (!deck.current) {
       deck.current = new Reveal(host.current!, {
