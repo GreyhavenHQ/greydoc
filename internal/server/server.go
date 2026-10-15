@@ -37,6 +37,8 @@ type Server struct {
 	history       *history.Processor
 	stop          chan struct{}
 	workers       sync.WaitGroup
+	closeOnce     sync.Once
+	closeErr      error
 	noteLocks     sync.Map
 	ai            *ai.Client
 	seenBase      atomic.Value
@@ -54,10 +56,6 @@ func Open(cfg config.Config) (*Server, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := st.Init(ctx); err != nil {
-		st.Close()
-		return nil, err
-	}
-	if err := st.LockInstance(ctx); err != nil {
 		st.Close()
 		return nil, err
 	}
@@ -109,13 +107,16 @@ func Open(cfg config.Config) (*Server, error) {
 func (s *Server) Store() *store.Store { return s.store }
 
 func (s *Server) Close() error {
-	close(s.stop)
-	s.workers.Wait()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	s.hub.Shutdown(ctx)
-	s.mirror.Close()
-	return s.store.Close()
+	s.closeOnce.Do(func() {
+		close(s.stop)
+		s.workers.Wait()
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		s.hub.Shutdown(ctx)
+		s.mirror.Close()
+		s.closeErr = s.store.Close()
+	})
+	return s.closeErr
 }
 
 // LiveText returns the text of a note open in the hub.

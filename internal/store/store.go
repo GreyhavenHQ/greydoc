@@ -27,7 +27,6 @@ type Store struct {
 	db      *sql.DB
 	dialect string
 	path    string
-	lock    *sql.Conn
 }
 
 func Open(databaseURL string) (*Store, error) {
@@ -65,36 +64,7 @@ func OpenTest(t testing.TB) *Store {
 }
 
 func (s *Store) Close() error {
-	if s.lock != nil {
-		_ = s.lock.Close()
-	}
 	return s.db.Close()
-}
-
-// instanceLockKey is the Postgres advisory lock that marks the one running greydoc server.
-const instanceLockKey = 0x67726579646f63
-
-// LockInstance makes sure that only one server uses a Postgres database. Rooms live in memory,
-// so a second server would not see live edits. SQLite needs no lock: it is one file on one host.
-func (s *Store) LockInstance(ctx context.Context) error {
-	if s.dialect != "postgres" {
-		return nil
-	}
-	conn, err := s.db.Conn(ctx)
-	if err != nil {
-		return err
-	}
-	var ok bool
-	if err := conn.QueryRowContext(ctx, `SELECT pg_try_advisory_lock($1)`, instanceLockKey).Scan(&ok); err != nil {
-		conn.Close()
-		return err
-	}
-	if !ok {
-		conn.Close()
-		return errors.New("another greydoc server is using this database; run one instance only")
-	}
-	s.lock = conn
-	return nil
 }
 
 func (s *Store) Dialect() string { return s.dialect }

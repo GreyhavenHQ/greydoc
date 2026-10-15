@@ -198,9 +198,6 @@ func cmdCopyDB(args []string) error {
 		return fmt.Errorf("destination: %w", err)
 	}
 	defer dst.Close()
-	if err := dst.LockInstance(ctx); err != nil {
-		return fmt.Errorf("destination: %w", err)
-	}
 	if err := dst.CopyFrom(ctx, src); err != nil {
 		return err
 	}
