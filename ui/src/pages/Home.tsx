@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { FileText, Pin, PinOff, Search, X } from 'lucide-react'
 import { AppHeader, NewNoteButton } from '@/components/AppHeader'
@@ -150,22 +150,7 @@ export default function Home() {
           )}
         </div>
 
-        {tags.length > 0 && (
-          <div className="mb-6 flex flex-wrap gap-1.5" data-testid="tag-filter">
-            {tags.map((t) => (
-              <button
-                key={t.tag}
-                onClick={() => update({ tag: tag === t.tag ? '' : t.tag })}
-                className={cn(
-                  'rounded-full border px-2.5 py-0.5 text-xs transition-colors hover:border-primary hover:text-primary',
-                  tag === t.tag && 'border-primary bg-primary text-primary-foreground hover:text-primary-foreground',
-                )}
-              >
-                #{t.tag} <span className="opacity-60">{t.count}</span>
-              </button>
-            ))}
-          </div>
-        )}
+        {tags.length > 0 && <TagFilter tags={tags} selected={tag} onSelect={(t) => update({ tag: t })} />}
 
         {notes === null ? (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -224,6 +209,59 @@ export default function Home() {
           </ul>
         )}
       </main>
+    </div>
+  )
+}
+
+// TagFilter shows two lines of tags, most used first, and expands on demand. The selected tag stays in view.
+function TagFilter({ tags, selected, onSelect }: { tags: TagCount[]; selected: string; onSelect: (tag: string) => void }) {
+  const [expanded, setExpanded] = useState(false)
+  const [overflows, setOverflows] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
+  const ordered = useMemo(() => {
+    const sel = tags.find((t) => t.tag === selected)
+    return sel ? [sel, ...tags.filter((t) => t !== sel)] : tags
+  }, [tags, selected])
+
+  useLayoutEffect(() => {
+    const el = box.current
+    if (!el) return
+    const check = () => setOverflows(el.scrollHeight > el.clientHeight + 1)
+    check()
+    const ro = new ResizeObserver(check)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [ordered, expanded])
+
+  return (
+    <div className="mb-6 flex items-start gap-2">
+      <div
+        ref={box}
+        className={cn('flex flex-1 flex-wrap gap-1.5 overflow-hidden', !expanded && 'max-h-[3.25rem]')}
+        data-testid="tag-filter"
+      >
+        {ordered.map((t) => (
+          <button
+            key={t.tag}
+            onClick={() => onSelect(selected === t.tag ? '' : t.tag)}
+            className={cn(
+              'rounded-full border px-2.5 py-0.5 text-xs transition-colors hover:border-primary hover:text-primary',
+              selected === t.tag && 'border-primary bg-primary text-primary-foreground hover:text-primary-foreground',
+            )}
+          >
+            #{t.tag} <span className="opacity-60">{t.count}</span>
+          </button>
+        ))}
+      </div>
+      {(overflows || expanded) && (
+        <button
+          className="shrink-0 rounded-full px-2 py-0.5 text-xs whitespace-nowrap text-muted-foreground hover:text-foreground"
+          onClick={() => setExpanded(!expanded)}
+          aria-expanded={expanded}
+        >
+          {expanded ? 'Show fewer' : `All ${tags.length} tags`}
+        </button>
+      )}
     </div>
   )
 }

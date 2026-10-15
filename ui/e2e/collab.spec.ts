@@ -189,3 +189,17 @@ test('every common diagram type renders', async ({ page }) => {
   for (let i = 0; i < kinds.length; i++) await expect(blocks.nth(i).locator('svg').first()).toBeVisible({ timeout: 15_000 })
   await expect(page.locator('.mermaid-error')).toHaveCount(0)
 })
+
+test('the home page shows two lines of tags and expands on demand', async ({ page }) => {
+  const tags = Array.from({ length: 60 }, (_, i) => `topic-${i}`)
+  await page.request.post('/api/notes', { data: { content: `---\ntags: [${tags.join(', ')}]\n---\n# Many tags` } })
+  await page.goto('/?scope=all')
+  const filter = page.getByTestId('tag-filter')
+  await expect(filter.getByRole('button').first()).toBeVisible()
+  const collapsed = (await filter.boundingBox())!.height
+  expect(collapsed).toBeLessThan(60)
+  await page.getByRole('button', { name: /^All \d+ tags$/ }).click()
+  await expect.poll(async () => (await filter.boundingBox())!.height).toBeGreaterThan(collapsed + 20)
+  await page.getByRole('button', { name: 'Show fewer' }).click()
+  await expect.poll(async () => (await filter.boundingBox())!.height).toBeLessThan(60)
+})
