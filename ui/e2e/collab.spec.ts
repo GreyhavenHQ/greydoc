@@ -95,20 +95,15 @@ test('comment on a selection, reply and resolve', async ({ page }) => {
   await expect(page.locator('.cm-thread')).toHaveCount(0)
 })
 
-test('suggest mode turns typing into a tracked change', async ({ page }) => {
+test('a suggestion from the selection toolbar becomes a tracked change', async ({ page }) => {
   await page.goto('/new')
   await expect(page).toHaveURL(/\/n\//)
   await page.keyboard.type('The plan is bad.')
-  await page.getByRole('button', { name: 'More' }).click()
-  await page.getByRole('menuitemcheckbox', { name: 'Suggest instead of editing' }).click()
-  await expect(page.getByRole('button', { name: /Suggesting/ })).toBeVisible()
-  await page.locator('[data-testid=editor] .cm-content').click()
   await page.keyboard.press('End')
   await page.keyboard.press('ArrowLeft')
   for (let i = 0; i < 3; i++) await page.keyboard.press('Shift+ArrowLeft')
-  await page.keyboard.type('g')
-  await expect(page.getByTestId('suggest-input')).toHaveValue('g')
-  await page.getByTestId('suggest-input').pressSequentially('ood')
+  await page.getByTestId('selection-toolbar').getByRole('button', { name: 'Suggest' }).click()
+  await page.getByTestId('suggest-input').fill('good')
   await page.getByTestId('suggest-composer').getByRole('button', { name: 'Suggest' }).click()
   await expect(page.locator('.cm-sugg-del')).toHaveText('bad')
   await expect(page.locator('.cm-sugg-ins .cm-sugg-text')).toHaveText('good')

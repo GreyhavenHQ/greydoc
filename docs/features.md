@@ -62,7 +62,7 @@ Select text and pick **Comment**. A comment is a remark on that text. The text d
 
 ### Suggestions
 
-Select text and pick **Suggest**. A suggestion proposes new text. A person who can edit the note accepts or rejects it. To make every edit a suggestion, open the **...** menu and turn on "Suggest instead of editing". People who can only comment always make suggestions.
+Select text and pick **Suggest**. A suggestion proposes new text. A person who can edit the note accepts or rejects it. People who can only comment make a suggestion each time they type.
 
 ### AI assistant
 

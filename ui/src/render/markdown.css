@@ -169,5 +169,4 @@
 .markdown-body.help-sample h1 { font-size: 1.5em; margin: 0.3em 0; }
 .markdown-body.help-sample h2 { font-size: 1.25em; margin: 0.3em 0; }
 .markdown-body.help-sample h3 { font-size: 1.05em; margin: 0.3em 0; }
-.reveal.greydoc-deck p.kicker, .reveal.greydoc-deck .columns p.kicker { margin: 0 0 0.2em; font-size: 0.42em; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--r-link-color); }
 .reveal.greydoc-deck p.lead { font-size: 0.8em; opacity: 0.75; }

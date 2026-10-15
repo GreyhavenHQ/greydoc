@@ -28,7 +28,6 @@ import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -151,7 +150,6 @@ export default function Editor() {
   const [activeThread, setActiveThread] = useState<string | null>(null)
   const [selection, setSelection] = useState<SelectionInfo | null>(null)
   const [rawSuggestions, setRawSuggestions] = useState<Suggestion[]>([])
-  const [suggesting, setSuggesting] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [suggestDraft, setSuggestDraft] = useState<SuggestDraft | null>(null)
   const viewRef = useRef<EditorView | null>(null)
@@ -320,11 +318,11 @@ export default function Editor() {
   const aliasRef = useRef(alias)
   aliasRef.current = note?.alias ?? alias
   const canEditRef = useRef(false)
-  canEditRef.current = atLeast(level, 'write') && !suggesting
+  canEditRef.current = atLeast(level, 'write')
 
   const isCommenter = level === 'comment'
   const suggestingRef = useRef(false)
-  suggestingRef.current = isCommenter || suggesting
+  suggestingRef.current = isCommenter
 
   useEffect(() => {
     const myId = me?.id
@@ -557,15 +555,6 @@ export default function Editor() {
               {level === 'comment' ? 'Suggesting' : 'Read only'}
             </span>
           )}
-          {canEdit && suggesting && (
-            <button
-              className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary hover:bg-primary/20"
-              onClick={() => setSuggesting(false)}
-              title="Back to editing"
-            >
-              Suggesting ×
-            </button>
-          )}
           <div className="flex-1" />
           <div className="mr-1 hidden -space-x-1.5 sm:flex" data-testid="presence">
             {presence.slice(0, 6).map((u) => (
@@ -661,14 +650,6 @@ export default function Editor() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              {canEdit && (
-                <>
-                  <DropdownMenuCheckboxItem checked={suggesting} onCheckedChange={(v) => setSuggesting(Boolean(v))}>
-                    Suggest instead of editing
-                  </DropdownMenuCheckboxItem>
-                  <DropdownMenuSeparator />
-                </>
-              )}
               <DropdownMenuItem asChild>
                 <a href={withShare(`/p/${note.alias}`)} target="_blank" rel="noreferrer">
                   <Presentation className="size-4" /> Slide mode
@@ -800,7 +781,7 @@ export default function Editor() {
               className={cn('relative min-w-0 overflow-y-auto bg-background', showEditor ? 'w-1/2' : 'w-full')}
             >
               <div className="mx-auto max-w-3xl px-8 py-8">
-                <Preview source={text} ref={article} onToggleTask={canEdit && !suggesting ? toggleTask : undefined} />
+                <Preview source={text} ref={article} onToggleTask={canEdit ? toggleTask : undefined} />
               </div>
             </section>
           )}
