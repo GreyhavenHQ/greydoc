@@ -20,6 +20,9 @@ export function useLiveNote(alias: string) {
         setText(n.content ?? '')
         session = new NoteSession(n.alias, { share: shareParam() })
         session.provider.awareness.setLocalState(null)
+        session.onEvent((ev) => {
+          if (ev.type === 'refused') setError({ status: Number(ev.code) - 4000, message: String(ev.reason || 'This note cannot be opened.') })
+        })
         const update = () => setText(session!.text.toString())
         session.text.observe(update)
         session.provider.on('sync', (v: boolean) => {

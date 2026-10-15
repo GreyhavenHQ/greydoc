@@ -282,3 +282,16 @@ test('the account menu has Markdown help and the theme switch, the note menu has
   await page.getByRole('menuitemcheckbox', { name: 'Who wrote what' }).click()
   await expect(page.getByTestId('authors-legend')).toBeVisible()
 })
+
+test('a refused connection stops the retries and says why', async ({ page }) => {
+  const alias = await noteWith(page, '# Gone soon')
+  let attempts = 0
+  await page.routeWebSocket(/\/ws\//, (ws) => {
+    attempts++
+    ws.close({ code: 4410, reason: 'this note is in the trash' })
+  })
+  await page.goto('/n/' + alias)
+  await expect(page.getByText('This note is in the trash.')).toBeVisible()
+  await page.waitForTimeout(3000)
+  expect(attempts).toBe(1)
+})

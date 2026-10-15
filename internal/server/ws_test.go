@@ -31,6 +31,25 @@ func dialStatus(t *testing.T, url string, header http.Header) int {
 	return resp.StatusCode
 }
 
+// dialClose connects and returns the close code the server sends at once. A refused note is closed, not failed,
+// so browsers do not slow down later connections to the server.
+func dialClose(t *testing.T, url string, header http.Header) websocket.StatusCode {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	ws, resp, err := websocket.Dial(ctx, url, &websocket.DialOptions{HTTPHeader: header})
+	if err != nil {
+		code := 0
+		if resp != nil {
+			code = resp.StatusCode
+		}
+		t.Fatalf("dial failed with HTTP %d: %v", code, err)
+	}
+	defer ws.CloseNow()
+	_, _, err = ws.Read(ctx)
+	return websocket.CloseStatus(err)
+}
+
 func cookieHeader(e *testEnv, c *http.Client) http.Header {
 	h := http.Header{}
 	req, _ := http.NewRequest("GET", e.ts.URL, nil)
@@ -49,17 +68,29 @@ func TestWebsocketGateway(t *testing.T) {
 
 	t.Run("invalid session", func(t *testing.T) {
 		h := http.Header{"Cookie": {"greydoc_session=bogus"}}
-		if code := dialStatus(t, e.wsURL()+"/"+alias, h); code != 401 {
+		if code := dialClose(t, e.wsURL()+"/"+alias, h); code != 4401 {
+			t.Fatalf("%d", code)
+		}
+	})
+	t.Run("signed out", func(t *testing.T) {
+		if code := dialClose(t, e.wsURL()+"/"+alias, nil); code != 4401 {
 			t.Fatalf("%d", code)
 		}
 	})
 	t.Run("unknown note", func(t *testing.T) {
-		if code := dialStatus(t, e.wsURL()+"/does-not-exist", cookieHeader(e, owner)); code != 404 {
+		if code := dialClose(t, e.wsURL()+"/does-not-exist", cookieHeader(e, owner)); code != 4404 {
 			t.Fatalf("%d", code)
 		}
 	})
 	t.Run("no read permission", func(t *testing.T) {
-		if code := dialStatus(t, e.wsURL()+"/"+alias, cookieHeader(e, bob)); code != 403 {
+		if code := dialClose(t, e.wsURL()+"/"+alias, cookieHeader(e, bob)); code != 4403 {
+			t.Fatalf("%d", code)
+		}
+	})
+	t.Run("note in the trash", func(t *testing.T) {
+		gone := e.createNote(owner, "old")
+		e.do(owner, "DELETE", "/api/notes/"+gone, nil)
+		if code := dialClose(t, e.wsURL()+"/"+gone, cookieHeader(e, owner)); code != 4410 {
 			t.Fatalf("%d", code)
 		}
 	})

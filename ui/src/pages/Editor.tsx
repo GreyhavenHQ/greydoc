@@ -219,7 +219,8 @@ export default function Editor() {
         reported = true
         console.warn(
           `greydoc: "${note.alias}" took ${(now / 1000).toFixed(1)} s to arrive. WebSocket created at ${(created / 1000).toFixed(1)} s, ` +
-            `connected at ${(connectedAt / 1000).toFixed(1)} s, text at ${(now / 1000).toFixed(1)} s.`,
+            `connected at ${(connectedAt / 1000).toFixed(1)} s, text at ${(now / 1000).toFixed(1)} s, ` +
+            `${s.attempts} connection attempt(s)${s.lastClose ? `, last close code ${s.lastClose}` : ''}.`,
         )
       }
     }
@@ -233,6 +234,14 @@ export default function Editor() {
       if (ev.type === 'access' && ev.level) {
         setLevel(ev.level)
         if (ev.level === 'deny') toast.error('Your access to this note was removed.')
+      }
+      if (ev.type === 'refused') {
+        const code = Number(ev.code)
+        if (code === 4401) location.href = loginHref()
+        else {
+          if (code === 4410) setInTrash(true)
+          setError(code === 4404 ? 'This note does not exist.' : code === 4410 ? 'This note is in the trash.' : 'You do not have access to this note.')
+        }
       }
       if (ev.type === 'timeline') setTimelineKey((k) => k + 1)
       if (ev.type === 'comments') loadThreadsRef.current()

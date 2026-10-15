@@ -48,6 +48,10 @@ func identityFrom(ctx context.Context) *Identity {
 func (s *Server) withIdentity(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id, err := s.identify(r)
+		if err != nil && isWebsocket(r) && strings.HasPrefix(r.URL.Path, "/ws/") {
+			s.refuseWebsocket(w, r, wsSignIn, "sign in again")
+			return
+		}
 		if err != nil {
 			w.Header().Set("WWW-Authenticate", s.wwwAuthenticate(r))
 			writeError(w, http.StatusUnauthorized, "invalid_token", err.Error())
