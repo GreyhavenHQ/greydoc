@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"testing"
 )
 
@@ -46,6 +47,53 @@ func TestClientRegistry(t *testing.T) {
 		cs, err := st.NoteClients(ctx, n.ID)
 		if err != nil || len(cs) != 1 || cs[0].ClientID != big || cs[0].Source != SourceAIAssisted {
 			t.Fatalf("%+v %v", cs, err)
+		}
+	})
+}
+
+func TestMergeSnapshotRetriesWhenAnotherServerSaved(t *testing.T) {
+	eachDialect(t, func(t *testing.T, st *Store) {
+		n, _ := st.CreateNote(ctx, NewNote{})
+		_ = st.AppendUpdates(ctx, n.ID, []NoteUpdate{{UserID: "a", Source: SourceHuman, ClientID: 1, Data: []byte{1}}})
+		calls := 0
+		err := st.MergeSnapshot(ctx, n.ID, func(stored []byte, pending [][]byte) (NoteState, error) {
+			calls++
+			if calls == 1 {
+				// Another server logs an update and saves in between.
+				_ = st.AppendUpdates(ctx, n.ID, []NoteUpdate{{UserID: "b", Source: SourceHuman, ClientID: 2, Data: []byte{2}}})
+				if err := st.MergeSnapshot(ctx, n.ID, func(_ []byte, p [][]byte) (NoteState, error) {
+					return NoteState{YState: []byte{byte(len(p))}, Content: "other"}, nil
+				}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			return NoteState{YState: append(append([]byte{}, stored...), byte(len(pending))), Content: "mine"}, nil
+		})
+		if err != nil || calls != 2 {
+			t.Fatalf("calls %d, err %v", calls, err)
+		}
+		got, _ := st.NoteByID(ctx, n.ID)
+		if got.Content != "mine" || string(got.YState) != string([]byte{2, 0}) {
+			t.Fatalf("%q %v", got.Content, got.YState)
+		}
+		if ups, _ := st.UpdatesAfterSnapshot(ctx, n.ID); len(ups) != 0 {
+			t.Fatalf("%d updates left after the snapshot", len(ups))
+		}
+	})
+}
+
+func TestCommitHistoryOnce(t *testing.T) {
+	eachDialect(t, func(t *testing.T, st *Store) {
+		n, _ := st.CreateNote(ctx, NewNote{})
+		rev := &Revision{Text: "x", StartedAt: Now(), EndedAt: Now()}
+		if err := st.CommitHistory(ctx, n.ID, rev, 0, 5, nil); err != nil {
+			t.Fatal(err)
+		}
+		if err := st.CommitHistory(ctx, n.ID, rev, 0, 5, nil); !errors.Is(err, ErrConflict) {
+			t.Fatalf("second commit: %v", err)
+		}
+		if revs, _ := st.Revisions(ctx, n.ID, 10); len(revs) != 1 {
+			t.Fatalf("%d revisions", len(revs))
 		}
 	})
 }

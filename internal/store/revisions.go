@@ -39,9 +39,18 @@ func (s *Store) HistoryCursor(ctx context.Context, noteID string) (int64, []byte
 	return upto, state, err
 }
 
-// CommitHistory stores rev (nil when the text did not change) and advances the history cursor.
-func (s *Store) CommitHistory(ctx context.Context, noteID string, rev *Revision, upto int64, state []byte) error {
+// CommitHistory stores rev (nil when the text did not change) and moves the history cursor from one update ID to another.
+// It returns ErrConflict if another server moved the cursor first.
+func (s *Store) CommitHistory(ctx context.Context, noteID string, rev *Revision, from, upto int64, state []byte) error {
 	return s.tx(ctx, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx, s.q(`UPDATE note SET history_upto = ?, history_state = ? WHERE id = ? AND history_upto = ?`),
+			upto, state, noteID, from)
+		if err != nil {
+			return err
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return ErrConflict
+		}
 		if rev != nil {
 			authors, _ := json.Marshal(rev.Authors)
 			sources := make([]string, len(rev.Sources))
@@ -55,8 +64,7 @@ func (s *Store) CommitHistory(ctx context.Context, noteID string, rev *Revision,
 				return err
 			}
 		}
-		_, err := tx.ExecContext(ctx, s.q(`UPDATE note SET history_upto = ?, history_state = ? WHERE id = ?`), upto, state, noteID)
-		return err
+		return nil
 	})
 }
 

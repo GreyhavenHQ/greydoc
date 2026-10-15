@@ -16,7 +16,7 @@ greydoc reads environment variables. All have defaults. The server needs none of
 | `GREYDOC_SECRET_FILE` | `.greydoc/secret` | Where the generated secret is kept. Back it up with the database. |
 | `GREYDOC_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error`. |
 
-Run one server per database. With Postgres, a second server refuses to start, because live editing state is in memory.
+Run one server per database in normal operation. Two servers can run at the same time during a rolling deploy. Each save merges the edits that the other server stored, so no edit is lost. Live editing state is in memory, so people connected to different servers do not see each other's typing until they reconnect.
 
 `greydoc copy-db --from <database> --to <empty database>` copies everything from one database to another, for example from SQLite to Postgres. Stop the server first. The source is not changed.
 

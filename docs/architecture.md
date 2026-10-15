@@ -61,7 +61,7 @@ The database is the source of truth. The Markdown copies in `data/notes` are wri
 
 ## Limits
 
-- One server per database. Live state is in memory.
+- One server per database in normal operation. Live state is in memory. Two servers can overlap during a deploy.
 - Markdown copies are one way.
 - Search is full text (SQLite FTS5 or Postgres `tsvector`), not semantic.
 - Diagram types other than Mermaid, embeds, and import from HedgeDoc are not supported yet.

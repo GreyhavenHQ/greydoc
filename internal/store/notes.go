@@ -322,15 +322,31 @@ type NoteState struct {
 }
 
 func (s *Store) SaveNoteState(ctx context.Context, id string, st NoteState) error {
+	return s.saveNoteState(ctx, id, st, -1, 0)
+}
+
+// saveNoteState with fromUpto >= 0 saves only if ystate_upto is still fromUpto, and moves it to toUpto.
+func (s *Store) saveNoteState(ctx context.Context, id string, st NoteState, fromUpto, toUpto int64) error {
 	return s.tx(ctx, func(tx *sql.Tx) error {
 		// updated_at follows text changes only, so opening a note, or an imported date, does not move it.
-		res, err := tx.ExecContext(ctx, s.q(`UPDATE note SET updated_at = CASE WHEN content <> ? THEN ? ELSE updated_at END,
-			ystate = ?, content = ?, title = ?, description = ?, search_tags = ? WHERE id = ?`),
-			st.Content, Now(), st.YState, st.Content, st.Title, st.Description, strings.Join(st.Tags, " "), id)
+		q := `UPDATE note SET updated_at = CASE WHEN content <> ? THEN ? ELSE updated_at END,
+			ystate = ?, content = ?, title = ?, description = ?, search_tags = ?`
+		args := []any{st.Content, Now(), st.YState, st.Content, st.Title, st.Description, strings.Join(st.Tags, " ")}
+		if fromUpto >= 0 {
+			q += `, ystate_upto = ? WHERE id = ? AND ystate_upto = ?`
+			args = append(args, toUpto, id, fromUpto)
+		} else {
+			q += ` WHERE id = ?`
+			args = append(args, id)
+		}
+		res, err := tx.ExecContext(ctx, s.q(q), args...)
 		if err != nil {
 			return err
 		}
 		if n, _ := res.RowsAffected(); n == 0 {
+			if fromUpto >= 0 {
+				return ErrConflict
+			}
 			return ErrNotFound
 		}
 		if _, err := tx.ExecContext(ctx, s.q(`DELETE FROM note_tag WHERE note_id = ?`), id); err != nil {

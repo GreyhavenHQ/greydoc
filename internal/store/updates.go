@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 )
 
 type NoteUpdate struct {
@@ -72,6 +73,40 @@ func (s *Store) UpdatesBetween(ctx context.Context, noteID string, afterID, upto
 		return nil, err
 	}
 	return s.scanUpdates(rows)
+}
+
+// MergeSnapshot saves a snapshot that includes the stored one and every update logged after it,
+// so a save never drops edits that another server logged. merge builds the state from those parts.
+func (s *Store) MergeSnapshot(ctx context.Context, noteID string, merge func(stored []byte, pending [][]byte) (NoteState, error)) error {
+	for range 5 {
+		var stored []byte
+		var upto int64
+		err := s.db.QueryRowContext(ctx, s.q(`SELECT ystate, ystate_upto FROM note WHERE id = ?`), noteID).Scan(&stored, &upto)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		ups, err := s.UpdatesBetween(ctx, noteID, upto, 0)
+		if err != nil {
+			return err
+		}
+		pending := make([][]byte, len(ups))
+		next := upto
+		for i, u := range ups {
+			pending[i] = u.Data
+			next = u.ID
+		}
+		st, err := merge(stored, pending)
+		if err != nil {
+			return err
+		}
+		if err := s.saveNoteState(ctx, noteID, st, upto, next); !errors.Is(err, ErrConflict) {
+			return err
+		}
+	}
+	return ErrConflict
 }
 
 // SaveSnapshot stores the Yjs state and derived fields, and marks every logged update as included.

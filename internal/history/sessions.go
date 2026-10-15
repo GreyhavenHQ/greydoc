@@ -3,6 +3,7 @@ package history
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/greyhavenhq/greydoc/internal/collab"
@@ -116,9 +117,14 @@ func (p *Processor) Process(ctx context.Context, noteID string, force bool) erro
 			}
 			prev = text
 		}
-		if err := p.Store.CommitHistory(ctx, noteID, rev, sess[len(sess)-1].ID, state); err != nil {
+		end := sess[len(sess)-1].ID
+		if err := p.Store.CommitHistory(ctx, noteID, rev, upto, end, state); errors.Is(err, store.ErrConflict) {
+			// Another server wrote this history first.
+			return nil
+		} else if err != nil {
 			return err
 		}
+		upto = end
 	}
 	return p.Store.CompactUpdates(ctx, noteID)
 }

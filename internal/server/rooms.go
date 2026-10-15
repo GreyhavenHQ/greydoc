@@ -38,10 +38,19 @@ func (rs roomStore) LoadRoom(ctx context.Context, noteID string) (*collab.RoomSt
 	return rsState, nil
 }
 
-func (rs roomStore) SaveRoom(ctx context.Context, noteID string, ystate []byte, text string) error {
-	meta := notemeta.Extract(text)
-	return rs.st.SaveSnapshot(ctx, noteID, ystate, store.NoteState{
-		Content: text, Title: meta.Title, Description: meta.Description, Tags: meta.Tags,
+// SaveRoom merges the room with what the database holds, so two servers on one database keep each other's edits.
+func (rs roomStore) SaveRoom(ctx context.Context, noteID string, ystate []byte, _ string) error {
+	return rs.st.MergeSnapshot(ctx, noteID, func(stored []byte, pending [][]byte) (store.NoteState, error) {
+		parts := pending
+		if len(stored) > 0 {
+			parts = append([][]byte{stored}, pending...)
+		}
+		merged, text, err := collab.Replay(ystate, parts)
+		if err != nil {
+			return store.NoteState{}, err
+		}
+		meta := notemeta.Extract(text)
+		return store.NoteState{YState: merged, Content: text, Title: meta.Title, Description: meta.Description, Tags: meta.Tags}, nil
 	})
 }
 
