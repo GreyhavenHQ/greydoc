@@ -12,7 +12,7 @@ func TestMentions(t *testing.T) {
 		want []string
 	}{
 		{"finds a mention", "Hi [@Alice Martin](@alice), see this.", []string{"alice"}},
-		{"keeps order and drops duplicates", "[@B](@bob) [@A](@alice) [@Bob](@bob)", []string{"bob", "alice"}},
+		{"keeps order and drops duplicates", "[@B](@bob)[@A](@alice) [@Bob](@bob)", []string{"bob", "alice"}},
 		{"lowercases the username", "[@Alice](@Alice)", []string{"alice"}},
 		{"accepts email-like usernames", "[@A](@alice@example.com)", []string{"alice@example.com"}},
 		{"ignores a plain at sign", "mail @alice or [link](https://x)", []string{}},
@@ -30,5 +30,11 @@ func TestMentions(t *testing.T) {
 				t.Fatalf("got %#v, want %#v", got, c.want)
 			}
 		})
+	}
+}
+
+func TestMentionsToText(t *testing.T) {
+	if got := MentionsToText(`hi [@Alice Martin](@alice), \[@x](@y) [@b](https://b)`); got != `hi @Alice Martin, \[@x](@y) [@b](https://b)` {
+		t.Fatalf("%q", got)
 	}
 }

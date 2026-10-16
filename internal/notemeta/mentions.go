@@ -6,7 +6,7 @@ import (
 )
 
 var (
-	mentionLink = regexp.MustCompile(`(^|[^\\])\[@[^\]\n]*\]\(@([A-Za-z0-9][A-Za-z0-9._@+-]*)\)`)
+	mentionLink = regexp.MustCompile(`\\?\[@([^\]\n]*)\]\(@([A-Za-z0-9][A-Za-z0-9._@+-]*)\)`)
 	codeSpan    = regexp.MustCompile("`+")
 )
 
@@ -31,6 +31,9 @@ func Mentions(text string) []string {
 			continue
 		}
 		for _, m := range mentionLink.FindAllStringSubmatch(stripCodeSpans(line), -1) {
+			if m[0][0] == '\\' {
+				continue
+			}
 			u := strings.ToLower(m[2])
 			if !seen[u] {
 				seen[u] = true
@@ -60,4 +63,14 @@ func stripCodeSpans(line string) string {
 	}
 	b.WriteString(line[last:])
 	return b.String()
+}
+
+// MentionsToText writes each mention as @Name, for plain-text excerpts.
+func MentionsToText(text string) string {
+	return mentionLink.ReplaceAllStringFunc(text, func(m string) string {
+		if m[0] == '\\' {
+			return m
+		}
+		return "@" + mentionLink.FindStringSubmatch(m)[1]
+	})
 }
