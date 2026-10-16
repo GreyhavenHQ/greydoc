@@ -140,3 +140,24 @@ test('the editor follows the preview and does not scroll it back', async ({ page
   await page.waitForTimeout(300)
   expect(await scrollTops(page)).toEqual(before)
 })
+
+test('the reading position survives a mode switch', async ({ page }) => {
+  const { text, markers } = acceptanceDoc()
+  const row = markers.get('R40')!
+  await open(page, text)
+  await expect(page.getByTestId('preview').locator('.mermaid-block svg.flowchart')).toBeVisible({ timeout: 15_000 })
+  await scrollEditorTo(page, row)
+  await expect.poll(() => previewError(page, 'R40').then(Math.abs)).toBeLessThan(24)
+
+  await page.keyboard.press('Control+Alt+v')
+  await expect(page.locator('.cm-editor')).toHaveCount(0)
+  await expect.poll(() => previewError(page, 'R40').then(Math.abs)).toBeLessThan(24)
+
+  await page.keyboard.press('Control+Alt+e')
+  await expect(page.getByTestId('preview')).toHaveCount(0)
+  await expect.poll(async () => Math.abs((await editorTop(page)) - row)).toBeLessThanOrEqual(1)
+
+  await page.keyboard.press('Control+Alt+b')
+  await expect.poll(() => previewError(page, 'R40').then(Math.abs)).toBeLessThan(24)
+  await expect.poll(async () => Math.abs((await editorTop(page)) - row)).toBeLessThanOrEqual(1)
+})

@@ -305,20 +305,21 @@ export default function Editor() {
   const source = useRef<'editor' | 'preview'>('editor')
   const layoutFrame = useRef(0)
   const editorCleanup = useRef<() => void>(undefined)
+  const shownLines = useRef(1)
+  const lineCount = useCallback(() => viewRef.current?.state.doc.lines ?? shownLines.current, [])
   const previewPoints = useCallback(() => {
     const pane = previewPane.current
-    const v = viewRef.current
-    if (!pane || !article.current || !v) return null
-    points.current ??= measure(pane, article.current, v.state.doc.lines)
+    if (!pane || !article.current) return null
+    points.current ??= measure(pane, article.current, lineCount())
     return points.current
-  }, [])
+  }, [lineCount])
   const syncPreview = useCallback(() => {
     const p = previewPoints()
     if (p) previewPane.current!.scrollTop = yForLine(p, position.current)
   }, [previewPoints])
   const onEditorScroll = useCallback(() => {
     const v = viewRef.current
-    if (!v || source.current !== 'editor') return
+    if (!v || (source.current !== 'editor' && previewPane.current)) return
     position.current = atBottom(v.scrollDOM) ? v.state.doc.lines : editorTopLine(v)
     syncPreview()
   }, [syncPreview])
@@ -326,10 +327,10 @@ export default function Editor() {
     const p = previewPoints()
     const pane = previewPane.current
     const v = viewRef.current
-    if (!p || !pane || !v || source.current !== 'preview') return
-    position.current = atBottom(pane) ? v.state.doc.lines : lineForY(p, pane.scrollTop)
-    scrollEditorToLine(v, position.current)
-  }, [previewPoints])
+    if (!p || !pane || (source.current !== 'preview' && v)) return
+    position.current = atBottom(pane) ? lineCount() : lineForY(p, pane.scrollTop)
+    if (v) scrollEditorToLine(v, position.current)
+  }, [previewPoints, lineCount])
   const onPreviewLayout = useCallback(() => {
     points.current = null
     cancelAnimationFrame(layoutFrame.current)
@@ -580,6 +581,9 @@ export default function Editor() {
       if (!v) return
       v.scrollDOM.addEventListener('scroll', onEditorScroll, { passive: true })
       const stop = scrollSource(v.dom, () => (source.current = 'editor'))
+      // A newly shown editor opens at the reading position.
+      const restore = position.current
+      requestAnimationFrame(() => scrollEditorToLine(v, restore))
       editorCleanup.current = () => {
         v.scrollDOM.removeEventListener('scroll', onEditorScroll)
         stop()
@@ -637,6 +641,7 @@ export default function Editor() {
   // once it arrives, so the preview does not render again.
   const ready = Boolean(session && loaded)
   const shown = ready ? text : (note.content ?? '')
+  shownLines.current = shown.split('\n').length
 
   const showEditor = mode !== 'view' && atLeast(level, 'comment')
   const showPreview = (mode !== 'edit' && mode !== 'live') || !atLeast(level, 'comment')
