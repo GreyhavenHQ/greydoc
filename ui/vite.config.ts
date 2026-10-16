@@ -2,10 +2,25 @@ import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
+import fs from 'node:fs'
 
 // Output goes into the Go module and is embedded with go:embed (internal/server/ui.go).
+// emptyOutDir removes the tracked .gitkeep, which go:embed needs when the UI is not built.
+function keepOutDir() {
+  let outDir = ''
+  return {
+    name: 'keep-out-dir',
+    configResolved(config: { build: { outDir: string } }) {
+      outDir = config.build.outDir
+    },
+    closeBundle() {
+      fs.writeFileSync(path.join(outDir, '.gitkeep'), '')
+    },
+  }
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), keepOutDir()],
   resolve: {
     alias: { '@': path.resolve(__dirname, 'src') },
   },
