@@ -41,6 +41,37 @@ var migrations = []migration{
 	addColumn("004_suggestion_ai_prompt", "suggestion", "ai_prompt", "TEXT NOT NULL DEFAULT ''"),
 	addColumn("005_token_rotated_at", "api_token", "rotated_at", "TEXT NOT NULL DEFAULT ''"),
 	{version: "006_note_slides", apply: addSlides},
+	{version: "007_drop_named_group_grants", apply: dropNamedGroupGrants},
+}
+
+// dropNamedGroupGrants deletes grants to OIDC groups and records each one in the note history.
+func dropNamedGroupGrants(ctx context.Context, tx *sql.Tx, s *Store) error {
+	rows, err := tx.QueryContext(ctx, s.q(`SELECT note_id, group_name, level FROM note_group_grant WHERE group_name NOT IN (?, ?)`),
+		GroupEveryone, GroupSignedIn)
+	if err != nil {
+		return err
+	}
+	var evs []*Event
+	for rows.Next() {
+		var note, group, level string
+		if err := rows.Scan(&note, &group, &level); err != nil {
+			rows.Close()
+			return err
+		}
+		evs = append(evs, &Event{NoteID: note, ActorName: "greydoc", Kind: "permission.group_removed",
+			Data: map[string]any{"group": group, "level": level}})
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, ev := range evs {
+		if err := s.insertEvent(ctx, tx, ev); err != nil {
+			return err
+		}
+	}
+	_, err = tx.ExecContext(ctx, s.q(`DELETE FROM note_group_grant WHERE group_name NOT IN (?, ?)`), GroupEveryone, GroupSignedIn)
+	return err
 }
 
 // addSlides adds note.slides and sets it from the front matter of the existing notes.

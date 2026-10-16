@@ -244,12 +244,7 @@ func (s *Server) handleSearchUsers(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	groups, err := s.store.KnownGroups(r.Context())
-	if err != nil {
-		internalError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"users": users, "groups": groups})
+	writeJSON(w, http.StatusOK, map[string]any{"users": users})
 }
 
 // handleResolveShare turns a short view-only link, /v/<token>, into the note it opens.

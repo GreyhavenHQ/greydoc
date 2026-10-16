@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS note_user_grant (
     level TEXT NOT NULL,
     PRIMARY KEY (note_id, user_id)
 );
--- group_name is an OIDC group or a special group: _everyone, _signed_in.
+-- group_name is _everyone or _signed_in. Named groups are not supported.
 CREATE TABLE IF NOT EXISTS note_group_grant (
     note_id TEXT NOT NULL REFERENCES note(id) ON DELETE CASCADE,
     group_name TEXT NOT NULL,

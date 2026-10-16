@@ -18,7 +18,7 @@ func (s *Server) viewer(id *Identity) store.Viewer {
 	if id.Local {
 		return store.Viewer{Local: true, Admin: true, UserID: id.UserID()}
 	}
-	return store.Viewer{UserID: id.UserID(), Groups: id.User.Groups, Admin: id.Admin && !id.isAgent()}
+	return store.Viewer{UserID: id.UserID(), Admin: id.Admin && !id.isAgent()}
 }
 
 func (s *Server) handleListNotes(w http.ResponseWriter, r *http.Request) {
