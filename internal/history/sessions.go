@@ -20,6 +20,8 @@ const (
 type Processor struct {
 	Store *store.Store
 	Now   func() time.Time
+	// OnRevision runs after each revision is stored. prev is the text before it.
+	OnRevision func(ctx context.Context, noteID, prev, text string, authors []store.RevisionAuthor)
 }
 
 // class decides which updates may share a session. People editing together share one.
@@ -97,6 +99,7 @@ func (p *Processor) Process(ctx context.Context, noteID string, force bool) erro
 			return err
 		}
 		var rev *store.Revision
+		before := prev
 		if text != prev {
 			patch, added, removed := UnifiedDiff(prev, text)
 			rev = &store.Revision{Text: text, Patch: patch, Added: added, Removed: removed,
@@ -123,6 +126,9 @@ func (p *Processor) Process(ctx context.Context, noteID string, force bool) erro
 			return nil
 		} else if err != nil {
 			return err
+		}
+		if rev != nil && p.OnRevision != nil {
+			p.OnRevision(ctx, noteID, before, text, rev.Authors)
 		}
 		upto = end
 	}
