@@ -127,6 +127,7 @@ func (s *Server) createThread(ctx context.Context, id *Identity, n *store.Note, 
 		return nil, http.StatusInternalServerError, err
 	}
 	s.commentsChanged(n.ID)
+	s.notifyMentions(ctx, id, n, mentionComment, th.ID, req.Body)
 	out, err := s.resolveThreads(ctx, n.ID, []store.Thread{*th})
 	if err != nil {
 		return nil, http.StatusInternalServerError, err
@@ -182,6 +183,7 @@ func (s *Server) handleReply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.commentsChanged(n.ID)
+	s.notifyMentions(r.Context(), id, n, mentionComment, c.ThreadID, req.Body)
 	writeJSON(w, http.StatusCreated, c)
 }
 
