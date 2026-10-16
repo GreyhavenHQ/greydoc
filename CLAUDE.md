@@ -2,7 +2,7 @@
 
 ## Docker only
 
-Every build, test, lint and run command MUST run inside the dev container. Do not run `go`, `node`, `npm` or Playwright on the host.
+Every build, test, lint and run command MUST run inside the dev container. Do not run `go`, `node`, `pnpm` or Playwright on the host.
 
 ```bash
 docker compose -f docker-compose.dev.yml run --rm dev just test     # go test ./...

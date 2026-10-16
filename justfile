@@ -8,13 +8,13 @@ build:
     CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=$(git describe --tags --always --dirty 2>/dev/null || echo dev)" -o bin/greydoc ./cmd/greydoc
 
 ui:
-    cd ui && npm ci --no-fund --no-audit && npm run build
+    cd ui && pnpm install --frozen-lockfile && pnpm run build
 
 ui-test:
-    cd ui && npm ci --no-fund --no-audit && npm run test
+    cd ui && pnpm install --frozen-lockfile && pnpm run test
 
 e2e: ui build
-    cd ui && npx playwright test
+    cd ui && pnpm exec playwright test
 
 test:
     go test ./...
