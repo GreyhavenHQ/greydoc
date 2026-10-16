@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
-import { Input } from '@/components/ui/input'
+import { MentionTextarea } from '@/components/Mentions'
+import type { Person } from '@/lib/mentions'
 import { api, withShare } from '@/lib/api'
 
 export interface SuggestDraft {
@@ -21,12 +21,14 @@ export function SuggestComposer({
   top,
   onChange,
   onDone,
+  onNoAccess,
 }: {
   alias: string
   draft: SuggestDraft
   top: number
   onChange: (proposed: string) => void
   onDone: (created: boolean) => void
+  onNoAccess?: (p: Person) => void
 }) {
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
@@ -60,10 +62,12 @@ export function SuggestComposer({
           {draft.original}
         </div>
       )}
-      <Textarea
+      <MentionTextarea
         autoFocus
         value={draft.proposed}
-        onChange={(e) => onChange(e.target.value)}
+        onValueChange={onChange}
+        alias={alias}
+        onNoAccess={onNoAccess}
         className="font-mono text-sm"
         rows={Math.min(10, Math.max(2, draft.proposed.split('\n').length))}
         data-testid="suggest-input"
@@ -73,7 +77,24 @@ export function SuggestComposer({
           if (e.key === 'Escape') onDone(false)
         }}
       />
-      <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why? (optional)" className="mt-2 h-8 text-sm" />
+      <div className="mt-2">
+        <MentionTextarea
+          value={reason}
+          onValueChange={setReason}
+          alias={alias}
+          onNoAccess={onNoAccess}
+          placeholder="Why? (optional)"
+          rows={1}
+          className="min-h-8 resize-none py-1 text-sm"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault()
+              submit()
+            }
+            if (e.key === 'Escape') onDone(false)
+          }}
+        />
+      </div>
       <div className="mt-2 flex justify-end gap-2">
         <Button size="sm" variant="ghost" onClick={() => onDone(false)}>
           Cancel

@@ -2,12 +2,13 @@ import { useState } from 'react'
 import { Check, MessageSquare, RotateCcw, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
+import { MentionText, MentionTextarea } from '@/components/Mentions'
 import { Badge } from '@/components/ui/badge'
 import { api, withShare } from '@/lib/api'
 import { authorColor, sourceLabel, type Source } from '@/lib/authors'
 import { relativeTime } from '@/lib/time'
 import { cn } from '@/lib/utils'
+import type { Person } from '@/lib/mentions'
 
 export interface CommentItem {
   id: string
@@ -85,9 +86,17 @@ function SuggestionCard({
       </div>
       <div className="flex flex-col gap-1 font-mono text-xs">
         {s.original && <div className="line-clamp-4 rounded bg-red-500/10 px-1.5 py-0.5 whitespace-pre-wrap line-through decoration-red-500/60">{s.original}</div>}
-        {s.proposed && <div className="line-clamp-6 rounded bg-emerald-500/10 px-1.5 py-0.5 whitespace-pre-wrap">{s.proposed}</div>}
+        {s.proposed && (
+          <div className="line-clamp-6 rounded bg-emerald-500/10 px-1.5 py-0.5 whitespace-pre-wrap">
+            <MentionText text={s.proposed} />
+          </div>
+        )}
       </div>
-      {s.reason && <p className="mt-2 text-sm whitespace-pre-wrap">{s.reason}</p>}
+      {s.reason && (
+        <p className="mt-2 text-sm whitespace-pre-wrap">
+          <MentionText text={s.reason} />
+        </p>
+      )}
       {(s.stale || s.range === null) && (
         <div className="mt-2 text-[11px] text-amber-600">{s.range === null ? 'The original text was removed.' : 'The text changed since this suggestion.'}</div>
       )}
@@ -114,7 +123,11 @@ export interface Draft {
 }
 
 function Body({ text }: { text: string }) {
-  return <p className="text-sm whitespace-pre-wrap">{text}</p>
+  return (
+    <p className="text-sm whitespace-pre-wrap">
+      <MentionText text={text} />
+    </p>
+  )
 }
 
 function ThreadCard({
@@ -125,6 +138,7 @@ function ThreadCard({
   meId,
   onSelect,
   onChanged,
+  onNoAccess,
 }: {
   alias: string
   thread: Thread
@@ -133,6 +147,7 @@ function ThreadCard({
   meId?: string
   onSelect: () => void
   onChanged: () => void
+  onNoAccess?: (p: Person) => void
 }) {
   const [reply, setReply] = useState('')
   const base = `/api/notes/${alias}/comments/${thread.id}`
@@ -198,9 +213,11 @@ function ThreadCard({
             act(() => api.post(base + '/replies', { body: reply })).then(() => setReply(''))
           }}
         >
-          <Textarea
+          <MentionTextarea
             value={reply}
-            onChange={(e) => setReply(e.target.value)}
+            onValueChange={setReply}
+            alias={alias}
+            onNoAccess={onNoAccess}
             placeholder="Reply"
             className="min-h-9 resize-none text-sm"
             rows={1}
@@ -256,6 +273,7 @@ export function CommentsPanel({
   onSelect,
   onChanged,
   onClose,
+  onNoAccess,
 }: {
   alias: string
   threads: Thread[]
@@ -271,6 +289,7 @@ export function CommentsPanel({
   onSelect: (t: Thread) => void
   onChanged: () => void
   onClose: () => void
+  onNoAccess?: (p: Person) => void
 }) {
   const [body, setBody] = useState('')
   const [showResolved, setShowResolved] = useState(false)
@@ -307,11 +326,13 @@ export function CommentsPanel({
             <blockquote className="mb-2 line-clamp-3 border-l-2 border-yellow-500/70 pl-2 text-xs text-muted-foreground">
               {draft.quote}
             </blockquote>
-            <Textarea
+            <MentionTextarea
               autoFocus
               value={body}
-              onChange={(e) => setBody(e.target.value)}
-              placeholder="Add a comment"
+              onValueChange={setBody}
+              alias={alias}
+              onNoAccess={onNoAccess}
+              placeholder="Add a comment, @ to mention"
               className="text-sm"
               data-testid="comment-input"
               onKeyDown={(e) => {
@@ -336,7 +357,7 @@ export function CommentsPanel({
             <SuggestionCard key={sg.id} s={sg} active={sg.id === activeId} canDecide={canDecide} meId={meId} onDecide={onDecide} onSelect={() => onSelect({ id: sg.id, range: sg.range } as Thread)} />
           ))}
         {open.map((t) => (
-          <ThreadCard key={t.id} alias={alias} thread={t} active={t.id === activeId} canModerate={canModerate} meId={meId} onSelect={() => onSelect(t)} onChanged={onChanged} />
+          <ThreadCard key={t.id} alias={alias} thread={t} active={t.id === activeId} canModerate={canModerate} meId={meId} onSelect={() => onSelect(t)} onChanged={onChanged} onNoAccess={onNoAccess} />
         ))}
         {open.length === 0 && suggestions.length === 0 && !draft && (
           <p className="px-1 text-sm text-muted-foreground">Select text in the editor and press Comment or Suggest.</p>
@@ -348,7 +369,7 @@ export function CommentsPanel({
         )}
         {showResolved &&
           resolved.map((t) => (
-            <ThreadCard key={t.id} alias={alias} thread={t} active={t.id === activeId} canModerate={canModerate} meId={meId} onSelect={() => onSelect(t)} onChanged={onChanged} />
+            <ThreadCard key={t.id} alias={alias} thread={t} active={t.id === activeId} canModerate={canModerate} meId={meId} onSelect={() => onSelect(t)} onChanged={onChanged} onNoAccess={onNoAccess} />
           ))}
       </div>
     </aside>

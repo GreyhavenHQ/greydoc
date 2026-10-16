@@ -5,6 +5,13 @@ import { diagramUsesElk, mermaidConfig } from '@/render/mermaidTheme'
 const html = (src: string) => renderMarkdown(src).html
 
 describe('markdown extensions', () => {
+  it('renders mentions as chips, but not in code or after a backslash', () => {
+    const out = html('Hi [@Alice <b>](@Alice), see `[@B](@bob)` and \\[@C](@carol).')
+    expect(out).toContain('<span class="mention" data-user="alice">@Alice &lt;b&gt;</span>')
+    expect(out).toContain('<code>[@B](@bob)</code>')
+    expect(out).not.toContain('data-user="carol"')
+    expect(html('[@x](https://x.org)')).toContain('href="https://x.org"')
+  })
   it('links to other notes with [[alias]] and [[alias|label]]', () => {
     const out = html('See [[Q4-Roadmap]] and [[incident-search|the incident]].')
     expect(out).toContain('<a href="/n/q4-roadmap" class="note-link" data-alias="q4-roadmap">q4-roadmap</a>')

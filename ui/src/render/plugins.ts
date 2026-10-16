@@ -161,3 +161,20 @@ export function noteLinks(md: MarkdownIt) {
     return true
   })
 }
+
+// mentions reads [@Name](@username) as a mention chip. hydrateMentions later shows the current name.
+export function mentions(md: MarkdownIt) {
+  const re = /^\[@([^\]\n]*)\]\(@([A-Za-z0-9][A-Za-z0-9._@+-]*)\)/
+  md.inline.ruler.before('link', 'mention', (state: StateInline, silent: boolean) => {
+    if (state.src.charCodeAt(state.pos) !== 0x5b || state.src.charCodeAt(state.pos + 1) !== 0x40) return false
+    const m = re.exec(state.src.slice(state.pos))
+    if (!m) return false
+    if (!silent) {
+      const t = state.push('html_inline', '', 0) as Token
+      const user = md.utils.escapeHtml(m[2].toLowerCase())
+      t.content = `<span class="mention" data-user="${user}">@${md.utils.escapeHtml(m[1])}</span>`
+    }
+    state.pos += m[0].length
+    return true
+  })
+}

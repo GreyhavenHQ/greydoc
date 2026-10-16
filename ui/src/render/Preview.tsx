@@ -5,6 +5,7 @@ import { hydrateMermaid } from '@/render/mermaid'
 import { hydrateNoteLinks } from '@/render/noteLinks'
 import { findHeading, scrollToHash } from '@/render/headings'
 import { toast } from 'sonner'
+import { hydrateMentions } from '@/render/mentions'
 import { useTheme } from '@/lib/theme'
 
 interface PreviewProps {
@@ -32,6 +33,7 @@ export const Preview = forwardRef<HTMLElement, PreviewProps>(function Preview({ 
       if (pendingHash.current && el.isConnected) scrollToHash(el)
     }
     void hydrateNoteLinks(el)
+    void hydrateMentions(el)
     void hydrateMermaid(el, { mode: resolvedTheme }).then(() => {
       onRendered?.(el)
       toHash()
