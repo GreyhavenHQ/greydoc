@@ -11,6 +11,12 @@ export default defineConfig({
   use: { baseURL: `http://127.0.0.1:${port}`, trace: 'retain-on-failure' },
   webServer: [
     {
+      // The fake identity provider also starts a greydoc with OIDC on port 3996, for people and mentions.
+      command: 'node e2e/fake-idp.mjs',
+      url: 'http://127.0.0.1:3996/healthz',
+      reuseExistingServer: false,
+    },
+    {
       command: 'node e2e/fake-llm.mjs',
       url: 'http://127.0.0.1:3998/health',
       reuseExistingServer: false,
