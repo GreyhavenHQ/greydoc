@@ -42,6 +42,7 @@ import { CommentsPanel, type Draft, type Suggestion, type Thread } from '@/compo
 import { SuggestComposer, type SuggestDraft } from '@/components/SuggestComposer'
 import { AiMenu } from '@/components/AiMenu'
 import { imageUpload } from '@/editor/upload'
+import { formatKeymap } from '@/editor/format'
 import { canToggleTasks } from '@/editor/live'
 import { taskToggle } from '@/lib/tasks'
 import { captureEdits, setSuggestionRanges, suggestionDecorations, type SuggestionAction } from '@/editor/suggestions'
@@ -463,8 +464,16 @@ export default function Editor() {
     }
   }, [])
 
+  const commentOn = useCallback((from: number, to: number) => {
+    const s = sessionRef.current
+    if (!s) return
+    setDraft({ quote: s.text.toString().slice(from, to).slice(0, 2000), ...anchorRange(s.text, from, to) })
+    setCommentsOpen(true)
+  }, [])
+
   const editorExtensions = useMemo(
     () => [
+      formatKeymap({ onComment: commentOn }),
       threadDecorations((id) => {
         setActiveThread(id)
         setCommentsOpen(true)
@@ -503,7 +512,7 @@ export default function Editor() {
         },
       ),
     ],
-    [],
+    [commentOn],
   )
 
   const toggleTask = useCallback(
@@ -531,9 +540,7 @@ export default function Editor() {
   }
 
   const startComment = () => {
-    if (!session || !selection) return
-    setDraft({ quote: selection.text.slice(0, 2000), ...anchorRange(session.text, selection.from, selection.to) })
-    setCommentsOpen(true)
+    if (selection) commentOn(selection.from, selection.to)
   }
 
   const loadClients = useCallback(() => {

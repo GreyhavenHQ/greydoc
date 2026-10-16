@@ -165,7 +165,7 @@ export const insertLink: StateCommand = ({ state, dispatch }) => {
 }
 
 // formatKeymap binds the formatting keys. It runs before the default keymap, which binds Mod-i to selectParentSyntax.
-export function formatKeymap(opts: { onComment: () => void }): Extension {
+export function formatKeymap(opts: { onComment: (from: number, to: number) => void }): Extension {
   const bindings: KeyBinding[] = [
     { key: 'Mod-b', run: toggleWrap('**') },
     { key: 'Mod-i', run: toggleWrap('*') },
@@ -183,8 +183,9 @@ export function formatKeymap(opts: { onComment: () => void }): Extension {
     {
       key: 'Mod-Alt-m',
       run: (view) => {
-        if (view.state.selection.main.empty) return false
-        opts.onComment()
+        const { from, to, empty } = view.state.selection.main
+        if (empty) return false
+        opts.onComment(from, to)
         return true
       },
     },
