@@ -110,7 +110,7 @@ The **Audit log** in the account menu lists every recorded action on the server.
 
 ## Share and protect
 
-The **Share** dialog sets who can read, comment or edit. You can give access to everyone with the address, to signed-in users, to OIDC groups or to named people.
+The **Share** dialog sets who can read, comment or edit. You can give access to everyone with the address, to signed-in users or to named people. The search lists only people who signed in to greydoc at least once. Documents cannot be shared with OIDC groups. When you upgrade, greydoc removes the group grants that older versions stored, and the history of each document shows the removal.
 
 | HedgeDoc 1 mode | greydoc access |
 |---|---|
