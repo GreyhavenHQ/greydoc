@@ -113,3 +113,30 @@ test('the preview resyncs when a block above changes height', async ({ page }) =
   await page.locator('.mermaid-block').evaluate((b) => (b.style.minHeight = '3000px'))
   await expect.poll(() => previewError(page, 'P10').then(Math.abs)).toBeLessThan(24)
 })
+
+// editorTop is the zero-based source line at the top of the editor, by the gutter.
+async function editorTop(page: Page) {
+  return page.evaluate(() => {
+    const top = document.querySelector('.cm-scroller')!.getBoundingClientRect().top
+    const cell = Array.from(document.querySelectorAll<HTMLElement>('.cm-lineNumbers .cm-gutterElement')).find(
+      (c) => c.textContent && c.getBoundingClientRect().bottom > top + 1,
+    )
+    return Number(cell?.textContent) - 1
+  })
+}
+
+const scrollTops = (page: Page) =>
+  page.evaluate(() => [document.querySelector('.cm-scroller')!.scrollTop, document.querySelector('[data-testid=preview]')!.closest('section')!.scrollTop])
+
+test('the editor follows the preview and does not scroll it back', async ({ page }) => {
+  const { text, markers } = acceptanceDoc()
+  await open(page, text)
+  await expect(page.getByTestId('preview').locator('.mermaid-block svg.flowchart')).toBeVisible({ timeout: 15_000 })
+  await page.getByTestId('preview').hover()
+  await page.mouse.wheel(0, await previewError(page, 'P20'))
+  await expect.poll(() => previewError(page, 'P20').then(Math.abs)).toBeLessThan(2)
+  await expect.poll(async () => Math.abs((await editorTop(page)) - markers.get('P20')!)).toBeLessThanOrEqual(1)
+  const before = await scrollTops(page)
+  await page.waitForTimeout(300)
+  expect(await scrollTops(page)).toEqual(before)
+})

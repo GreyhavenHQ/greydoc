@@ -1,4 +1,4 @@
-import type { EditorView } from '@codemirror/view'
+import { EditorView } from '@codemirror/view'
 
 // A Point maps a zero-based source line to a preview scroll position.
 export interface Point {
@@ -74,16 +74,23 @@ export function editorTopLine(view: EditorView): number {
 }
 
 // scrollEditorToLine puts a fractional source line at the top of the editor. The line count scrolls to the end.
+// CodeMirror scrolls to the line in its measure phase, where lines outside the viewport get their real height.
+// The fraction is added in the next frame, when the line is measured.
 export function scrollEditorToLine(view: EditorView, line: number) {
   const doc = view.state.doc
-  const scroller = view.scrollDOM
   if (line >= doc.lines) {
-    scroller.scrollTop = scroller.scrollHeight
+    view.dispatch({ effects: EditorView.scrollIntoView(doc.length, { y: 'end', yMargin: 0 }) })
     return
   }
-  const block = view.lineBlockAt(doc.line(clamp(Math.floor(line), 0, doc.lines - 1) + 1).from)
-  const first = doc.lineAt(block.from).number - 1
-  const count = doc.lineAt(block.to).number - first
-  const offset = view.documentTop - scroller.getBoundingClientRect().top + scroller.scrollTop
-  scroller.scrollTop = offset + block.top + clamp((line - first) / count, 0, 1) * block.height
+  const from = doc.line(clamp(Math.floor(line), 0, doc.lines - 1) + 1).from
+  view.dispatch({ effects: EditorView.scrollIntoView(from, { y: 'start', yMargin: 0 }) })
+  requestAnimationFrame(() => {
+    if (!view.dom.isConnected) return
+    const scroller = view.scrollDOM
+    const block = view.lineBlockAt(from)
+    const first = doc.lineAt(block.from).number - 1
+    const count = doc.lineAt(block.to).number - first
+    const offset = view.documentTop - scroller.getBoundingClientRect().top + scroller.scrollTop
+    scroller.scrollTop = offset + block.top + clamp((line - first) / count, 0, 1) * block.height
+  })
 }

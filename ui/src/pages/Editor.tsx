@@ -54,7 +54,7 @@ import { authorColor, sourceLabel, type NoteClient } from '@/lib/authors'
 import { CodeEditor } from '@/editor/CodeEditor'
 import { NoteSession, type AppEvent } from '@/editor/session'
 import { Preview } from '@/render/Preview'
-import { atBottom, editorTopLine, measure, yForLine, type Point } from '@/render/scrollSync'
+import { atBottom, editorTopLine, lineForY, measure, scrollEditorToLine, yForLine, type Point } from '@/render/scrollSync'
 import { api, ApiError, atLeast, shareParam, withShare, type Level, type Note } from '@/lib/api'
 import { loginHref, useMe } from '@/lib/me'
 import { localName, presenceColor } from '@/lib/presence'
@@ -137,6 +137,13 @@ async function searchNotes(query: string): Promise<NoteHit[]> {
   let { notes } = await api.get<{ notes: NoteHit[] }>('/api/notes?' + sp)
   if (!q && notes.length === 0) notes = (await api.get<{ notes: NoteHit[] }>('/api/notes?scope=all&limit=20')).notes
   return notes
+}
+
+// scrollSource calls take when the user starts to scroll or type in el.
+function scrollSource(el: HTMLElement, take: () => void) {
+  const events = ['pointerenter', 'pointerdown', 'wheel', 'touchstart', 'keydown', 'focusin']
+  for (const e of events) el.addEventListener(e, take, { passive: true })
+  return () => events.forEach((e) => el.removeEventListener(e, take))
 }
 
 export default function Editor() {
@@ -292,22 +299,37 @@ export default function Editor() {
   }, [])
 
   // The reading position is a fractional source line. points maps it to the preview and is rebuilt after a layout change.
+  // Only the pane that the user last touched drives the other one, so a synced scroll does not sync back.
   const position = useRef(0)
   const points = useRef<Point[] | null>(null)
+  const source = useRef<'editor' | 'preview'>('editor')
   const layoutFrame = useRef(0)
-  const syncPreview = useCallback(() => {
+  const editorCleanup = useRef<() => void>(undefined)
+  const previewPoints = useCallback(() => {
     const pane = previewPane.current
     const v = viewRef.current
-    if (!pane || !article.current || !v) return
+    if (!pane || !article.current || !v) return null
     points.current ??= measure(pane, article.current, v.state.doc.lines)
-    pane.scrollTop = yForLine(points.current, position.current)
+    return points.current
   }, [])
+  const syncPreview = useCallback(() => {
+    const p = previewPoints()
+    if (p) previewPane.current!.scrollTop = yForLine(p, position.current)
+  }, [previewPoints])
   const onEditorScroll = useCallback(() => {
     const v = viewRef.current
-    if (!v) return
+    if (!v || source.current !== 'editor') return
     position.current = atBottom(v.scrollDOM) ? v.state.doc.lines : editorTopLine(v)
     syncPreview()
   }, [syncPreview])
+  const onPreviewScroll = useCallback(() => {
+    const p = previewPoints()
+    const pane = previewPane.current
+    const v = viewRef.current
+    if (!p || !pane || !v || source.current !== 'preview') return
+    position.current = atBottom(pane) ? v.state.doc.lines : lineForY(p, pane.scrollTop)
+    scrollEditorToLine(v, position.current)
+  }, [previewPoints])
   const onPreviewLayout = useCallback(() => {
     points.current = null
     cancelAnimationFrame(layoutFrame.current)
@@ -319,8 +341,14 @@ export default function Editor() {
     const ro = new ResizeObserver(onPreviewLayout)
     ro.observe(previewEl)
     if (article.current) ro.observe(article.current)
-    return () => ro.disconnect()
-  }, [previewEl, onPreviewLayout])
+    previewEl.addEventListener('scroll', onPreviewScroll, { passive: true })
+    const stop = scrollSource(previewEl, () => (source.current = 'preview'))
+    return () => {
+      ro.disconnect()
+      previewEl.removeEventListener('scroll', onPreviewScroll)
+      stop()
+    }
+  }, [previewEl, onPreviewLayout, onPreviewScroll])
 
   const loadThreads = useCallback(() => {
     if (!note) return
@@ -546,9 +574,16 @@ export default function Editor() {
 
   const onView = useCallback(
     (v: EditorView | null) => {
-      viewRef.current?.scrollDOM.removeEventListener('scroll', onEditorScroll)
+      editorCleanup.current?.()
+      editorCleanup.current = undefined
       viewRef.current = v
-      v?.scrollDOM.addEventListener('scroll', onEditorScroll, { passive: true })
+      if (!v) return
+      v.scrollDOM.addEventListener('scroll', onEditorScroll, { passive: true })
+      const stop = scrollSource(v.dom, () => (source.current = 'editor'))
+      editorCleanup.current = () => {
+        v.scrollDOM.removeEventListener('scroll', onEditorScroll)
+        stop()
+      }
     },
     [onEditorScroll],
   )
