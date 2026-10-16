@@ -4,8 +4,10 @@ FROM golang:1.26-bookworm
 COPY --from=node:22-bookworm /usr/local/bin/node /usr/local/bin/node
 COPY --from=node:22-bookworm /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
- && ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
-RUN npm install -g pnpm@12.14.0 && npm cache clean --force && pnpm config set --location=global store-dir /root/.pnpm-store
+ && ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
+ && ln -s /usr/local/lib/node_modules/corepack/dist/corepack.js /usr/local/bin/corepack
+# Pre-installs the pnpm version that the packageManager field of ui/package.json names.
+RUN corepack enable && corepack install -g pnpm@12.14.0 && pnpm config set --location=global store-dir /root/.pnpm-store
 
 RUN curl -sSfL https://just.systems/install.sh | bash -s -- --to /usr/local/bin
 # Built from source so it understands the Go version of this module.

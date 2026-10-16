@@ -2,10 +2,11 @@
 # The UI and the Go build run as separate stages on the build platform, so they build in parallel,
 # the UI stage is cached while only Go code changes, and multi-arch builds do not emulate the compiler.
 FROM --platform=$BUILDPLATFORM node:22-alpine AS ui
-RUN npm install -g pnpm@12.14.0
 WORKDIR /src/ui
 COPY ui/package.json ui/pnpm-lock.yaml ui/pnpm-workspace.yaml ./
-RUN --mount=type=cache,target=/root/.pnpm-store pnpm install --frozen-lockfile --store-dir /root/.pnpm-store
+# corepack installs the pnpm version named in the packageManager field of package.json.
+RUN --mount=type=cache,target=/root/.pnpm-store corepack enable && corepack install \
+ && pnpm install --frozen-lockfile --store-dir /root/.pnpm-store
 COPY ui ./
 COPY docs/features.md /src/docs/features.md
 RUN pnpm run build
