@@ -50,6 +50,8 @@ export function describe(e: AuditEvent): string {
       const g = d.group === '_everyone' ? 'anyone with the address' : d.group === '_signed_in' ? 'signed-in users' : `group ${d.group}`
       return d.level === 'deny' ? `removed access for ${g}` : `gave ${g} ${levelWords[String(d.level)] ?? d.level}`
     }
+    case 'permission.group_removed':
+      return `removed ${levelWords[String(d.level)] ?? d.level} for group ${d.group}: documents are shared with people only`
     case 'permission.owner':
       return `made @${d.username} the owner`
     case 'agent_policy':
