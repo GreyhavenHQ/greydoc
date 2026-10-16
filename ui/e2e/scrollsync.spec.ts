@@ -82,3 +82,34 @@ test('the preview follows the editor through a table and a diagram', async ({ pa
   console.log('scroll sync error in px', JSON.stringify(errors))
   for (const e of Object.values(errors)) expect(Math.abs(e)).toBeLessThan(24)
 })
+
+test('a diagram covers only its own lines', async ({ page }) => {
+  const { text, markers } = acceptanceDoc()
+  await open(page, text)
+  const diagram = page.getByTestId('preview').locator('.mermaid-block')
+  await expect(diagram.locator('svg.flowchart')).toBeVisible({ timeout: 15_000 })
+  await scrollEditorTo(page, markers.get('P1')! - 1)
+  await expect.poll(() => previewError(page, 'P1')).toBeGreaterThanOrEqual(0)
+  await expect.poll(() => previewError(page, 'P1')).toBeLessThan(24)
+})
+
+test('the end of the editor shows the end of the preview', async ({ page }) => {
+  const { text } = acceptanceDoc()
+  await open(page, text)
+  await page.locator('.cm-editor').hover()
+  await page.locator('.cm-scroller').evaluate((s) => (s.scrollTop = s.scrollHeight))
+  const pane = page.getByTestId('preview').locator('xpath=ancestor::section[1]')
+  await expect.poll(() => pane.evaluate((p) => p.scrollHeight - p.clientHeight - p.scrollTop)).toBeLessThan(2)
+})
+
+test('the preview resyncs when a block above changes height', async ({ page }) => {
+  const { text, markers } = acceptanceDoc()
+  await open(page, text)
+  await expect(page.getByTestId('preview').locator('.mermaid-block svg.flowchart')).toBeVisible({ timeout: 15_000 })
+  await scrollEditorTo(page, markers.get('P10')!)
+  await expect.poll(() => previewError(page, 'P10').then(Math.abs)).toBeLessThan(24)
+  // Without this, the browser keeps the position by itself when content above grows.
+  await page.getByTestId('preview').evaluate((a) => (a.closest('section')!.style.overflowAnchor = 'none'))
+  await page.locator('.mermaid-block').evaluate((b) => (b.style.minHeight = '3000px'))
+  await expect.poll(() => previewError(page, 'P10').then(Math.abs)).toBeLessThan(24)
+})

@@ -64,28 +64,3 @@ export const Preview = forwardRef<HTMLElement, PreviewProps>(function Preview({ 
     />
   )
 })
-
-// scrollToSourceLine scrolls container so the block rendered from line is at the top.
-export function scrollToSourceLine(container: HTMLElement, article: HTMLElement, line: number, fraction = 0) {
-  const blocks = Array.from(article.querySelectorAll<HTMLElement>('[data-line]'))
-  if (!blocks.length) return
-  let before = blocks[0]
-  let after: HTMLElement | null = null
-  for (const b of blocks) {
-    const l = Number(b.dataset.line)
-    if (l <= line) before = b
-    else {
-      after = b
-      break
-    }
-  }
-  const top = (el: HTMLElement) => el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop
-  const l0 = Number(before.dataset.line)
-  let y = top(before)
-  if (after) {
-    const l1 = Number(after.dataset.line)
-    const t = l1 > l0 ? (line + fraction - l0) / (l1 - l0) : 0
-    y += (top(after) - y) * Math.min(Math.max(t, 0), 1)
-  }
-  container.scrollTo({ top: Math.max(0, y - 16) })
-}
