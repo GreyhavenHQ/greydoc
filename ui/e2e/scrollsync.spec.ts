@@ -70,7 +70,6 @@ test('the preview follows the editor in a document of paragraphs', async ({ page
 })
 
 test('the preview follows the editor through a table and a diagram', async ({ page }) => {
-  test.fail()
   const { text, markers } = acceptanceDoc()
   await open(page, text)
   await expect(page.getByTestId('preview').locator('.mermaid-block svg.flowchart')).toBeVisible({ timeout: 15_000 })

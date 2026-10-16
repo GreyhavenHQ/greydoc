@@ -20,7 +20,10 @@ export function standaloneHTML(title: string, article: HTMLElement): string {
     const svg = b.querySelector('svg')
     if (svg) b.replaceChildren(svg)
   })
-  clone.querySelectorAll('[data-line]').forEach((el) => el.removeAttribute('data-line'))
+  clone.querySelectorAll('[data-line], [data-line-end]').forEach((el) => {
+    el.removeAttribute('data-line')
+    el.removeAttribute('data-line-end')
+  })
   clone.querySelectorAll('script').forEach((el) => el.remove())
   // KaTeX fonts are not bundled. Math falls back to system fonts offline.
   const css = tokens + '\n' + katexCss.replace(/url\([^)]*\)/g, 'local("none")') + '\n' + markdownCss
