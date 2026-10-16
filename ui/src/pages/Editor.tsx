@@ -293,9 +293,11 @@ export default function Editor() {
   const syncScroll = useCallback(() => {
     const v = viewRef.current
     if (!v || !previewPane.current || !article.current) return
-    const block = v.lineBlockAtHeight(v.scrollDOM.scrollTop - v.documentTop + v.scrollDOM.getBoundingClientRect().top)
+    // documentTop already moves with the scroll position.
+    const top = v.scrollDOM.getBoundingClientRect().top - v.documentTop
+    const block = v.lineBlockAtHeight(top)
     const line = v.state.doc.lineAt(block.from).number - 1
-    const fraction = block.height ? (v.scrollDOM.scrollTop - block.top) / block.height : 0
+    const fraction = block.height ? (top - block.top) / block.height : 0
     scrollToSourceLine(previewPane.current, article.current, line, Math.max(0, Math.min(1, fraction)))
   }, [])
 
@@ -523,6 +525,7 @@ export default function Editor() {
 
   const onView = useCallback(
     (v: EditorView | null) => {
+      viewRef.current?.scrollDOM.removeEventListener('scroll', syncScroll)
       viewRef.current = v
       v?.scrollDOM.addEventListener('scroll', syncScroll, { passive: true })
     },
