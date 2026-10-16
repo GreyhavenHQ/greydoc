@@ -62,8 +62,7 @@ import { localName, presenceColor } from '@/lib/presence'
 import { extractTitle, isSlides } from '@/lib/meta'
 import { cn } from '@/lib/utils'
 import { shortDateTime } from '@/lib/time'
-
-type Mode = 'live' | 'edit' | 'both' | 'view'
+import { modeFromKey, type Mode } from '@/lib/shortcuts'
 
 const toolbarButton = 'h-7 gap-1 px-2 text-background hover:bg-background/15 hover:text-background'
 
@@ -288,8 +287,7 @@ export default function Editor() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || !e.altKey) return
-      const next = ({ KeyL: 'live', KeyE: 'edit', KeyB: 'both', KeyV: 'view' } as Record<string, Mode>)[e.code]
+      const next = modeFromKey(e)
       if (next) {
         e.preventDefault()
         setMode(next)
