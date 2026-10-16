@@ -189,7 +189,6 @@ type permissionsIn struct {
 	Everyone     string            `json:"everyone,omitempty" jsonschema:"level for anyone with the address: deny, read, comment or write"`
 	SignedIn     string            `json:"signed_in,omitempty" jsonschema:"level for signed-in users: deny, read, comment or write"`
 	Users        map[string]string `json:"users,omitempty" jsonschema:"username to level"`
-	Groups       map[string]string `json:"groups,omitempty" jsonschema:"OIDC group to level"`
 }
 
 type createNoteIn struct {
@@ -198,7 +197,7 @@ type createNoteIn struct {
 	ExtraAliases []string       `json:"extra_aliases,omitempty" jsonschema:"more addresses, for example a HedgeDoc 1 short ID used in /s/ links"`
 	CreatedAt    string         `json:"created_at,omitempty" jsonschema:"original creation date, RFC 3339. Also the last update unless updated_at is given."`
 	UpdatedAt    string         `json:"updated_at,omitempty" jsonschema:"original last update, RFC 3339"`
-	Permissions  *permissionsIn `json:"permissions,omitempty" jsonschema:"initial access. Unset fields keep the server defaults."`
+	Permissions  *permissionsIn `json:"permissions,omitempty" jsonschema:"initial access. Unset fields keep the server defaults. Groups are not supported."`
 	AgentPolicy  string         `json:"agent_policy,omitempty" jsonschema:"none, read, suggest or edit"`
 }
 
@@ -306,8 +305,8 @@ func (s *Server) registerTools(srv *mcp.Server) {
 			spec := NoteSpec{Content: in.Content, Alias: in.Alias, ExtraAliases: in.ExtraAliases, CreatedAt: in.CreatedAt,
 				UpdatedAt: in.UpdatedAt, AgentPolicy: in.AgentPolicy}
 			if in.Permissions != nil {
-				p := PermissionSpec(*in.Permissions)
-				spec.Permissions = &p
+				p := in.Permissions
+				spec.Permissions = &PermissionSpec{HedgeDocMode: p.HedgeDocMode, Everyone: p.Everyone, SignedIn: p.SignedIn, Users: p.Users}
 			}
 			n, err := s.createNote(ctx, id, spec)
 			if err != nil {

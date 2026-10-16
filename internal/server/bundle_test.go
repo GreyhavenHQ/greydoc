@@ -167,6 +167,42 @@ func TestNoteBundleImportChecks(t *testing.T) {
 	}
 }
 
+func TestNoteBundleIgnoresGroups(t *testing.T) {
+	e := newTestEnv(t)
+	meta := []byte(`{"greydoc": 1, "alias": "old-bundle", "permissions": {"signed_in": "read", "groups": {"eng": "write"}}}`)
+	if code, body := importBundle(t, e, "old.zip", zipOf(t, map[string][]byte{"note.json": meta, "old.md": []byte("# Old\n")})); code != 201 {
+		t.Fatalf("import: %d %s", code, body)
+	}
+	_, perms := e.get("/api/notes/old-bundle/permissions")
+	if strings.Contains(perms, "eng") || !strings.Contains(perms, `{"group":"_signed_in","level":"read"}`) {
+		t.Fatalf("permissions: %s", perms)
+	}
+	id := noteID(t, e, "old-bundle")
+	if err := e.srv.Store().SetGroupGrant(context.Background(), id, "eng", 2, nil); err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.Get(e.ts.URL + "/api/notes/old-bundle/export.zip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	zr, err := zip.NewReader(bytes.NewReader(raw), int64(len(raw)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range zr.File {
+		if f.Name == "note.json" {
+			rc, _ := f.Open()
+			b, _ := io.ReadAll(rc)
+			rc.Close()
+			if strings.Contains(string(b), "groups") || strings.Contains(string(b), "eng") {
+				t.Fatalf("note.json: %s", b)
+			}
+		}
+	}
+}
+
 func keys(m map[string]string) []string {
 	out := []string{}
 	for k := range m {

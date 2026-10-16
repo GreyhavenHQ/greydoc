@@ -14,11 +14,12 @@ import (
 const LocalUserID = "local"
 
 type User struct {
-	ID          string   `json:"id"`
-	Username    string   `json:"username"`
-	DisplayName string   `json:"display_name"`
-	Email       string   `json:"email,omitempty"`
-	Groups      []string `json:"groups"`
+	ID          string `json:"id"`
+	Username    string `json:"username"`
+	DisplayName string `json:"display_name"`
+	Email       string `json:"email,omitempty"`
+	// Groups only set the admin flag. They are not shown to other people.
+	Groups []string `json:"-"`
 }
 
 func (s *Store) EnsureLocalUser(ctx context.Context) (*User, error) {
