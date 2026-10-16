@@ -32,12 +32,10 @@ func TestNotePermissionsFlow(t *testing.T) {
 	if code, _ := e.do(bob, "PUT", "/api/notes/"+alias+"/permissions/users/bob", map[string]string{"level": "write"}); code != 403 {
 		t.Fatalf("bob escalated: %d", code)
 	}
-	// Group grant.
-	if code, _ := e.do(owner, "PUT", "/api/notes/"+alias+"/permissions/groups/sales", map[string]string{"level": "write"}); code != 200 {
-		t.Fatal("group grant")
-	}
-	if _, body := e.do(bob, "GET", "/api/notes/"+alias, nil); !strings.Contains(body, `"level":"write"`) {
-		t.Fatalf("group grant not applied: %s", body)
+	// OIDC groups give no access.
+	e.do(owner, "PUT", "/api/notes/"+alias+"/permissions/groups/sales", map[string]string{"level": "write"})
+	if _, body := e.do(bob, "GET", "/api/notes/"+alias, nil); !strings.Contains(body, `"level":"comment"`) {
+		t.Fatalf("group grant applied: %s", body)
 	}
 	// Full is not grantable.
 	if code, _ := e.do(owner, "PUT", "/api/notes/"+alias+"/permissions/users/bob", map[string]string{"level": "full"}); code != 400 {

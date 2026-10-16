@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"slices"
 
 	"github.com/greyhavenhq/greydoc/internal/permission"
 	"github.com/greyhavenhq/greydoc/internal/store"
@@ -66,8 +65,6 @@ func (s *Server) noteLevel(ctx context.Context, id *Identity, n *store.Note, sha
 				in.Everyone = g.Level
 			case g.Group == store.GroupSignedIn:
 				in.LoggedIn = g.Level
-			case in.IsRegistered && slices.Contains(id.User.Groups, g.Group):
-				in.Group = max(in.Group, g.Level)
 			}
 		}
 		if shareToken != "" {
