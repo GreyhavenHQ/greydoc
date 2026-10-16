@@ -81,7 +81,7 @@ Permission modes map like this. The owner always edits.
 | `protected` | none | read |
 | `private` | none | none |
 
-"Anyone with the address" is capped by `GREYDOC_GUEST_MAX` (default read). Set it to `write` before the import if `freely` documents must stay editable without sign-in.
+"Anyone with the address" is capped by `GREYDOC_GUEST_MAX` (default write). If it is lower, `freely` documents are not editable without sign-in.
 
 ## Limits
 

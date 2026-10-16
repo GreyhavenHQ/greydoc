@@ -47,7 +47,7 @@ Levels are `deny`, `read`, `comment` and `write`. The owner always has full acce
 |---|---|---|
 | `GREYDOC_DEFAULT_EVERYONE` | `deny` | What anyone with the address gets on a new document, without sign-in. |
 | `GREYDOC_DEFAULT_SIGNED_IN` | `deny` | What signed-in users get on a new document. With `deny`, only the owner can open it until they share it. |
-| `GREYDOC_GUEST_MAX` | `read` | The most a person without sign-in can get on any document. |
+| `GREYDOC_GUEST_MAX` | `write` | The most a person without sign-in can get on any document. Set `read` to stop guests from comments and edits. |
 
 View-only links work for guests whatever these values are.
 

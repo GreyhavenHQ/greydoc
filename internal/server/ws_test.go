@@ -177,3 +177,25 @@ func TestRoomPersistsToDatabase(t *testing.T) {
 		return err == nil && n.Content == "# Title from editor\nbody" && n.Title == "Title from editor"
 	})
 }
+
+func TestGuestCanCommentAndEdit(t *testing.T) {
+	e, idp := newOIDCEnv(t)
+	owner := e.login(idp, map[string]any{"sub": "o", "preferred_username": "owner"})
+	alias := e.createNote(owner, "alpha\n")
+	if code, b := e.do(owner, "PUT", "/api/notes/"+alias+"/permissions/groups/_everyone", map[string]string{"level": "comment"}); code != 200 {
+		t.Fatalf("%d %s", code, b)
+	}
+	if code, b := e.do(nil, "POST", "/api/notes/"+alias+"/comments", map[string]any{"quote": "alpha", "body": "From a guest"}); code != 201 {
+		t.Fatalf("guest comment: %d %s", code, b)
+	}
+	if code, b := e.do(owner, "PUT", "/api/notes/"+alias+"/permissions/groups/_everyone", map[string]string{"level": "write"}); code != 200 {
+		t.Fatalf("%d %s", code, b)
+	}
+	d := newYgoClient(t, e, alias)
+	waitFor(t, "seed", func() bool { return ytext(d) == "alpha\n" })
+	yinsert(d, 0, "guest\n")
+	waitFor(t, "guest edit", func() bool {
+		_, body := e.do(owner, "GET", "/api/notes/"+alias+"/content", nil)
+		return body == "guest\nalpha\n"
+	})
+}

@@ -85,7 +85,7 @@ func FromEnv() Config {
 		SessionTTL:        envDuration("GREYDOC_SESSION_TTL", 7*24*time.Hour),
 		AdminGroup:        envStr("GREYDOC_ADMIN_GROUP", ""),
 		TrashRetention:    envDuration("GREYDOC_TRASH_RETENTION", 30*24*time.Hour),
-		GuestMax:          envStr("GREYDOC_GUEST_MAX", "read"),
+		GuestMax:          envStr("GREYDOC_GUEST_MAX", "write"),
 		DefaultEveryone:   envStr("GREYDOC_DEFAULT_EVERYONE", "deny"),
 		DefaultSignedIn:   envStr("GREYDOC_DEFAULT_SIGNED_IN", "deny"),
 		MaxNoteLength:     envInt("GREYDOC_MAX_NOTE_LENGTH", 1_000_000),

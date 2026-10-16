@@ -85,7 +85,7 @@ docker compose up -d greydoc
 |---|---|---|
 | Permission modes (freely, editable, limited, locked, protected, private) | Different | Grants per person, group, signed-in users and anyone with the address, at view, comment or edit level. Each mode maps to grants, see [import](docs/import-hedgedoc.md). |
 | Owner | Same | The owner manages access and the trash. |
-| Guest editing | Different | Off by default. `GREYDOC_GUEST_MAX=write` allows it. |
+| Guest editing | Same | The owner sets "Anyone with the address" to "Can edit". `GREYDOC_GUEST_MAX=read` turns it off. |
 | Real-time collaboration and cursors | Same | Yjs instead of OT. |
 | Revision history and revert | Same | Timeline with diffs, authors and restore. |
 | Recent documents and pins | Same | Home page, "Recent". |
