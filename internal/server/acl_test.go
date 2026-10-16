@@ -12,21 +12,15 @@ func TestNotePermissionsFlow(t *testing.T) {
 	bob := e.login(idp, map[string]any{"sub": "b", "preferred_username": "bob", "groups": []string{"sales"}})
 	alias := e.createNote(owner, "# Plan")
 
-	// Default: signed-in users write, guests nothing.
-	if code, _ := e.do(bob, "GET", "/api/notes/"+alias, nil); code != 200 {
-		t.Fatalf("signed-in default read: %d", code)
+	// Default: only the owner.
+	if code, _ := e.do(bob, "GET", "/api/notes/"+alias, nil); code != 403 {
+		t.Fatalf("signed-in default: %d", code)
 	}
 	if code, _ := e.do(nil, "GET", "/api/notes/"+alias, nil); code != 401 {
 		t.Fatalf("guest: %d", code)
 	}
 
-	// Remove the signed-in default and grant bob comment.
-	if code, b := e.do(owner, "DELETE", "/api/notes/"+alias+"/permissions/groups/_signed_in", nil); code != 200 {
-		t.Fatalf("%d %s", code, b)
-	}
-	if code, _ := e.do(bob, "GET", "/api/notes/"+alias, nil); code != 403 {
-		t.Fatalf("bob after removal: %d", code)
-	}
+	// Grant bob comment.
 	if code, b := e.do(owner, "PUT", "/api/notes/"+alias+"/permissions/users/bob", map[string]string{"level": "comment"}); code != 200 {
 		t.Fatalf("%d %s", code, b)
 	}
