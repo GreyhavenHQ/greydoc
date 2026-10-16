@@ -13,7 +13,7 @@ ui:
 ui-test:
     cd ui && npm ci --no-fund --no-audit && npm run test
 
-e2e: build
+e2e: ui build
     cd ui && npx playwright test
 
 test:

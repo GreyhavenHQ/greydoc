@@ -9,3 +9,4 @@ ui/playwright-report
 *.db
 *.db-wal
 *.db-shm
+internal/server/uidist

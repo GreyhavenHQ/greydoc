@@ -1,5 +1,14 @@
-# Production image: a static Go binary with the committed UI (internal/server/uidist) embedded.
-# The build stage runs natively and cross-compiles, so multi-arch builds do not emulate the compiler.
+# Production image: a static Go binary with the UI embedded.
+# The UI and the Go build run as separate stages on the build platform, so they build in parallel,
+# the UI stage is cached while only Go code changes, and multi-arch builds do not emulate the compiler.
+FROM --platform=$BUILDPLATFORM node:22-alpine AS ui
+WORKDIR /src/ui
+COPY ui/package.json ui/package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm npm ci --no-fund --no-audit
+COPY ui ./
+COPY docs/features.md /src/docs/features.md
+RUN npm run build
+
 FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS build
 ARG TARGETOS
 ARG TARGETARCH
@@ -8,10 +17,12 @@ ARG GIT_COMMIT=""
 ARG BUILD_TIME=""
 WORKDIR /src
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY cmd ./cmd
 COPY internal ./internal
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath \
+COPY --from=ui /src/internal/server/uidist ./internal/server/uidist
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath \
     -ldflags="-s -w -X main.version=${VERSION} -X main.gitCommit=${GIT_COMMIT} -X main.buildTime=${BUILD_TIME}" \
     -o /out/greydoc ./cmd/greydoc
 

@@ -7,7 +7,7 @@ Every build, test, lint and run command MUST run inside the dev container. Do no
 ```bash
 docker compose -f docker-compose.dev.yml run --rm dev just test     # go test ./...
 docker compose -f docker-compose.dev.yml run --rm dev just race
-docker compose -f docker-compose.dev.yml run --rm dev just ui       # rebuild internal/server/uidist
+docker compose -f docker-compose.dev.yml run --rm dev just ui       # build the UI into internal/server/uidist (not tracked)
 docker compose -f docker-compose.dev.yml run --rm dev just ui-test  # vitest
 docker compose -f docker-compose.dev.yml run --rm dev just e2e      # Playwright against a built binary
 docker compose -f docker-compose.dev.yml --profile postgres up -d postgres && docker compose -f docker-compose.dev.yml run --rm dev just test-pg
@@ -27,7 +27,7 @@ docker compose -f docker-compose.dev.yml up app                     # http://127
 - `internal/history`: edit sessions into timeline revisions.
 - `internal/ai`: OpenAI-compatible client for in-editor actions. It returns text and never writes.
 - `internal/server`: HTTP handlers, the embedded UI, the MCP tools (`mcp.go`) and the OAuth server for MCP (`oauth.go`). MCP shares the access checks of the REST handlers.
-- `ui/`: React + Vite. It builds into `internal/server/uidist/`, which is committed. After a UI change, run `just ui` and commit `uidist/`.
+- `ui/`: React + Vite. It builds into `internal/server/uidist/`, which is embedded but not tracked: only `.gitkeep` is. The Docker image builds it in its own stage. Without it, the server answers 503 on UI pages; run `just ui` before `just e2e` or `just serve`.
 
 ## Rules
 

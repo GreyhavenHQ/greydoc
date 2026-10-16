@@ -22,21 +22,19 @@ jobs:
       - run: docker compose -f docker-compose.dev.yml --profile postgres up -d postgres
       - run: sleep 5 && docker compose -f docker-compose.dev.yml run --rm dev just test-pg
 
-  ui-drift:
+  ui:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: docker compose -f docker-compose.dev.yml build dev
       - run: docker compose -f docker-compose.dev.yml run --rm dev sh -c 'just ui-test && just ui'
-      - name: committed uidist matches the UI source
-        run: git diff --exit-code -- internal/server/uidist
 
   e2e:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: docker compose -f docker-compose.dev.yml build dev
-      - run: docker compose -f docker-compose.dev.yml run --rm dev sh -c 'cd ui && npm ci --no-fund --no-audit && cd .. && just e2e'
+      - run: docker compose -f docker-compose.dev.yml run --rm dev just e2e
 
   docker:
     runs-on: ubuntu-latest
