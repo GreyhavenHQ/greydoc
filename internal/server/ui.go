@@ -7,10 +7,13 @@ import (
 	"strings"
 )
 
-// The React app in ui/ builds into uidist/, which is committed and embedded.
+// The React app in ui/ builds into uidist/ (just ui), which is embedded. Only .gitkeep is tracked.
 
 //go:embed all:uidist
 var uiDist embed.FS
+
+// uiIndexFallback replaces index.html when the UI is not built. Tests set it.
+var uiIndexFallback []byte
 
 func (s *Server) uiHandler() http.Handler {
 	dist, err := fs.Sub(uiDist, "uidist")
@@ -20,7 +23,7 @@ func (s *Server) uiHandler() http.Handler {
 	fileServer := http.FileServerFS(dist)
 	index, err := fs.ReadFile(dist, "index.html")
 	if err != nil {
-		panic(err)
+		index = uiIndexFallback
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
@@ -40,6 +43,10 @@ func (s *Server) uiHandler() http.Handler {
 				fileServer.ServeHTTP(w, r)
 				return
 			}
+		}
+		if index == nil {
+			http.Error(w, "UI not built: run just ui", http.StatusServiceUnavailable)
+			return
 		}
 		s.serveIndex(w, r, index)
 	})

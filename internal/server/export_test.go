@@ -15,3 +15,7 @@ func (s *Server) EditForTest(ctx context.Context, noteID, text string) (string, 
 func (s *Server) TextForTest(ctx context.Context, noteID string) (string, error) {
 	return s.hub.Text(ctx, noteID)
 }
+
+func init() {
+	uiIndexFallback = []byte(`<!doctype html><html><head></head><body><div id="root"></div></body></html>`)
+}
