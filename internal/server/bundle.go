@@ -118,15 +118,13 @@ func (s *Server) exportPermissions(ctx context.Context, noteID string) (*Permiss
 	if err != nil {
 		return nil, err
 	}
-	p := &PermissionSpec{Everyone: "deny", SignedIn: "deny", Users: map[string]string{}, Groups: map[string]string{}}
+	p := &PermissionSpec{Everyone: "deny", SignedIn: "deny", Users: map[string]string{}}
 	for _, g := range acl.Groups {
 		switch g.Group {
 		case store.GroupEveryone:
 			p.Everyone = g.Level.String()
 		case store.GroupSignedIn:
 			p.SignedIn = g.Level.String()
-		default:
-			p.Groups[g.Group] = g.Level.String()
 		}
 	}
 	for _, u := range acl.Users {
@@ -276,12 +274,16 @@ func (s *Server) handleImportBundle(w http.ResponseWriter, r *http.Request) {
 	}{noteView{Note: n, Level: permission.Full}, renamed, len(uploads)})
 }
 
-// knownUsersOnly drops grants to people who have no account on this server.
+// knownUsersOnly drops grants to people who have no account on this server, and grants to groups.
 func (s *Server) knownUsersOnly(ctx context.Context, p *PermissionSpec) *PermissionSpec {
-	if p == nil || len(p.Users) == 0 {
+	if p == nil {
 		return p
 	}
 	out := *p
+	out.Groups = nil
+	if len(p.Users) == 0 {
+		return &out
+	}
 	out.Users = map[string]string{}
 	for name, level := range p.Users {
 		if _, err := s.store.UserByUsername(ctx, name); err == nil {

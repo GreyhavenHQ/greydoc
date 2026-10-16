@@ -20,7 +20,7 @@ func TestListNotesVisibility(t *testing.T) {
 		_ = st.SaveNoteState(ctx, grp.ID, NoteState{Title: "Eng", Tags: []string{"design"}})
 		_ = st.SaveNoteState(ctx, pub.ID, NoteState{Title: "Pub", Tags: []string{"design", "q4"}})
 
-		viewer := Viewer{UserID: alice.ID, Groups: alice.Groups}
+		viewer := Viewer{UserID: alice.ID}
 		aliases := func(f ListFilter) []string {
 			f.Viewer = viewer
 			ns, err := st.ListNotes(ctx, f)
@@ -33,13 +33,13 @@ func TestListNotesVisibility(t *testing.T) {
 			}
 			return out
 		}
-		if got := aliases(ListFilter{Scope: ScopeAll}); len(got) != 4 || contains(got, "private") {
+		if got := aliases(ListFilter{Scope: ScopeAll}); len(got) != 3 || contains(got, "private") || contains(got, "eng-note") {
 			t.Fatalf("all: %v", got)
 		}
 		if got := aliases(ListFilter{Scope: ScopeMine}); len(got) != 1 || got[0] != own.PrimaryAlias {
 			t.Fatalf("mine: %v", got)
 		}
-		if got := aliases(ListFilter{Scope: ScopeShared}); len(got) != 2 || !contains(got, "bob-shared") || !contains(got, "eng-note") {
+		if got := aliases(ListFilter{Scope: ScopeShared}); len(got) != 1 || got[0] != "bob-shared" {
 			t.Fatalf("shared: %v", got)
 		}
 		if got := aliases(ListFilter{Scope: ScopeAll, Tag: "q4"}); len(got) != 1 || got[0] != "public" {
@@ -50,7 +50,7 @@ func TestListNotesVisibility(t *testing.T) {
 			t.Fatalf("recent: %v", got)
 		}
 		tags, err := st.TagCounts(ctx, viewer)
-		if err != nil || len(tags) != 2 || tags[0].Tag != "design" || tags[0].Count != 2 {
+		if err != nil || len(tags) != 2 || tags[0].Tag != "design" || tags[0].Count != 1 {
 			t.Fatalf("tags %+v %v", tags, err)
 		}
 		local, _ := st.ListNotes(ctx, ListFilter{Scope: ScopeAll, Viewer: Viewer{Local: true}})
@@ -99,4 +99,33 @@ func contains(xs []string, s string) bool {
 		}
 	}
 	return false
+}
+
+func TestMigrationDropsNamedGroupGrants(t *testing.T) {
+	eachDialect(t, func(t *testing.T, st *Store) {
+		n, _ := st.CreateNote(ctx, NewNote{Groups: map[string]permission.Level{"eng": permission.Write, GroupSignedIn: permission.Read}})
+		if _, err := st.db.Exec(st.q(`DELETE FROM schema_migration WHERE version = ?`), "007_drop_named_group_grants"); err != nil {
+			t.Fatal(err)
+		}
+		if err := st.Init(ctx); err != nil {
+			t.Fatal(err)
+		}
+		acl, err := st.NoteACL(ctx, n.ID)
+		if err != nil || len(acl.Groups) != 1 || acl.Groups[0].Group != GroupSignedIn {
+			t.Fatalf("groups after migration: %+v %v", acl, err)
+		}
+		evs, err := st.Events(ctx, n.ID, 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var removed []Event
+		for _, ev := range evs {
+			if ev.Kind == "permission.group_removed" {
+				removed = append(removed, ev)
+			}
+		}
+		if len(removed) != 1 || removed[0].Data["group"] != "eng" || removed[0].Data["level"] != "write" {
+			t.Fatalf("events: %+v", evs)
+		}
+	})
 }

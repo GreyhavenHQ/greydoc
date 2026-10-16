@@ -32,12 +32,15 @@ func TestNotePermissionsFlow(t *testing.T) {
 	if code, _ := e.do(bob, "PUT", "/api/notes/"+alias+"/permissions/users/bob", map[string]string{"level": "write"}); code != 403 {
 		t.Fatalf("bob escalated: %d", code)
 	}
-	// Group grant.
-	if code, _ := e.do(owner, "PUT", "/api/notes/"+alias+"/permissions/groups/sales", map[string]string{"level": "write"}); code != 200 {
-		t.Fatal("group grant")
+	// Only the two special groups can be granted.
+	if code, body := e.do(owner, "PUT", "/api/notes/"+alias+"/permissions/groups/sales", map[string]string{"level": "write"}); code != 400 || !strings.Contains(body, "bad_group") {
+		t.Fatalf("named group grant: %d %s", code, body)
 	}
-	if _, body := e.do(bob, "GET", "/api/notes/"+alias, nil); !strings.Contains(body, `"level":"write"`) {
-		t.Fatalf("group grant not applied: %s", body)
+	if code, _ := e.do(owner, "PUT", "/api/notes/"+alias+"/permissions/groups/_signed_in", map[string]string{"level": "read"}); code != 200 {
+		t.Fatalf("signed-in grant: %d", code)
+	}
+	if _, body := e.do(bob, "GET", "/api/notes/"+alias, nil); !strings.Contains(body, `"level":"comment"`) {
+		t.Fatalf("bob level: %s", body)
 	}
 	// Full is not grantable.
 	if code, _ := e.do(owner, "PUT", "/api/notes/"+alias+"/permissions/users/bob", map[string]string{"level": "full"}); code != 400 {
@@ -45,12 +48,22 @@ func TestNotePermissionsFlow(t *testing.T) {
 	}
 	// Only the owner sees who else has access.
 	_, body = e.do(owner, "GET", "/api/notes/"+alias+"/permissions", nil)
-	if !strings.Contains(body, `"username":"bob"`) || !strings.Contains(body, `"group":"sales"`) {
+	if !strings.Contains(body, `"username":"bob"`) || !strings.Contains(body, `"group":"_signed_in"`) {
 		t.Fatalf("owner view: %s", body)
 	}
 	_, body = e.do(bob, "GET", "/api/notes/"+alias+"/permissions", nil)
-	if strings.Contains(body, `"username":"bob"`) || strings.Contains(body, `"sales"`) || !strings.Contains(body, `"agent_policy"`) {
+	if strings.Contains(body, `"username":"bob"`) || !strings.Contains(body, `"agent_policy"`) {
 		t.Fatalf("non-owner view leaks grants: %s", body)
+	}
+}
+
+func TestUserSearchListsPeopleOnly(t *testing.T) {
+	e, idp := newOIDCEnv(t)
+	owner := e.login(idp, map[string]any{"sub": "o", "preferred_username": "owner", "groups": []string{"eng"}})
+	e.login(idp, map[string]any{"sub": "b", "preferred_username": "bob", "groups": []string{"sales"}})
+	code, body := e.do(owner, "GET", "/api/users?q=b", nil)
+	if code != 200 || !strings.Contains(body, `"username":"bob"`) || strings.Contains(body, "groups") || strings.Contains(body, "eng") || strings.Contains(body, "sales") {
+		t.Fatalf("%d %s", code, body)
 	}
 }
 

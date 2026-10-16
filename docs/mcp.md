@@ -119,7 +119,7 @@ The URL works once and expires after 10 minutes. A rejected file, for example HT
 
 ## Import from HedgeDoc
 
-`create_note` takes the fields an import needs: `alias` (the old document ID), `extra_aliases` (the other IDs), `created_at`, `updated_at`, `permissions` (a HedgeDoc 1 `hedgedoc_mode`, or explicit `everyone`, `signed_in`, `users` and `groups` levels) and `agent_policy`. `POST /api/notes` takes the same fields. [Import from HedgeDoc 1](import-hedgedoc.md) explains the IDs, the permission mapping and the links that keep working.
+`create_note` takes the fields an import needs: `alias` (the old document ID), `extra_aliases` (the other IDs), `created_at`, `updated_at`, `permissions` (a HedgeDoc 1 `hedgedoc_mode`, or explicit `everyone`, `signed_in` and `users` levels. A `groups` field is rejected) and `agent_policy`. `POST /api/notes` takes the same fields. [Import from HedgeDoc 1](import-hedgedoc.md) explains the IDs, the permission mapping and the links that keep working.
 
 ## Audit
 

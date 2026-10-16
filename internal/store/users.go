@@ -14,11 +14,12 @@ import (
 const LocalUserID = "local"
 
 type User struct {
-	ID          string   `json:"id"`
-	Username    string   `json:"username"`
-	DisplayName string   `json:"display_name"`
-	Email       string   `json:"email,omitempty"`
-	Groups      []string `json:"groups"`
+	ID          string `json:"id"`
+	Username    string `json:"username"`
+	DisplayName string `json:"display_name"`
+	Email       string `json:"email,omitempty"`
+	// Groups only set the admin flag. They are not shown to other people.
+	Groups []string `json:"-"`
 }
 
 func (s *Store) EnsureLocalUser(ctx context.Context) (*User, error) {
@@ -150,24 +151,6 @@ func (s *Store) SearchUsers(ctx context.Context, q string, limit int) ([]User, e
 			return nil, err
 		}
 		out = append(out, u)
-	}
-	return out, rows.Err()
-}
-
-// KnownGroups lists group names seen on any user, for the share dialog.
-func (s *Store) KnownGroups(ctx context.Context) ([]string, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT group_name FROM user_group ORDER BY group_name`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []string{}
-	for rows.Next() {
-		var g string
-		if err := rows.Scan(&g); err != nil {
-			return nil, err
-		}
-		out = append(out, g)
 	}
 	return out, rows.Err()
 }

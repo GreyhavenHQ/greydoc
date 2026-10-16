@@ -10,6 +10,7 @@ import (
 	"github.com/greyhavenhq/greydoc/internal/config"
 	"github.com/greyhavenhq/greydoc/internal/permission"
 	"github.com/greyhavenhq/greydoc/internal/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func TestHedgeDocModes(t *testing.T) {
@@ -70,6 +71,14 @@ func TestImportThroughMCP(t *testing.T) {
 	if strings.Contains(perms, "_everyone") {
 		t.Fatalf("protected note open to guests: %s", perms)
 	}
+	res, err := s.CallTool(context.Background(), &mcp.CallToolParams{Name: "create_note", Arguments: map[string]any{
+		"content": "x", "alias": "mcp-groups", "permissions": map[string]any{"groups": map[string]string{"eng": "read"}}}})
+	if err != nil || !res.IsError || !strings.Contains(res.Content[0].(*mcp.TextContent).Text, `"groups"`) {
+		t.Fatalf("create_note with groups: %v %+v", err, res)
+	}
+	if code, _ := e.do(owner, "GET", "/api/notes/mcp-groups", nil); code != 404 {
+		t.Fatalf("note with groups created: %d", code)
+	}
 	if code, body := e.do(carol, "GET", "/api/notes/SyJdkz5Jx", nil); code != 200 || !strings.Contains(body, `"level":"read"`) {
 		t.Fatalf("signed-in read: %d %s", code, body)
 	}
@@ -99,6 +108,13 @@ func TestImportValidation(t *testing.T) {
 		if code, body := e.do(nil, "POST", "/api/notes", req); code != 400 && code != 404 {
 			t.Errorf("%v: %d %s", req, code, body)
 		}
+	}
+	code, body := e.do(nil, "POST", "/api/notes", map[string]any{"content": "x", "alias": "with-groups", "permissions": map[string]any{"groups": map[string]string{"eng": "read"}}})
+	if code != 400 || !strings.Contains(body, "groups are not supported") {
+		t.Fatalf("groups: %d %s", code, body)
+	}
+	if code, _ := e.do(nil, "GET", "/api/notes/with-groups", nil); code != 404 {
+		t.Fatalf("note with groups created: %d", code)
 	}
 	if code, body := e.do(nil, "POST", "/api/notes", map[string]any{"content": "x", "alias": "kept-id", "created_at": "2020-05-06T07:08:09Z"}); code != 201 ||
 		!strings.Contains(body, `"created_at":"2020-05-06T07:08:09.000000Z"`) {

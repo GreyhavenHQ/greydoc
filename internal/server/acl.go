@@ -3,7 +3,6 @@ package server
 import (
 	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/greyhavenhq/greydoc/internal/permission"
 	"github.com/greyhavenhq/greydoc/internal/store"
@@ -47,13 +46,6 @@ func (s *Server) handleGetPermissions(w http.ResponseWriter, r *http.Request) {
 	if l < permission.Full {
 		// Only the owner sees who else has access. Others see the public grants and their own level.
 		v.ShareLinks, v.Users = nil, []store.UserGrant{}
-		public := []store.GroupGrant{}
-		for _, g := range v.Groups {
-			if g.Group == store.GroupEveryone || g.Group == store.GroupSignedIn {
-				public = append(public, g)
-			}
-		}
-		v.Groups = public
 	}
 	writeJSON(w, http.StatusOK, v)
 }
@@ -130,8 +122,8 @@ func (s *Server) handleGroupGrant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	group := r.PathValue("group")
-	if group == "" || (strings.HasPrefix(group, "_") && group != store.GroupEveryone && group != store.GroupSignedIn) {
-		writeError(w, http.StatusBadRequest, "bad_group", "unknown special group")
+	if group != store.GroupEveryone && group != store.GroupSignedIn {
+		writeError(w, http.StatusBadRequest, "bad_group", "share with people, signed-in users or anyone with the address")
 		return
 	}
 	if group == store.GroupEveryone && l > s.guestMax {
@@ -244,12 +236,7 @@ func (s *Server) handleSearchUsers(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	groups, err := s.store.KnownGroups(r.Context())
-	if err != nil {
-		internalError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"users": users, "groups": groups})
+	writeJSON(w, http.StatusOK, map[string]any{"users": users})
 }
 
 // handleResolveShare turns a short view-only link, /v/<token>, into the note it opens.

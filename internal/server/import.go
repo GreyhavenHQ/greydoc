@@ -29,7 +29,8 @@ type PermissionSpec struct {
 	Everyone     string            `json:"everyone,omitempty"`
 	SignedIn     string            `json:"signed_in,omitempty"`
 	Users        map[string]string `json:"users,omitempty"`
-	Groups       map[string]string `json:"groups,omitempty"`
+	// Groups is read only to reject it. Named groups are not supported.
+	Groups map[string]string `json:"groups,omitempty"`
 }
 
 var errBadSpec = errors.New("invalid document settings")
@@ -119,13 +120,8 @@ func (s *Server) noteFromSpec(ctx context.Context, id *Identity, spec NoteSpec) 
 				return nn, err
 			}
 		}
-		for g, lv := range p.Groups {
-			if g == "" || strings.HasPrefix(g, "_") {
-				return nn, badSpec("group %q: use everyone and signed_in for the special groups", g)
-			}
-			if nn.Groups[g], err = grantLevel(lv); err != nil {
-				return nn, err
-			}
+		if len(p.Groups) > 0 {
+			return nn, badSpec("groups are not supported: share with users, signed_in or everyone")
 		}
 		if len(p.Users) > 0 {
 			nn.Users = map[string]permission.Level{}

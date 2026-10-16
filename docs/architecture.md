@@ -46,7 +46,7 @@ AI actions in the editor never change text. They create suggestions with source 
 
 ## Access
 
-Levels are deny, read, comment, write and full (owner). A person gets the highest of their own grant, their groups' grants, the signed-in grant, and the everyone grant. Guests get the everyone grant, capped by `GREYDOC_GUEST_MAX` (default write). A view-only link gives read. Agents are also capped by the document's agent policy. In local mode every request has full access.
+Levels are deny, read, comment, write and full (owner). A person gets the highest of their own grant, the signed-in grant, and the everyone grant. OIDC groups give no document access. Guests get the everyone grant, capped by `GREYDOC_GUEST_MAX` (default write). A view-only link gives read. Agents are also capped by the document's agent policy. In local mode every request has full access.
 
 ## Trash and audit
 

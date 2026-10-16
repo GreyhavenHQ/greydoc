@@ -43,7 +43,7 @@ docker compose up -d greydoc
 | Tags | Add `tags: [design, q4]` to the front matter. Click a tag on the home page to filter. |
 | Link to a document | Type `[[` in the editor and pick a document. It inserts `[[alias|Title]]`: the address, then the link text, which you can edit. `[[alias]]` alone shows the current title of the document. |
 | Table of contents | On wide screens, the view page and the preview-only mode show the headings on the right, as in HedgeDoc: top-level headings, the open section, and "Expand all". `[toc]` in the text inserts a table of contents too. |
-| Protect a document | "Share" in the editor: people, groups, signed-in users, anyone with the address. Levels are view, comment and edit. |
+| Protect a document | "Share" in the editor: people, signed-in users, anyone with the address. Levels are view, comment and edit. |
 | Share with a client | "Share", then "New link". The short link `/v/<token>` opens the rendered document with no editor, comments or toolbar. Older `/s/<alias>?share=<token>` links keep working. |
 | Comment | Select text, press "Comment". |
 | Suggest | Select text, press "Suggest". People with comment access suggest each time they type. |
@@ -83,7 +83,7 @@ docker compose up -d greydoc
 
 | HedgeDoc 1 | greydoc | Notes |
 |---|---|---|
-| Permission modes (freely, editable, limited, locked, protected, private) | Different | Grants per person, group, signed-in users and anyone with the address, at view, comment or edit level. Each mode maps to grants, see [import](docs/import-hedgedoc.md). |
+| Permission modes (freely, editable, limited, locked, protected, private) | Different | Grants per person, signed-in users and anyone with the address, at view, comment or edit level. Each mode maps to grants, see [import](docs/import-hedgedoc.md). |
 | Owner | Same | The owner manages access and the trash. |
 | Guest editing | Same | The owner sets "Anyone with the address" to "Can edit". `GREYDOC_GUEST_MAX=read` turns it off. |
 | Real-time collaboration and cursors | Same | Yjs instead of OT. |
