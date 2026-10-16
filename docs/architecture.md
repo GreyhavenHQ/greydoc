@@ -44,6 +44,10 @@ Comment and suggestion anchors are Yjs relative positions, so they follow the te
 
 AI actions in the editor never change text. They create suggestions with source `ai_assisted`.
 
+## Mentions and notifications
+
+A mention is `[@Name](@username)`. The username identifies the person because it never changes after the first login. `internal/notemeta` parses mentions outside code and front matter. Comments, replies and suggestions notify the mentioned readers when they are created. For the text, `note_mention` holds the people the current text mentions. When the history processor stores a revision, the server notifies the people that the new text adds to that set, then replaces the set. Accepting a suggestion adds its mentions to the set, because those people were notified when it was made. Notifications are rows in `notification`. The browser polls them every minute. Local mode has no mentions and no notifications.
+
 ## Access
 
 Levels are deny, read, comment, write and full (owner). A person gets the highest of their own grant, the signed-in grant, and the everyone grant. OIDC groups give no document access. Guests get the everyone grant, capped by `GREYDOC_GUEST_MAX` (default write). A view-only link gives read. Agents are also capped by the document's agent policy. In local mode every request has full access.
