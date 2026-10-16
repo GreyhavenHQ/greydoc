@@ -537,6 +537,8 @@ export default function Editor() {
     const v = viewRef.current
     if (v && t.range) {
       v.dispatch({ selection: { anchor: t.range.from, head: t.range.to }, effects: CMView.scrollIntoView(t.range.from, { y: 'center' }) })
+    } else {
+      article.current?.querySelector(`[data-thread="${CSS.escape(t.id)}"]`)?.scrollIntoView({ block: 'center' })
     }
   }, [])
 
@@ -569,6 +571,21 @@ export default function Editor() {
       v.dispatch({ selection: { anchor: Math.max(0, from) }, effects: CMView.scrollIntoView(Math.max(0, from), { y: 'center' }) })
     }
   }, [threads, suggestions, loaded, me])
+
+  useEffect(() => {
+    const el = article.current
+    if (!el) return
+    const onClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (target.closest('a, input, button') || !document.getSelection()?.isCollapsed) return
+      const id = target.closest<HTMLElement>('[data-thread]')?.dataset.thread
+      if (!id) return
+      setActiveThread(id)
+      setCommentsOpen(true)
+    }
+    el.addEventListener('click', onClick)
+    return () => el.removeEventListener('click', onClick)
+  }, [previewEl])
 
   const editorExtensions = useMemo(
     () => [
