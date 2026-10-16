@@ -360,7 +360,7 @@ export function CommentsPanel({
           <ThreadCard key={t.id} alias={alias} thread={t} active={t.id === activeId} canModerate={canModerate} meId={meId} onSelect={() => onSelect(t)} onChanged={onChanged} onNoAccess={onNoAccess} />
         ))}
         {open.length === 0 && suggestions.length === 0 && !draft && (
-          <p className="px-1 text-sm text-muted-foreground">Select text in the editor and press Comment or Suggest.</p>
+          <p className="px-1 text-sm text-muted-foreground">Select text and press Comment or Suggest.</p>
         )}
         {resolved.length > 0 && (
           <button className="self-start px-1 text-xs text-muted-foreground hover:text-foreground" onClick={() => setShowResolved(!showResolved)}>

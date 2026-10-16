@@ -5,12 +5,10 @@ import {
   Columns2,
   Download,
   Eye,
-  FilePenLine,
   FileArchive,
   FileCode,
   History,
   MessageSquare,
-  MessageSquarePlus,
   MoreHorizontal,
   NotebookPen,
   Pencil,
@@ -46,6 +44,7 @@ import { Timeline } from '@/components/Timeline'
 import { CommentsPanel, type Draft, type Suggestion, type Thread } from '@/components/CommentsPanel'
 import { SuggestComposer, type SuggestDraft } from '@/components/SuggestComposer'
 import { AiMenu } from '@/components/AiMenu'
+import { SelectionToolbar, toolbarButton } from '@/components/SelectionToolbar'
 import { imageUpload } from '@/editor/upload'
 import { formatKeymap } from '@/editor/format'
 import { canToggleTasks } from '@/editor/live'
@@ -61,6 +60,8 @@ import { CodeEditor } from '@/editor/CodeEditor'
 import { NoteSession, type AppEvent } from '@/editor/session'
 import { Preview } from '@/render/Preview'
 import { atBottom, editorTopLine, lineForY, measure, scrollEditorToLine, yForLine, type Point } from '@/render/scrollSync'
+import { selectionToSource, type SourceSelection } from '@/render/sourceMap'
+import { applyThreadMarks, type PreviewThread } from '@/render/previewThreads'
 import { api, ApiError, atLeast, shareParam, withShare, type Level, type Note } from '@/lib/api'
 import { loginHref, useMe } from '@/lib/me'
 import { localName, presenceColor } from '@/lib/presence'
@@ -69,7 +70,12 @@ import { cn } from '@/lib/utils'
 import { shortDateTime } from '@/lib/time'
 import { modeFromKey, type Mode } from '@/lib/shortcuts'
 
-const toolbarButton = 'h-7 gap-1 px-2 text-background hover:bg-background/15 hover:text-background'
+interface PreviewSelection extends SourceSelection {
+  // top, left and bottom are relative to the preview pane's content.
+  top: number
+  left: number
+  bottom: number
+}
 
 const MODE_KEY = 'greydoc-mode'
 // Split view, as in HedgeDoc, until the user picks another mode.
@@ -182,12 +188,18 @@ export default function Editor() {
   const [selection, setSelection] = useState<SelectionInfo | null>(null)
   const [rawSuggestions, setRawSuggestions] = useState<Suggestion[]>([])
   const [suggestDraft, setSuggestDraft] = useState<SuggestDraft | null>(null)
+  const [previewSel, setPreviewSel] = useState<PreviewSelection | null>(null)
+  const [suggestTop, setSuggestTop] = useState(0)
   const viewRef = useRef<EditorView | null>(null)
+  // view follows viewRef so ranges reach an editor that mounts after a mode change.
+  const [view, setView] = useState<EditorView | null>(null)
   const sessionRef = useRef<NoteSession | null>(null)
   const previewPane = useRef<HTMLElement | null>(null)
   const article = useRef<HTMLElement | null>(null)
   const [previewEl, setPreviewEl] = useState<HTMLElement | null>(null)
   const text = useYText(session)
+  const textRef = useRef(text)
+  textRef.current = text
   const presence = usePresence(session)
 
   useEffect(() => {
@@ -444,7 +456,7 @@ export default function Editor() {
           })),
       ),
     })
-  }, [suggestions, level, me])
+  }, [suggestions, level, me, view])
 
   const threads = useMemo(
     () => (session ? rawThreads.map((t) => ({ ...t, range: resolveRange(session.doc, t.anchor_start, t.anchor_end) })) : rawThreads),
@@ -461,7 +473,64 @@ export default function Editor() {
           .map((t) => ({ id: t.id, from: t.range!.from, to: t.range!.to, active: t.id === activeThread, kind: 'comment' as const })),
       ),
     })
-  }, [threads, activeThread])
+  }, [threads, activeThread, view])
+
+  // previewOnly matches the layout below: no editor pane, only the rendered document.
+  const previewOnly = mode === 'view' || !atLeast(level, 'comment')
+  const live = Boolean(session && loaded)
+  const previewMarks = useMemo<PreviewThread[]>(
+    () =>
+      previewOnly && live
+        ? threads.filter((t) => t.status === 'open' && t.range).map((t) => ({ id: t.id, from: t.range!.from, to: t.range!.to, active: t.id === activeThread }))
+        : [],
+    [previewOnly, live, threads, activeThread],
+  )
+  const previewMarksRef = useRef(previewMarks)
+  previewMarksRef.current = previewMarks
+  const onPreviewRendered = useCallback(
+    (root: HTMLElement) => {
+      applyThreadMarks(root, textRef.current, previewMarksRef.current)
+      onPreviewLayout()
+    },
+    [onPreviewLayout],
+  )
+  useEffect(() => {
+    if (article.current) applyThreadMarks(article.current, textRef.current, previewMarks)
+  }, [previewMarks])
+
+  const commentInPreview = previewOnly && live && atLeast(level, 'comment')
+  useEffect(() => {
+    setPreviewSel(null)
+    if (!commentInPreview) return
+    let frame = 0
+    const onChange = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const art = article.current
+        const pane = previewPane.current
+        const sel = document.getSelection()
+        if (!art || !pane || !sel || sel.isCollapsed || !sel.rangeCount) return setPreviewSel(null)
+        const range = sel.getRangeAt(0)
+        const mapped = art.contains(range.commonAncestorContainer) ? selectionToSource(art, range, textRef.current) : null
+        if (!mapped) return setPreviewSel(null)
+        const box = range.getBoundingClientRect()
+        const host = pane.getBoundingClientRect()
+        const top = box.top - host.top + pane.scrollTop
+        const bottom = box.bottom - host.top + pane.scrollTop
+        setPreviewSel({
+          ...mapped,
+          top: top - 44 > pane.scrollTop + 4 ? top - 44 : bottom + 6,
+          left: Math.max(4, Math.min(box.left - host.left, host.width - 300)),
+          bottom,
+        })
+      })
+    }
+    document.addEventListener('selectionchange', onChange)
+    return () => {
+      cancelAnimationFrame(frame)
+      document.removeEventListener('selectionchange', onChange)
+    }
+  }, [commentInPreview])
 
   const selectThread = useCallback((t: Thread) => {
     setActiveThread(t.id)
@@ -471,10 +540,11 @@ export default function Editor() {
     }
   }, [])
 
-  const commentOn = useCallback((from: number, to: number) => {
+  // quote defaults to the source text. The preview passes the rendered text when the anchor covers whole blocks.
+  const commentOn = useCallback((from: number, to: number, quote?: string) => {
     const s = sessionRef.current
     if (!s) return
-    setDraft({ quote: s.text.toString().slice(from, to).slice(0, 2000), ...anchorRange(s.text, from, to) })
+    setDraft({ quote: (quote ?? s.text.toString().slice(from, to)).slice(0, 2000), ...anchorRange(s.text, from, to) })
     setCommentsOpen(true)
   }, [])
 
@@ -563,15 +633,10 @@ export default function Editor() {
     [session],
   )
 
-  const startSuggest = () => {
-    if (!session || !selection) return
-    setSuggestDraft({
-      from: selection.from,
-      to: selection.to,
-      original: selection.text,
-      proposed: selection.text,
-      ...anchorRange(session.text, selection.from, selection.to),
-    })
+  const startSuggest = (from: number, to: number) => {
+    if (!session) return
+    const original = session.text.toString().slice(from, to)
+    setSuggestDraft({ from, to, original, proposed: original, ...anchorRange(session.text, from, to) })
   }
 
   const startComment = () => {
@@ -620,6 +685,7 @@ export default function Editor() {
       editorCleanup.current?.()
       editorCleanup.current = undefined
       viewRef.current = v
+      setView(v)
       if (!v) return
       v.scrollDOM.addEventListener('scroll', onEditorScroll, { passive: true })
       const stop = scrollSource(v.dom, () => (source.current = 'editor'))
@@ -851,30 +917,12 @@ export default function Editor() {
           {showEditor && (
             <section className={cn('relative min-w-0 border-r', showPreview ? 'w-1/2' : 'w-full')}>
               {selection && atLeast(level, 'comment') && (
-                <div
-                  className="absolute z-20 flex items-center gap-0.5 rounded-lg bg-foreground p-1 text-background shadow-lg ring-1 ring-black/10"
-                  style={{ top: selection.top, left: Math.max(8, selection.left) }}
-                  data-testid="selection-toolbar"
-                  onMouseDown={(e) => e.preventDefault()}
+                <SelectionToolbar
+                  top={selection.top}
+                  left={selection.left}
+                  onComment={startComment}
+                  onSuggest={() => startSuggest(selection.from, selection.to)}
                 >
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className={toolbarButton}
-                    onClick={startComment}
-                    title="Comment: add a remark for others. The text does not change."
-                  >
-                    <MessageSquarePlus className="size-3.5" /> Comment
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className={toolbarButton}
-                    onClick={startSuggest}
-                    title="Suggest: propose new text. A writer accepts or rejects it."
-                  >
-                    <FilePenLine className="size-3.5" /> Suggest
-                  </Button>
                   {me?.ai_enabled && (
                     <AiMenu
                       triggerClassName={toolbarButton}
@@ -893,7 +941,7 @@ export default function Editor() {
                       }}
                     />
                   )}
-                </div>
+                </SelectionToolbar>
               )}
               {suggestDraft && note && (
                 <SuggestComposer
@@ -946,9 +994,32 @@ export default function Editor() {
               }}
               className={cn('relative min-w-0 overflow-y-auto bg-background', showEditor ? 'w-1/2' : 'w-full')}
             >
+              {previewSel && commentInPreview && !suggestDraft && (
+                <SelectionToolbar
+                  top={previewSel.top}
+                  left={previewSel.left}
+                  onComment={() => commentOn(previewSel.from, previewSel.to, previewSel.quote)}
+                  onSuggest={() => {
+                    setSuggestTop(previewSel.bottom + 8)
+                    startSuggest(previewSel.from, previewSel.to)
+                  }}
+                />
+              )}
+              {suggestDraft && !showEditor && (
+                <SuggestComposer
+                  alias={note.alias}
+                  draft={suggestDraft}
+                  top={suggestTop}
+                  onChange={(proposed) => setSuggestDraft({ ...suggestDraft, proposed })}
+                  onDone={(created) => {
+                    setSuggestDraft(null)
+                    if (created) loadSuggestions()
+                  }}
+                />
+              )}
               <WithToc show={!showEditor && !commentsOpen} scroller={previewEl}>
                 <div className="px-8 py-8">
-                  <Preview source={shown} ref={article} followHash onRendered={onPreviewLayout} onToggleTask={canEdit && ready ? toggleTask : undefined} />
+                  <Preview source={shown} ref={article} followHash onRendered={onPreviewRendered} onToggleTask={canEdit && ready ? toggleTask : undefined} />
                 </div>
               </WithToc>
             </section>
