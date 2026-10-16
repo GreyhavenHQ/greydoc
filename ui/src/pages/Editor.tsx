@@ -28,6 +28,7 @@ import { mentions } from '@/editor/mentions'
 import { offerAccess } from '@/components/Mentions'
 import { searchPeople } from '@/lib/mentions'
 import { UserMenu } from '@/components/AppHeader'
+import { NotificationBell } from '@/components/NotificationBell'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
@@ -843,6 +844,7 @@ export default function Editor() {
               )}
             </DropdownMenuContent>
           </DropdownMenu>
+          <NotificationBell />
           <UserMenu />
         </header>
         <main className="flex min-h-0 flex-1">
