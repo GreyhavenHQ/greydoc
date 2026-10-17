@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Textarea } from '@/components/ui/textarea'
 import { api } from '@/lib/api'
@@ -41,6 +41,7 @@ export function MentionTextarea({
   ...props
 }: TextareaProps & { value: string; onValueChange: (v: string) => void; alias?: string; onNoAccess?: (p: Person) => void }) {
   const ref = useRef<HTMLTextAreaElement | null>(null)
+  const caretAfterPick = useRef<number | null>(null)
   const [picker, setPicker] = useState<PickerState | null>(null)
   const [people, setPeople] = useState<Person[]>([])
   const [active, setActive] = useState(0)
@@ -64,6 +65,12 @@ export function MentionTextarea({
     }
   }, [query, alias])
 
+  useLayoutEffect(() => {
+    if (caretAfterPick.current === null || !ref.current) return
+    ref.current.setSelectionRange(caretAfterPick.current, caretAfterPick.current)
+    caretAfterPick.current = null
+  }, [value])
+
   const track = (text: string, caret: number) => setPicker((p) => (mentionsOn() ? nextPicker(p, text, caret) : null))
   const open = query !== null && people.length > 0
 
@@ -71,9 +78,9 @@ export function MentionTextarea({
     const el = ref.current
     if (!picker || !el) return
     const r = applyMention(value, picker.from, el.selectionStart, p)
+    caretAfterPick.current = r.caret
     onValueChange(r.text)
     setPicker(null)
-    requestAnimationFrame(() => el.setSelectionRange(r.caret, r.caret))
     if (p.can_read === false) onNoAccess?.(p)
   }
 
