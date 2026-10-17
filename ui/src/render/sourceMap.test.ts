@@ -98,7 +98,7 @@ describe('selectionToSource', () => {
     const m = selectionToSource(article, r, src)!
     expect(m.exact).toBe(false)
     expect(src.slice(m.from, m.to)).toBe('$$\n\\frac{a}{b}\n$$')
-    expect(m.quote).toBe(r.toString())
+    expect(m.quote).toBe('\\frac{a}{b}')
   })
   it('returns null outside source blocks', () => {
     const article = mount('text')

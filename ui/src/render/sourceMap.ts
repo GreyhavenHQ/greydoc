@@ -117,6 +117,18 @@ function offsetIn(u: Unit, container: Node, offset: number): number {
   return u.text.length
 }
 
+// visibleText is the selected text with each formula as its TeX source instead of its MathML and glyphs.
+function visibleText(range: Range): string {
+  const frag = range.cloneContents()
+  for (const k of frag.querySelectorAll('.katex')) {
+    // The sanitizer drops <annotation> but keeps its TeX as text directly under <math>.
+    const math = k.querySelector('math')
+    const tex = math ? Array.from(math.childNodes, (n) => (n.nodeType === Node.TEXT_NODE ? n.textContent : '')).join('').trim() : ''
+    k.replaceWith(tex || (k.querySelector('.katex-html')?.textContent ?? ''))
+  }
+  return frag.textContent ?? ''
+}
+
 export interface SourceSelection {
   from: number
   to: number
@@ -154,7 +166,7 @@ export function selectionToSource(article: HTMLElement, range: Range, source: st
   }
   const from = Math.min(ua.from, ub.from)
   const to = Math.max(ua.to, ub.to)
-  return from < to ? { from, to, exact: false, quote: range.toString() } : null
+  return from < to ? { from, to, exact: false, quote: visibleText(range) } : null
 }
 
 export interface RenderedPiece {

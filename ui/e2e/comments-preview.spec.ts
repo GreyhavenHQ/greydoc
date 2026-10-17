@@ -72,6 +72,7 @@ test('a comment on rendered math covers the whole block', async ({ page }) => {
   await openInPreview(page, alias)
   await selectInPreview(page, '', '.katex-display')
   await comment(page, 'Check the formula')
+  await expect(page.getByTestId('thread').locator('blockquote')).toHaveText('\\frac{a}{b}')
   await expect(page.locator('.preview-thread-block')).toHaveCount(1)
   await expect(page.locator('.preview-thread-block')).toHaveClass(/katex-block/)
   await page.keyboard.press('Control+Alt+KeyB')
