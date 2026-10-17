@@ -30,6 +30,7 @@ async function people(browser: Browser) {
 
 test('a mention in the text notifies once when the revision closes, and Esc keeps plain text', async ({ browser }) => {
   const { alice, bob } = await people(browser)
+  const before = await unread(alice)
   const alias = await newNote(bob, 'Hi ')
   await bob.request.put(`/api/notes/${alias}/permissions/users/alice`, { data: { level: 'comment' } })
   await bob.keyboard.type('@ali')
@@ -47,12 +48,12 @@ test('a mention in the text notifies once when the revision closes, and Esc keep
   await expect.poll(async () => (await bob.request.get(`/api/notes/${alias}/download.md`)).text()).toContain('Hi [@Alice Martin](@alice) and @ali')
   // Closing the last editor closes the revision at once.
   await bob.close()
-  await expect.poll(() => unread(alice), { timeout: 15_000 }).toBe(1)
+  await expect.poll(() => unread(alice), { timeout: 15_000 }).toBe(before + 1)
   await alice.reload()
-  await expect(alice.getByTestId('notification-count')).toHaveText('1')
+  await expect(alice.getByTestId('notification-count')).toHaveText(String(before + 1))
   await alice.getByTestId('notification-bell').click()
-  await expect(alice.getByTestId('notification')).toHaveCount(1)
-  await expect(alice.getByTestId('notification')).toContainText('Bob mentioned you in')
+  await expect(alice.getByTestId('notification').first()).toContainText('Bob mentioned you in')
+  await expect(alice.getByTestId('notification').first()).toHaveAttribute('href', `/n/${alias}?mention=1`)
 })
 
 test('a mention in a comment notifies at once and opens the thread', async ({ browser }) => {
