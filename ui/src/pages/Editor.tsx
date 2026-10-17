@@ -195,7 +195,7 @@ export default function Editor() {
         setNote(n)
         setLevel(n.level)
         if (!atLeast(n.level, 'comment')) setModeState('view')
-        if (n.alias !== alias.toLowerCase()) navigate('/n/' + n.alias + location.search, { replace: true })
+        if (n.alias !== alias.toLowerCase()) navigate('/n/' + n.alias + location.search + location.hash, { replace: true })
       })
       .catch((e: unknown) => {
         if (e instanceof ApiError && e.status === 401) {
@@ -909,7 +909,7 @@ export default function Editor() {
             >
               <WithToc show={!showEditor && !commentsOpen} scroller={previewEl}>
                 <div className="px-8 py-8">
-                  <Preview source={shown} ref={article} onRendered={onPreviewLayout} onToggleTask={canEdit && ready ? toggleTask : undefined} />
+                  <Preview source={shown} ref={article} followHash onRendered={onPreviewLayout} onToggleTask={canEdit && ready ? toggleTask : undefined} />
                 </div>
               </WithToc>
             </section>

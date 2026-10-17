@@ -62,7 +62,7 @@ export default function View({ alias: given }: { alias?: string } = {}) {
       <WithToc show>
         <div className="px-6 py-12">
           {exporting && <div className="mb-4 text-sm text-muted-foreground">Preparing the HTML file…</div>}
-          <Preview source={text} />
+          <Preview source={text} followHash />
         </div>
       </WithToc>
     </main>

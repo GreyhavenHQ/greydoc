@@ -3,7 +3,7 @@ import 'katex/dist/katex.min.css'
 import { renderMarkdown } from '@/render/markdown'
 import { hydrateMermaid } from '@/render/mermaid'
 import { hydrateNoteLinks } from '@/render/noteLinks'
-import { findHeading } from '@/render/headings'
+import { findHeading, scrollToHash } from '@/render/headings'
 import { toast } from 'sonner'
 import { useTheme } from '@/lib/theme'
 
@@ -13,10 +13,13 @@ interface PreviewProps {
   onRendered?: (root: HTMLElement) => void
   // onToggleTask makes task boxes clickable. It gets the box's zero-based source line.
   onToggleTask?: (line: number) => void
+  // followHash moves to the heading named in the address after a render, until the user scrolls.
+  followHash?: boolean
 }
 
-export const Preview = forwardRef<HTMLElement, PreviewProps>(function Preview({ source, className, onRendered, onToggleTask }, ref) {
+export const Preview = forwardRef<HTMLElement, PreviewProps>(function Preview({ source, className, onRendered, onToggleTask, followHash }, ref) {
   const root = useRef<HTMLElement | null>(null)
+  const pendingHash = useRef(Boolean(followHash && window.location.hash))
   const toggle = useRef(onToggleTask)
   toggle.current = onToggleTask
   const { resolvedTheme } = useTheme()
@@ -25,10 +28,37 @@ export const Preview = forwardRef<HTMLElement, PreviewProps>(function Preview({ 
     const el = root.current
     if (!el) return
     el.innerHTML = renderMarkdown(source).html
+    const toHash = () => {
+      if (pendingHash.current && el.isConnected) scrollToHash(el)
+    }
     void hydrateNoteLinks(el)
-    void hydrateMermaid(el, { mode: resolvedTheme }).then(() => onRendered?.(el))
+    void hydrateMermaid(el, { mode: resolvedTheme }).then(() => {
+      onRendered?.(el)
+      toHash()
+    })
     onRendered?.(el)
+    toHash()
   }, [source, resolvedTheme, onRendered])
+
+  // Late content such as diagrams moves the heading, so the hash wins until the user acts or 10 s pass.
+  useEffect(() => {
+    if (!followHash) return
+    const stop = () => {
+      pendingHash.current = false
+    }
+    const onHash = () => {
+      if (root.current) scrollToHash(root.current)
+    }
+    const events = ['wheel', 'touchstart', 'keydown', 'mousedown'] as const
+    events.forEach((t) => window.addEventListener(t, stop, { passive: true, capture: true }))
+    window.addEventListener('hashchange', onHash)
+    const timer = window.setTimeout(stop, 10_000)
+    return () => {
+      window.clearTimeout(timer)
+      events.forEach((t) => window.removeEventListener(t, stop, { capture: true }))
+      window.removeEventListener('hashchange', onHash)
+    }
+  }, [followHash])
 
   // Task boxes follow whether toggling is allowed, which can change without the text changing.
   const canToggle = Boolean(onToggleTask)
