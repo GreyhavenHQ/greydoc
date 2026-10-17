@@ -69,14 +69,19 @@ md.use(container, 'spoiler', {
   },
 })
 
+// KaTeX renders block math without the token's attributes.
+const defaultMath = md.renderer.rules.math_block!
+md.renderer.rules.math_block = (tokens, idx, options, env, self) =>
+  defaultMath(tokens, idx, options, env, self).replace(/^<p class="katex-block[^"]*"/, (m) => m + self.renderAttrs(tokens[idx]))
+
 const defaultFence = md.renderer.rules.fence!
 const fence: RendererRule = (tokens, idx, options, env, self) => {
   const token = tokens[idx]
   const info = token.info.trim()
   const lang = info.split(/\s+/)[0]
-  const line = token.attrGet('data-line') ?? ''
+  const lines = `data-line="${token.attrGet('data-line') ?? ''}" data-line-end="${token.attrGet('data-line-end') ?? ''}"`
   if (lang === 'mermaid') {
-    return `<div class="mermaid-block" data-line="${line}"><pre class="mermaid-source">${escapeHtml(token.content)}</pre></div>\n`
+    return `<div class="mermaid-block" ${lines}><pre class="mermaid-source">${escapeHtml(token.content)}</pre></div>\n`
   }
   if (lang === 'csvpreview') {
     const header = /header="?true"?/.test(info)
@@ -85,7 +90,7 @@ const fence: RendererRule = (tokens, idx, options, env, self) => {
     const cells = (r: string[], tag: string) => '<tr>' + r.map((c) => `<${tag}>${escapeHtml(c)}</${tag}>`).join('') + '</tr>'
     const head = header && rows.length ? `<thead>${cells(rows[0], 'th')}</thead>` : ''
     const body = (header ? rows.slice(1) : rows).map((r) => cells(r, 'td')).join('')
-    return `<table class="csv-table" data-line="${line}">${head}<tbody>${body}</tbody></table>\n`
+    return `<table class="csv-table" ${lines}>${head}<tbody>${body}</tbody></table>\n`
   }
   if (lang) {
     token.info = lang.replace(/=$/, '')

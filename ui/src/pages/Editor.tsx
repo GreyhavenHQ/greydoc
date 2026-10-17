@@ -53,7 +53,8 @@ import { attribution, setClients } from '@/editor/attribution'
 import { authorColor, sourceLabel, type NoteClient } from '@/lib/authors'
 import { CodeEditor } from '@/editor/CodeEditor'
 import { NoteSession, type AppEvent } from '@/editor/session'
-import { Preview, scrollToSourceLine } from '@/render/Preview'
+import { Preview } from '@/render/Preview'
+import { atBottom, editorTopLine, lineForY, measure, scrollEditorToLine, yForLine, type Point } from '@/render/scrollSync'
 import { api, ApiError, atLeast, shareParam, withShare, type Level, type Note } from '@/lib/api'
 import { loginHref, useMe } from '@/lib/me'
 import { localName, presenceColor } from '@/lib/presence'
@@ -136,6 +137,13 @@ async function searchNotes(query: string): Promise<NoteHit[]> {
   let { notes } = await api.get<{ notes: NoteHit[] }>('/api/notes?' + sp)
   if (!q && notes.length === 0) notes = (await api.get<{ notes: NoteHit[] }>('/api/notes?scope=all&limit=20')).notes
   return notes
+}
+
+// scrollSource calls take when the user starts to scroll or type in el.
+function scrollSource(el: HTMLElement, take: () => void) {
+  const events = ['pointerenter', 'pointerdown', 'wheel', 'touchstart', 'keydown', 'focusin']
+  for (const e of events) el.addEventListener(e, take, { passive: true })
+  return () => events.forEach((e) => el.removeEventListener(e, take))
 }
 
 export default function Editor() {
@@ -290,14 +298,58 @@ export default function Editor() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  const syncScroll = useCallback(() => {
+  // The reading position is a fractional source line. points maps it to the preview and is rebuilt after a layout change.
+  // Only the pane that the user last touched drives the other one, so a synced scroll does not sync back.
+  const position = useRef(0)
+  const points = useRef<Point[] | null>(null)
+  const source = useRef<'editor' | 'preview'>('editor')
+  const layoutFrame = useRef(0)
+  const editorCleanup = useRef<() => void>(undefined)
+  const shownLines = useRef(1)
+  const lineCount = useCallback(() => viewRef.current?.state.doc.lines ?? shownLines.current, [])
+  const previewPoints = useCallback(() => {
+    const pane = previewPane.current
+    if (!pane || !article.current) return null
+    points.current ??= measure(pane, article.current, lineCount())
+    return points.current
+  }, [lineCount])
+  const syncPreview = useCallback(() => {
+    const p = previewPoints()
+    if (p) previewPane.current!.scrollTop = yForLine(p, position.current)
+  }, [previewPoints])
+  const onEditorScroll = useCallback(() => {
     const v = viewRef.current
-    if (!v || !previewPane.current || !article.current) return
-    const block = v.lineBlockAtHeight(v.scrollDOM.scrollTop - v.documentTop + v.scrollDOM.getBoundingClientRect().top)
-    const line = v.state.doc.lineAt(block.from).number - 1
-    const fraction = block.height ? (v.scrollDOM.scrollTop - block.top) / block.height : 0
-    scrollToSourceLine(previewPane.current, article.current, line, Math.max(0, Math.min(1, fraction)))
-  }, [])
+    if (!v || (source.current !== 'editor' && previewPane.current)) return
+    position.current = atBottom(v.scrollDOM) ? v.state.doc.lines : editorTopLine(v)
+    syncPreview()
+  }, [syncPreview])
+  const onPreviewScroll = useCallback(() => {
+    const p = previewPoints()
+    const pane = previewPane.current
+    const v = viewRef.current
+    if (!p || !pane || (source.current !== 'preview' && v)) return
+    position.current = atBottom(pane) ? lineCount() : lineForY(p, pane.scrollTop)
+    if (v) scrollEditorToLine(v, position.current)
+  }, [previewPoints, lineCount])
+  const onPreviewLayout = useCallback(() => {
+    points.current = null
+    cancelAnimationFrame(layoutFrame.current)
+    layoutFrame.current = requestAnimationFrame(syncPreview)
+  }, [syncPreview])
+
+  useEffect(() => {
+    if (!previewEl) return
+    const ro = new ResizeObserver(onPreviewLayout)
+    ro.observe(previewEl)
+    if (article.current) ro.observe(article.current)
+    previewEl.addEventListener('scroll', onPreviewScroll, { passive: true })
+    const stop = scrollSource(previewEl, () => (source.current = 'preview'))
+    return () => {
+      ro.disconnect()
+      previewEl.removeEventListener('scroll', onPreviewScroll)
+      stop()
+    }
+  }, [previewEl, onPreviewLayout, onPreviewScroll])
 
   const loadThreads = useCallback(() => {
     if (!note) return
@@ -523,10 +575,21 @@ export default function Editor() {
 
   const onView = useCallback(
     (v: EditorView | null) => {
+      editorCleanup.current?.()
+      editorCleanup.current = undefined
       viewRef.current = v
-      v?.scrollDOM.addEventListener('scroll', syncScroll, { passive: true })
+      if (!v) return
+      v.scrollDOM.addEventListener('scroll', onEditorScroll, { passive: true })
+      const stop = scrollSource(v.dom, () => (source.current = 'editor'))
+      // A newly shown editor opens at the reading position.
+      const restore = position.current
+      requestAnimationFrame(() => scrollEditorToLine(v, restore))
+      editorCleanup.current = () => {
+        v.scrollDOM.removeEventListener('scroll', onEditorScroll)
+        stop()
+      }
     },
-    [syncScroll],
+    [onEditorScroll],
   )
 
   const trashNote = async () => {
@@ -578,6 +641,7 @@ export default function Editor() {
   // once it arrives, so the preview does not render again.
   const ready = Boolean(session && loaded)
   const shown = ready ? text : (note.content ?? '')
+  shownLines.current = shown.split('\n').length
 
   const showEditor = mode !== 'view' && atLeast(level, 'comment')
   const showPreview = (mode !== 'edit' && mode !== 'live') || !atLeast(level, 'comment')
@@ -840,7 +904,7 @@ export default function Editor() {
             >
               <WithToc show={!showEditor && !commentsOpen} scroller={previewEl}>
                 <div className="px-8 py-8">
-                  <Preview source={shown} ref={article} onToggleTask={canEdit && ready ? toggleTask : undefined} />
+                  <Preview source={shown} ref={article} onRendered={onPreviewLayout} onToggleTask={canEdit && ready ? toggleTask : undefined} />
                 </div>
               </WithToc>
             </section>

@@ -20,7 +20,7 @@ describe('markdown extensions', () => {
   })
   it('renders GFM tables and strikethrough', () => {
     const out = html('| a | b |\n|---|---|\n| 1 | 2 |\n\n~~gone~~')
-    expect(out).toContain('<table data-line="0">')
+    expect(out).toContain('<table data-line="0" data-line-end="3">')
     expect(out).toContain('<td>1</td>')
     expect(out).toContain('<s>gone</s>')
   })
@@ -78,7 +78,7 @@ describe('markdown extensions', () => {
     expect(out).toContain('<ins>new</ins>')
     expect(out).toContain('footnote')
     expect(out).toContain('<abbr title="Hyper Text">HTML</abbr>')
-    expect(out).toContain('<dt>Term</dt>')
+    expect(out).toMatch(/<dt[^>]*>Term<\/dt>/)
   })
   it('turns mermaid fences into placeholders with the source', () => {
     const out = html('```mermaid\ngraph TD; A-->B\n```')
@@ -87,9 +87,23 @@ describe('markdown extensions', () => {
   })
   it('marks block elements with their source line', () => {
     const out = html('# A\n\npara\n\n- item')
-    expect(out).toMatch(/<h1[^>]* data-line="0"/)
-    expect(out).toContain('<p data-line="2"')
-    expect(out).toContain('<ul data-line="4"')
+    expect(out).toMatch(/<h1[^>]* data-line="0" data-line-end="1"/)
+    expect(out).toContain('<p data-line="2" data-line-end="3"')
+    expect(out).toContain('<ul data-line="4" data-line-end="5"')
+  })
+  it('marks table rows and nested blocks with their source lines', () => {
+    const table = html('| a |\n|---|\n| 1 |\n| 2 |')
+    expect(table).toContain('<tr data-line="0" data-line-end="1">')
+    expect(table).toContain('<tr data-line="3" data-line-end="4">')
+    expect(html('> one\n>\n> two')).toContain('<p data-line="2" data-line-end="3">two</p>')
+    expect(html(':::info\nfirst\n\nsecond\n:::')).toContain('<p data-line="3" data-line-end="4">second</p>')
+    expect(html('> [!NOTE]\n> first\n>\n> second')).toContain('<p data-line="3" data-line-end="4">second</p>')
+  })
+  it('marks the start and the end of math, code and diagrams', () => {
+    expect(html('$$\nx^2\n$$')).toMatch(/<p class="katex-block" data-line="0" data-line-end="3"/)
+    expect(html('```js\nlet a\n```')).toContain('data-line="0" data-line-end="3"')
+    expect(html('text\n\n```mermaid\ngraph TD; A-->B\n```')).toContain('<div class="mermaid-block" data-line="2" data-line-end="5">')
+    expect(html('```csvpreview\na,b\n```')).toContain('<table class="csv-table" data-line="0" data-line-end="3">')
   })
   it('hides front matter and returns it', () => {
     const r = renderMarkdown('---\ntitle: X\ntags: [a]\n---\n# Body')

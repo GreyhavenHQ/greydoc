@@ -8,15 +8,15 @@ export function slugify(s: string): string {
     .replace(/\s+/g, '-')
 }
 
-// sourceLines puts data-line on block tokens, for scroll sync and comment anchoring.
+const leafBlocks = new Set(['fence', 'code_block', 'hr', 'html_block', 'math_block'])
+
+// sourceLines puts data-line and data-line-end on block tokens at every depth, for scroll sync, comments and tasks.
 export function sourceLines(md: MarkdownIt, offset: () => number) {
   md.core.ruler.push('source_lines', (state: StateCore) => {
     for (const t of state.tokens) {
-      const block = t.level === 0 && (t.nesting === 1 || t.type === 'fence' || t.type === 'code_block' || t.type === 'hr' || t.type === 'html_block')
-      // List items at any depth carry their line too, so a task box can be toggled in the source.
-      if (t.map && (block || t.type === 'list_item_open')) {
-        t.attrSet('data-line', String(t.map[0] + offset()))
-      }
+      if (!t.map || !(t.nesting === 1 || leafBlocks.has(t.type))) continue
+      t.attrSet('data-line', String(t.map[0] + offset()))
+      t.attrSet('data-line-end', String(t.map[1] + offset()))
     }
   })
 }
