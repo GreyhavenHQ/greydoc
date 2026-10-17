@@ -176,7 +176,7 @@ function ThreadCard({
           detached && 'line-through',
         )}
       >
-        {thread.quote || '…'}
+        {thread.quote ? <MentionText text={thread.quote} /> : '…'}
       </blockquote>
       {detached && <div className="mb-2 text-[11px] text-muted-foreground">The commented text was removed.</div>}
       <div className="flex flex-col gap-3">
@@ -324,7 +324,7 @@ export function CommentsPanel({
         {draft && canComment && (
           <div className="rounded-lg border border-primary/60 bg-card p-3">
             <blockquote className="mb-2 line-clamp-3 border-l-2 border-yellow-500/70 pl-2 text-xs text-muted-foreground">
-              {draft.quote}
+              <MentionText text={draft.quote} />
             </blockquote>
             <MentionTextarea
               autoFocus
