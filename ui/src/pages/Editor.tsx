@@ -23,6 +23,7 @@ import { toast } from 'sonner'
 import { Logo } from '@/components/Logo'
 import { WithToc } from '@/components/TocSidebar'
 import { noteLinkCompletion, type NoteHit } from '@/editor/noteLinks'
+import { noteInfo } from '@/render/noteLinks'
 import { UserMenu } from '@/components/AppHeader'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
@@ -477,7 +478,7 @@ export default function Editor() {
         setCommentsOpen(true)
       }),
       selectionListener(setSelection),
-      noteLinkCompletion(searchNotes, () => aliasRef.current),
+      noteLinkCompletion(searchNotes, () => aliasRef.current, (a) => noteInfo(a).then((i) => i?.headings ?? [])),
       imageUpload(
         () => aliasRef.current,
         () => canEditRef.current,
