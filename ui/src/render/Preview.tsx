@@ -3,6 +3,8 @@ import 'katex/dist/katex.min.css'
 import { renderMarkdown } from '@/render/markdown'
 import { hydrateMermaid } from '@/render/mermaid'
 import { hydrateNoteLinks } from '@/render/noteLinks'
+import { findHeading } from '@/render/headings'
+import { toast } from 'sonner'
 import { useTheme } from '@/lib/theme'
 
 interface PreviewProps {
@@ -48,8 +50,27 @@ export const Preview = forwardRef<HTMLElement, PreviewProps>(function Preview({ 
       const line = box.closest('li[data-line]')?.getAttribute('data-line')
       if (toggle.current && line != null) toggle.current(Number(line))
     }
+    // Links inside the page set the hash without a navigation, so the router keeps its state.
+    const jump = (e: MouseEvent) => {
+      const a = (e.target as HTMLElement).closest<HTMLAnchorElement>('a[href^="#"]')
+      if (!a || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+      const target = findHeading(el, a.getAttribute('href')!)
+      if (!target) return
+      e.preventDefault()
+      const url = new URL(window.location.href)
+      url.hash = target.id
+      window.history.replaceState(window.history.state, '', url)
+      target.scrollIntoView({ block: 'start' })
+      if (a.classList.contains('header-anchor')) {
+        navigator.clipboard?.writeText(url.href).then(() => toast.success('Link copied'), () => {})
+      }
+    }
     el.addEventListener('click', stop)
-    return () => el.removeEventListener('click', stop)
+    el.addEventListener('click', jump)
+    return () => {
+      el.removeEventListener('click', stop)
+      el.removeEventListener('click', jump)
+    }
   }, [])
 
   return (
