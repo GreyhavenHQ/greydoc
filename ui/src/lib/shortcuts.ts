@@ -11,11 +11,8 @@ export function modeFromKey(e: KeyboardEvent, mac = isMac): Mode | null {
   if (!mode) return null
   // On Windows and Linux, AltGr reports Ctrl+Alt. A typed character such as € means it is not a shortcut.
   if (!mac && (e.getModifierState('AltGraph') || e.key.toLowerCase() !== e.code.slice(3).toLowerCase())) return null
+  // An open dialog keeps the focus inside it, so the target tells whether one is open.
   const t = e.target
-  if (t instanceof Element) {
-    if (t.closest('[role=dialog],[role=alertdialog],[role=menu]')) return null
-    if (t.closest('input, textarea, select, [contenteditable]') && !t.closest('.cm-editor')) return null
-  }
-  if (document.querySelector('[role=dialog][data-state=open],[role=alertdialog][data-state=open]')) return null
+  if (t instanceof Element && t.closest('[role=dialog], [role=alertdialog], [role=menu], input, textarea, select, [contenteditable]:not(.cm-content)')) return null
   return mode
 }

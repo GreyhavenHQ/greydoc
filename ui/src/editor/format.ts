@@ -1,19 +1,7 @@
-import { EditorSelection, Prec, type ChangeSpec, type EditorState, type Extension, type StateCommand, type Text, type Transaction } from '@codemirror/state'
+import { EditorSelection, Prec, type ChangeSpec, type EditorState, type Extension, type StateCommand, type Transaction } from '@codemirror/state'
 import { keymap, type KeyBinding } from '@codemirror/view'
 
 const userEvent = 'input.format'
-
-function runLeft(doc: Text, pos: number, ch: string): number {
-  let n = 0
-  while (pos - n > 0 && doc.sliceString(pos - n - 1, pos - n) === ch) n++
-  return n
-}
-
-function runRight(doc: Text, pos: number, ch: string): number {
-  let n = 0
-  while (pos + n < doc.length && doc.sliceString(pos + n, pos + n + 1) === ch) n++
-  return n
-}
 
 // fits tells whether a run of marker characters closes this marker: * is a run of 1 or 3, ** a run of 2 or more.
 function fits(marker: string, run: number): boolean {
@@ -21,7 +9,7 @@ function fits(marker: string, run: number): boolean {
   return run >= marker.length
 }
 
-function countRun(s: string, ch: string, fromEnd: boolean): number {
+function countRun(s: string, ch: string, fromEnd = false): number {
   let n = 0
   while (n < s.length && s[fromEnd ? s.length - 1 - n : n] === ch) n++
   return n
@@ -34,8 +22,9 @@ export function toggleWrap(marker: string): StateCommand {
   return ({ state, dispatch }) => {
     if (state.readOnly) return false
     const tr = state.changeByRange((r) => {
-      const doc = state.doc
-      if (fits(marker, runLeft(doc, r.from, ch)) && fits(marker, runRight(doc, r.to, ch))) {
+      const before = state.sliceDoc(Math.max(0, r.from - 4), r.from)
+      const after = state.sliceDoc(r.to, r.to + 4)
+      if (fits(marker, countRun(before, ch, true)) && fits(marker, countRun(after, ch))) {
         return {
           changes: [
             { from: r.from - n, to: r.from },
@@ -45,15 +34,15 @@ export function toggleWrap(marker: string): StateCommand {
         }
       }
       const text = state.sliceDoc(r.from, r.to)
-      const lead = countRun(text, ch, false)
+      const lead = countRun(text, ch)
       if (text.length >= 2 * n && lead < text.length && fits(marker, lead) && fits(marker, countRun(text, ch, true))) {
-        const back = r.anchor > r.head
+        const end = (p: number) => (p === r.from ? p : p - 2 * n)
         return {
           changes: [
             { from: r.from, to: r.from + n },
             { from: r.to - n, to: r.to },
           ],
-          range: back ? EditorSelection.range(r.to - 2 * n, r.from) : EditorSelection.range(r.from, r.to - 2 * n),
+          range: EditorSelection.range(end(r.anchor), end(r.head)),
         }
       }
       return {

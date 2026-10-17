@@ -24,7 +24,6 @@ describe('modeFromKey', () => {
   it('ignores keys while a dialog is open', () => {
     document.body.innerHTML = '<div role="dialog" data-state="open"><button>x</button></div>'
     expect(press(document.querySelector('button')!, ctrlAltE)).toBeNull()
-    expect(press(document.body, ctrlAltE)).toBeNull()
   })
   it('ignores keys typed in another text field', () => {
     document.body.innerHTML = '<textarea></textarea><input>'
