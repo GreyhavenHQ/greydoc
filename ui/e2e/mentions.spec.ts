@@ -15,6 +15,7 @@ async function signIn(browser: Browser, user: string): Promise<Page> {
 async function newNote(page: Page, text: string): Promise<string> {
   await page.goto('/new')
   await expect(page).toHaveURL(/\/n\/[a-z0-9]+$/)
+  await expect(page.locator('[data-testid=editor] .cm-content')).toBeFocused()
   await page.keyboard.type(text)
   return new URL(page.url()).pathname.split('/').pop()!
 }
