@@ -195,3 +195,16 @@
 .markdown-body a.note-link::before { content: '↗ '; font-size: 0.8em; opacity: 0.6; }
 .markdown-body a.note-link:hover { border-bottom-color: rgb(var(--primary)); }
 .markdown-body a.note-link-missing { color: rgb(var(--muted-foreground)); border-bottom-style: dashed; }
+
+/* Heading links: an icon left of the heading, shown on hover. */
+.markdown-body :is(h1, h2, h3, h4, h5, h6) { position: relative; }
+.markdown-body a.header-anchor {
+  position: absolute; left: -1.1em; top: 50%; transform: translateY(-50%); width: 0.8em; height: 0.8em; opacity: 0;
+  background: rgb(var(--muted-foreground)); transition: opacity 0.15s;
+  -webkit-mask: var(--link-icon) center / contain no-repeat; mask: var(--link-icon) center / contain no-repeat;
+  --link-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'/%3E%3Cpath d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'/%3E%3C/svg%3E");
+}
+.markdown-body :is(h1, h2, h3, h4, h5, h6):hover > a.header-anchor, .markdown-body a.header-anchor:focus-visible { opacity: 1; }
+.markdown-body a.header-anchor:hover { background: rgb(var(--primary)); }
+.greydoc-deck a.header-anchor { display: none; }
+@media print { .markdown-body a.header-anchor { display: none; } }

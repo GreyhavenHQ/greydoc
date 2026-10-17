@@ -35,6 +35,11 @@ describe('markdown extensions', () => {
     expect(out).toContain('class="toc"')
     expect(out).toContain('href="#second-part"')
   })
+  it('puts a link icon with no text in each heading', () => {
+    const out = html('[toc]\n\n## Second part')
+    expect(out).toMatch(/<h2 id="second-part"[^>]*><a class="header-anchor" href="#second-part" aria-label="Link to this section"><\/a>Second part<\/h2>/)
+    expect(out).toContain('<a href="#second-part">Second part</a>')
+  })
   it('renders HedgeDoc containers and spoilers', () => {
     const out = html(':::warning\nCareful\n:::\n\n:::spoiler Click me\nhidden\n:::')
     expect(out).toContain('class="alert alert-warning"')

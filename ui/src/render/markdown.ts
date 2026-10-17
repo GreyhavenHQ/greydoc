@@ -36,7 +36,17 @@ function highlight(code: string, lang: string): string {
 
 const md: MarkdownIt = new MarkdownItCallable({ html: true, linkify: true, typographer: false, breaks: true, highlight })
 
-md.use(anchor, { slugify, tabIndex: false })
+// The icon is drawn by CSS. An empty link keeps heading text clean for the TOC and comment anchors.
+md.use(anchor, {
+  slugify,
+  tabIndex: false,
+  permalink: anchor.permalink.linkInsideHeader({
+    symbol: '',
+    space: false,
+    placement: 'before',
+    renderAttrs: () => ({ 'aria-label': 'Link to this section' }),
+  }),
+})
 md.use(taskLists, { enabled: false, label: true })
 md.use(emoji)
 md.use(footnote)
