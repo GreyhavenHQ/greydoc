@@ -26,7 +26,31 @@ The buttons at the top of a document switch the mode:
 | Split (default) | The text and the preview side by side | Ctrl+Alt+B |
 | Preview | The rendered document only | Ctrl+Alt+V |
 
-On a Mac, use Cmd in place of Ctrl. The address can also set the mode: `?edit`, `?both` or `?view`.
+On a Mac, use Cmd in place of Ctrl. The address can also set the mode: `?edit`, `?both` or `?view`. The mode keys do nothing while a dialog is open or while you type in another text field.
+
+### Editor shortcuts
+
+These keys work while the editor has focus, in Live, Editor and Split modes. Press the same key again to remove the formatting. If you can only comment, the key opens a suggestion with the formatted text.
+
+| Shortcut | Action | Markdown |
+|---|---|---|
+| Ctrl+B | Bold | `**text**` |
+| Ctrl+I | Italic | `*text*` |
+| Ctrl+U | Underline | `++text++` |
+| Ctrl+Shift+X | Strikethrough | `~~text~~` |
+| Ctrl+Shift+H | Highlight | `==text==` |
+| Ctrl+E | Inline code | `` `text` `` |
+| Ctrl+. | Superscript | `^text^` |
+| Ctrl+, | Subscript | `~text~` |
+| Ctrl+K | Link | `[text](url)` |
+| Ctrl+Alt+1 to 6 | Heading 1 to 6 | `#` to `######` |
+| Ctrl+Alt+0 | Normal text | |
+| Ctrl+Shift+7 | Numbered list | `1.` |
+| Ctrl+Shift+8 | Bulleted list | `-` |
+| Ctrl+Shift+9 | Task list | `- [ ]` |
+| Ctrl+Alt+M | Comment on the selection | |
+
+Ctrl+S does nothing: greydoc saves as you type. On a Mac, use Cmd in place of Ctrl.
 
 ### Live mode
 

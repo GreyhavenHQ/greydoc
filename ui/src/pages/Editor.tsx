@@ -42,6 +42,7 @@ import { CommentsPanel, type Draft, type Suggestion, type Thread } from '@/compo
 import { SuggestComposer, type SuggestDraft } from '@/components/SuggestComposer'
 import { AiMenu } from '@/components/AiMenu'
 import { imageUpload } from '@/editor/upload'
+import { formatKeymap } from '@/editor/format'
 import { canToggleTasks } from '@/editor/live'
 import { taskToggle } from '@/lib/tasks'
 import { captureEdits, setSuggestionRanges, suggestionDecorations, type SuggestionAction } from '@/editor/suggestions'
@@ -61,8 +62,7 @@ import { localName, presenceColor } from '@/lib/presence'
 import { extractTitle, isSlides } from '@/lib/meta'
 import { cn } from '@/lib/utils'
 import { shortDateTime } from '@/lib/time'
-
-type Mode = 'live' | 'edit' | 'both' | 'view'
+import { modeFromKey, type Mode } from '@/lib/shortcuts'
 
 const toolbarButton = 'h-7 gap-1 px-2 text-background hover:bg-background/15 hover:text-background'
 
@@ -287,8 +287,7 @@ export default function Editor() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || !e.altKey) return
-      const next = ({ KeyL: 'live', KeyE: 'edit', KeyB: 'both', KeyV: 'view' } as Record<string, Mode>)[e.code]
+      const next = modeFromKey(e)
       if (next) {
         e.preventDefault()
         setMode(next)
@@ -463,8 +462,16 @@ export default function Editor() {
     }
   }, [])
 
+  const commentOn = useCallback((from: number, to: number) => {
+    const s = sessionRef.current
+    if (!s) return
+    setDraft({ quote: s.text.toString().slice(from, to).slice(0, 2000), ...anchorRange(s.text, from, to) })
+    setCommentsOpen(true)
+  }, [])
+
   const editorExtensions = useMemo(
     () => [
+      formatKeymap({ onComment: commentOn }),
       threadDecorations((id) => {
         setActiveThread(id)
         setCommentsOpen(true)
@@ -503,7 +510,7 @@ export default function Editor() {
         },
       ),
     ],
-    [],
+    [commentOn],
   )
 
   const toggleTask = useCallback(
@@ -531,9 +538,7 @@ export default function Editor() {
   }
 
   const startComment = () => {
-    if (!session || !selection) return
-    setDraft({ quote: selection.text.slice(0, 2000), ...anchorRange(session.text, selection.from, selection.to) })
-    setCommentsOpen(true)
+    if (selection) commentOn(selection.from, selection.to)
   }
 
   const loadClients = useCallback(() => {

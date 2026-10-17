@@ -53,14 +53,44 @@ const sections: { id: string; label: string; entries: Entry[] }[] = [
   },
 ]
 
-const shortcuts: [string[], string][] = [
-  [['Ctrl', 'Alt', 'L'], 'Live mode: Markdown renders as you type'],
-  [['Ctrl', 'Alt', 'E'], 'Editor only'],
-  [['Ctrl', 'Alt', 'B'], 'Editor and preview side by side'],
-  [['Ctrl', 'Alt', 'V'], 'Preview only'],
-  [['Select text'], 'Comment, suggest a change or ask the AI'],
-  [['Esc'], 'In slide mode: show all slides'],
-  [['D'], 'In slide mode: switch between light and dark'],
+const shortcuts: { label: string; rows: [string[], string][] }[] = [
+  {
+    label: 'Formatting',
+    rows: [
+      [['Ctrl', 'B'], 'Bold'],
+      [['Ctrl', 'I'], 'Italic'],
+      [['Ctrl', 'U'], 'Underline'],
+      [['Ctrl', 'Shift', 'X'], 'Strikethrough'],
+      [['Ctrl', 'Shift', 'H'], 'Highlight'],
+      [['Ctrl', 'E'], 'Inline code'],
+      [['Ctrl', '.'], 'Superscript'],
+      [['Ctrl', ','], 'Subscript'],
+      [['Ctrl', 'K'], 'Link'],
+    ],
+  },
+  {
+    label: 'Lines',
+    rows: [
+      [['Ctrl', 'Alt', '1–6'], 'Heading 1 to 6'],
+      [['Ctrl', 'Alt', '0'], 'Normal text'],
+      [['Ctrl', 'Shift', '7'], 'Numbered list'],
+      [['Ctrl', 'Shift', '8'], 'Bulleted list'],
+      [['Ctrl', 'Shift', '9'], 'Task list'],
+    ],
+  },
+  {
+    label: 'Document',
+    rows: [
+      [['Ctrl', 'Alt', 'M'], 'Comment on the selection'],
+      [['Ctrl', 'Alt', 'L'], 'Live mode: Markdown renders as you type'],
+      [['Ctrl', 'Alt', 'E'], 'Editor only'],
+      [['Ctrl', 'Alt', 'B'], 'Editor and preview side by side'],
+      [['Ctrl', 'Alt', 'V'], 'Preview only'],
+      [['Select text'], 'Comment, suggest a change or ask the AI'],
+      [['Esc'], 'In slide mode: show all slides'],
+      [['D'], 'In slide mode: switch between light and dark'],
+    ],
+  },
 ]
 
 function Row({ entry }: { entry: Entry }) {
@@ -120,17 +150,24 @@ export function SyntaxHelp({ open, onOpenChange }: { open: boolean; onOpenChange
               </TabsContent>
             ))}
             <TabsContent value="keys">
-              {shortcuts.map(([keys, what]) => (
-                <div key={what} className="flex items-center gap-4 border-b py-2.5 text-sm last:border-0">
-                  <span className="flex w-44 shrink-0 gap-1">
-                    {keys.map((k) => (
-                      <Kbd key={k}>{k}</Kbd>
-                    ))}
-                  </span>
-                  <span>{what}</span>
-                </div>
+              {shortcuts.map((g) => (
+                <section key={g.label} className="pb-3">
+                  <h3 className="pt-2 pb-1 text-xs font-medium text-muted-foreground">{g.label}</h3>
+                  {g.rows.map(([keys, what]) => (
+                    <div key={what} className="flex items-center gap-4 border-b py-2.5 text-sm last:border-0">
+                      <span className="flex w-44 shrink-0 gap-1">
+                        {keys.map((k) => (
+                          <Kbd key={k}>{k}</Kbd>
+                        ))}
+                      </span>
+                      <span>{what}</span>
+                    </div>
+                  ))}
+                </section>
               ))}
-              <p className="pt-3 text-xs text-muted-foreground">On a Mac, Cmd works in place of Ctrl.</p>
+              <p className="pt-3 text-xs text-muted-foreground">
+                Formatting and line keys work while the editor has focus. Press the same key again to remove the formatting. On a Mac, Cmd works in place of Ctrl.
+              </p>
             </TabsContent>
           </div>
         </Tabs>
