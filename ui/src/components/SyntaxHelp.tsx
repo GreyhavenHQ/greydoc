@@ -17,7 +17,11 @@ const sections: { id: string; label: string; entries: Entry[] }[] = [
       { label: 'Lists', src: '- item\n  - nested item\n1. first\n2. second' },
       { label: 'Tasks', src: '- [x] done\n- [ ] to do' },
       { label: 'Links', src: '[greydoc](https://example.com)\n<https://example.com>' },
-      { label: 'Other documents', src: '[[q4-roadmap|the roadmap]]\n[[q4-roadmap]]\n\nType [[ in the editor to search documents. The part after | is the link text.' },
+      { label: 'Links to headings', src: '## Release plan\n\n[See the plan](#release-plan)\n\nPut the pointer on a heading and click the link icon to copy its address.' },
+      {
+        label: 'Other documents',
+        src: '[[q4-roadmap|the roadmap]]\n[[q4-roadmap]]\n[[q4-roadmap#risks]]\n\nType [[ in the editor to search documents. Type # after the address to pick a heading. The part after | is the link text.',
+      },
       { label: 'Images', src: '![alt text](/favicon.svg)\n![wider](/favicon.svg =64x)' },
       { label: 'Quote', src: '> Text from someone else.' },
       { label: 'Code', src: 'Inline `code`.\n\n```js\nconst answer = 42\n```' },
