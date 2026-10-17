@@ -169,6 +169,25 @@ export function renderMarkdown(src: string, opts: { eagerImages?: boolean } = {}
   }
 }
 
+export interface Heading {
+  level: number
+  text: string
+  id: string
+}
+
+// headingsOf lists the headings of a note with the ids the renderer gives them.
+export function headingsOf(src: string): Heading[] {
+  const tokens = md.parse(splitFrontMatter(src).body, {})
+  const out: Heading[] = []
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i]
+    if (t.type !== 'heading_open') continue
+    const text = (tokens[i + 1].children ?? []).map((c) => c.content).join('').trim()
+    out.push({ level: Number(t.tag.slice(1)), text, id: String(t.attrGet('id') ?? '') })
+  }
+  return out
+}
+
 export function renderInline(src: string): string {
   return DOMPurify.sanitize(md.renderInline(src), purifyConfig) as string
 }

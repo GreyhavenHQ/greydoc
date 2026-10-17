@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { renderMarkdown } from '@/render/markdown'
+import { headingsOf, renderMarkdown } from '@/render/markdown'
 import { diagramUsesElk, mermaidConfig } from '@/render/mermaidTheme'
 
 const html = (src: string) => renderMarkdown(src).html
@@ -11,6 +11,20 @@ describe('markdown extensions', () => {
     expect(out).toContain('<a href="/n/incident-search" class="note-link" data-alias="incident-search" data-label="1">the incident</a>')
     expect(html('[[toc]]\n\n# A')).toContain('class="toc"')
     expect(html('[[not an alias]]')).not.toContain('note-link')
+  })
+  it('links to a heading of another note with [[alias#section]]', () => {
+    expect(html('[[q4#risks]]')).toContain('<a href="/n/q4#risks" class="note-link" data-alias="q4" data-section="risks">q4 › risks</a>')
+    expect(html('[[q4#risks|the risks]]')).toContain('<a href="/n/q4#risks" class="note-link" data-alias="q4" data-section="risks" data-label="1">the risks</a>')
+    expect(html('[[q4#Release Plan]]')).toContain('href="/n/q4#release-plan"')
+    expect(html('[[q4#]]')).not.toContain('note-link')
+    expect(html('[[toc]]\n\n# A')).toContain('class="toc"')
+  })
+  it('lists the headings of a note with their ids', () => {
+    expect(headingsOf('---\ntitle: x\n---\n# Intro\n\ntext\n\n## Release *plan*\n\n## Intro')).toEqual([
+      { level: 1, text: 'Intro', id: 'intro' },
+      { level: 2, text: 'Release plan', id: 'release-plan' },
+      { level: 2, text: 'Intro', id: 'intro-1' },
+    ])
   })
   it('keeps image width and height, which base CSS would override', () => {
     expect(html('<img src="/a.png" height="80px">')).toMatch(/style="height: ?80px;?"/)
