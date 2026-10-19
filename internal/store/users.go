@@ -154,3 +154,25 @@ func (s *Store) SearchUsers(ctx context.Context, q string, limit int) ([]User, e
 	}
 	return out, rows.Err()
 }
+
+// UsersByUsername returns the known users among the given usernames, with their groups.
+func (s *Store) UsersByUsername(ctx context.Context, usernames []string) ([]User, error) {
+	out := []User{}
+	seen := map[string]bool{}
+	for _, name := range usernames {
+		name = strings.ToLower(name)
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		u, err := s.UserByUsername(ctx, name)
+		if errors.Is(err, ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *u)
+	}
+	return out, nil
+}

@@ -5,6 +5,7 @@ import katex from 'katex'
 import { renderMarkdown } from '@/render/markdown'
 import { naturalSize, renderMermaid, themeMode } from '@/render/mermaid'
 import { splitFrontMatter } from '@/lib/meta'
+import { mentionsOn } from '@/lib/mentions'
 
 // Live preview: Markdown that renders in place, like Obsidian. Lines and blocks under a selection show their source.
 
@@ -309,6 +310,14 @@ export function liveDecorations(state: EditorState): DecorationSet {
           const marks = cur.getChildren('LinkMark')
           // [toc] and [!NOTE] parse as links without a target. They are not links.
           if (!cur.getChild('URL') && marks.length < 3) return false
+          if (doc.sliceString(node.from, node.from + 2) === '[@' && /\]\(@[^)]*\)$/.test(doc.sliceString(node.from, node.to))) {
+            // Mention chips cover the link when mentions are on. Without them it reads as plain @Name.
+            if (!mentionsOn() && marks.length >= 2 && !lineActive(node.from)) {
+              out.push(hide.range(marks[0].from, marks[0].to))
+              out.push(hide.range(marks[1].from, node.to))
+            }
+            return false
+          }
           if (marks.length >= 2 && !lineActive(node.from)) {
             out.push(Decoration.mark({ class: 'cm-lp-link' }).range(marks[0].to, marks[1].from))
             out.push(hide.range(marks[0].from, marks[0].to))

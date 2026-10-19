@@ -10,6 +10,7 @@ import { deckTheme, splitSlides } from '@/render/slides'
 import { renderMarkdown } from '@/render/markdown'
 import { hydrateMermaid } from '@/render/mermaid'
 import { hydrateNoteLinks } from '@/render/noteLinks'
+import { hydrateMentions } from '@/render/mentions'
 import { splitFrontMatter, extractTitle } from '@/lib/meta'
 import { Spinner } from '@/components/ui/spinner'
 import { useTheme } from '@/lib/theme'
@@ -65,6 +66,7 @@ export default function Slides() {
       .join('')
     void hydrateMermaid(el, { interactive: false, mode: modeRef.current })
     void hydrateNoteLinks(el)
+    void hydrateMentions(el)
     const opts = (splitFrontMatter(text).data?.slideOptions ?? {}) as Record<string, unknown>
     // CSS centers the slides. reveal.js centers with a top offset, measured before images load and reset in the overview.
     host.current!.classList.toggle('greydoc-center', opts.center !== false)

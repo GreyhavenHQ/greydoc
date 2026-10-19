@@ -24,7 +24,11 @@ import { Logo } from '@/components/Logo'
 import { WithToc } from '@/components/TocSidebar'
 import { noteLinkCompletion, type NoteHit } from '@/editor/noteLinks'
 import { noteInfo } from '@/render/noteLinks'
+import { mentions } from '@/editor/mentions'
+import { offerAccess } from '@/components/Mentions'
+import { searchPeople } from '@/lib/mentions'
 import { UserMenu } from '@/components/AppHeader'
+import { NotificationBell } from '@/components/NotificationBell'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
@@ -412,6 +416,10 @@ export default function Editor() {
   aliasRef.current = note?.alias ?? alias
   const canEditRef = useRef(false)
   canEditRef.current = atLeast(level, 'write')
+  const mentionsEnabled = Boolean(me?.authenticated && !me.local_mode)
+  const onNoAccess = useMemo(() => offerAccess(note?.alias ?? alias, level === 'full'), [note?.alias, alias, level])
+  const noAccessRef = useRef(onNoAccess)
+  noAccessRef.current = onNoAccess
 
   const isCommenter = level === 'comment'
   const suggestingRef = useRef(false)
@@ -470,6 +478,28 @@ export default function Editor() {
     setCommentsOpen(true)
   }, [])
 
+  // A notification opens the document with ?thread= for a comment or a suggestion, or ?mention=1 for the text.
+  const focusTarget = useRef(new URLSearchParams(location.search))
+  useEffect(() => {
+    const q = focusTarget.current
+    const v = viewRef.current
+    const id = q.get('thread')
+    if (id) {
+      const t = threads.find((x) => x.id === id) ?? suggestions.find((x) => x.id === id)
+      if (!t) return
+      q.delete('thread')
+      setCommentsOpen(true)
+      setActiveThread(id)
+      if (v && t.range) v.dispatch({ selection: { anchor: t.range.from, head: t.range.to }, effects: CMView.scrollIntoView(t.range.from, { y: 'center' }) })
+    } else if (q.get('mention') && v && me?.username) {
+      q.delete('mention')
+      const at = v.state.doc.toString().toLowerCase().indexOf('](@' + me.username.toLowerCase() + ')')
+      if (at < 0) return
+      const from = v.state.doc.toString().lastIndexOf('[@', at)
+      v.dispatch({ selection: { anchor: Math.max(0, from) }, effects: CMView.scrollIntoView(Math.max(0, from), { y: 'center' }) })
+    }
+  }, [threads, suggestions, loaded, me])
+
   const editorExtensions = useMemo(
     () => [
       formatKeymap({ onComment: commentOn }),
@@ -479,6 +509,12 @@ export default function Editor() {
       }),
       selectionListener(setSelection),
       noteLinkCompletion(searchNotes, () => aliasRef.current, (a) => noteInfo(a).then((i) => i?.headings ?? [])),
+      mentionsEnabled
+        ? mentions(
+            (q) => searchPeople(q, aliasRef.current),
+            (p) => noAccessRef.current(p),
+          )
+        : [],
       imageUpload(
         () => aliasRef.current,
         () => canEditRef.current,
@@ -511,7 +547,7 @@ export default function Editor() {
         },
       ),
     ],
-    [commentOn],
+    [commentOn, mentionsEnabled],
   )
 
   const toggleTask = useCallback(
@@ -808,6 +844,7 @@ export default function Editor() {
               )}
             </DropdownMenuContent>
           </DropdownMenu>
+          <NotificationBell />
           <UserMenu />
         </header>
         <main className="flex min-h-0 flex-1">
@@ -864,6 +901,7 @@ export default function Editor() {
                   draft={suggestDraft}
                   top={viewRef.current?.coordsAtPos(suggestDraft.to) ? viewRef.current.coordsAtPos(suggestDraft.to)!.bottom - viewRef.current.dom.getBoundingClientRect().top + 8 : 40}
                   onChange={(proposed) => setSuggestDraft({ ...suggestDraft, proposed })}
+                  onNoAccess={onNoAccess}
                   onDone={(created) => {
                     setSuggestDraft(null)
                     if (created) loadSuggestions()
@@ -931,6 +969,7 @@ export default function Editor() {
               onSelect={selectThread}
               onChanged={loadThreads}
               onClose={() => setCommentsOpen(false)}
+              onNoAccess={onNoAccess}
             />
           )}
         </main>

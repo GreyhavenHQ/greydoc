@@ -102,6 +102,12 @@ Select text and pick **Comment**. A comment is a remark on that text. The text d
 
 Select text and pick **Suggest**. A suggestion proposes new text. A person who can edit the document accepts or rejects it. People who can only comment make a suggestion each time they type.
 
+### Mentions
+
+Mentions need sign-in, so they do not exist in local mode. Type `@` in the text, a comment, a reply or a suggestion, then pick a person. The text gets `[@Alice Martin](@alice)`, which shows as a chip with the current name of the person. Press Esc to close the list and keep a plain `@`. A plain `@` notifies nobody.
+
+The bell in the header shows your mentions. A mention in a comment or a suggestion notifies at once. A mention in the text notifies when the edit session ends, that is after 2 minutes without edits or when the last editor leaves. A person gets one notification per mention, and none for their own mentions. A person who cannot open the document gets no notification. The list marks them, and the owner can give them comment access from there.
+
 ### AI assistant
 
 Select text and pick **AI**. Type what the AI must do with the selection, then press Enter. Below the text box, presets do common jobs in one click:

@@ -161,3 +161,28 @@ func TestCompactionKeepsReloadIdentical(t *testing.T) {
 		t.Fatalf("reload %q %v", text, err)
 	}
 }
+
+func TestOnRevisionRunsOncePerRevision(t *testing.T) {
+	w := newWriter(t)
+	w.edit(0, "alice", store.SourceHuman, 1, "one\n")
+	w.edit(time.Hour, "bob", store.SourceHuman, 2, "one\ntwo\n")
+	type call struct{ prev, text, author string }
+	var calls []call
+	p := &Processor{Store: w.st, Now: func() time.Time { return w.at.Add(time.Hour) },
+		OnRevision: func(_ context.Context, noteID, prev, text string, authors []store.RevisionAuthor) {
+			if noteID != w.note {
+				t.Errorf("note %s", noteID)
+			}
+			calls = append(calls, call{prev, text, authors[0].UserID})
+		}}
+	if err := p.Process(ctx, w.note, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Process(ctx, w.note, false); err != nil {
+		t.Fatal(err)
+	}
+	want := []call{{"", "one\n", "alice"}, {"one\n", "one\ntwo\n", "bob"}}
+	if len(calls) != 2 || calls[0] != want[0] || calls[1] != want[1] {
+		t.Fatalf("%+v", calls)
+	}
+}

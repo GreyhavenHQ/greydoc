@@ -394,6 +394,7 @@ func (s *Server) registerTools(srv *mcp.Server) {
 				return nil, nil, err
 			}
 			s.commentsChanged(n.ID)
+			s.notifyMentions(ctx, id, n, mentionComment, in.ThreadID, in.Body)
 			return textResult("replied")
 		})
 	mcp.AddTool(srv, &mcp.Tool{Name: "resolve_comment", Description: "Resolve a comment thread, or reopen it."},

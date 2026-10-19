@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { BookOpen, CircleHelp, LogIn, LogOut, Moon, Plus, ScrollText, Settings, Sun, Trash2 } from 'lucide-react'
 import { SyntaxHelp } from '@/components/SyntaxHelp'
+import { NotificationBell } from '@/components/NotificationBell'
 import { Logo } from '@/components/Logo'
 import { Button } from '@/components/ui/button'
 import {
@@ -142,6 +143,7 @@ export function AppHeader({ children }: { children?: React.ReactNode }) {
         <span>greydoc</span>
       </Link>
       <div className="flex flex-1 items-center gap-2">{children}</div>
+      <NotificationBell />
       <UserMenu />
     </header>
   )

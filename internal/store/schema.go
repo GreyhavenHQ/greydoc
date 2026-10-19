@@ -252,6 +252,26 @@ CREATE TABLE IF NOT EXISTS note_tag (
     PRIMARY KEY (note_id, tag)
 );
 CREATE INDEX IF NOT EXISTS idx_note_tag_tag ON note_tag(tag);
+-- An in-app notice for one person, today only for mentions. ref is a thread or suggestion id.
+CREATE TABLE IF NOT EXISTS notification (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+    note_id TEXT NOT NULL REFERENCES note(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    actor_id TEXT NOT NULL DEFAULT '',
+    actor_name TEXT NOT NULL DEFAULT '',
+    ref TEXT NOT NULL DEFAULT '',
+    excerpt TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    read_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_notification_user ON notification(user_id, created_at);
+-- The people the current text of a note mentions, so a revision notifies only new mentions.
+CREATE TABLE IF NOT EXISTS note_mention (
+    note_id TEXT NOT NULL REFERENCES note(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+    PRIMARY KEY (note_id, user_id)
+);
 `
 
 func schemaFor(dialect string) string {

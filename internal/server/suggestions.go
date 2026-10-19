@@ -141,6 +141,7 @@ func (s *Server) createSuggestion(ctx context.Context, id *Identity, n *store.No
 		return nil, err
 	}
 	s.suggestionsChanged(n.ID)
+	s.notifyMentions(ctx, id, n, mentionSuggestion, sg.ID, sg.Proposed+"\n"+sg.Reason)
 	out, err := s.resolveSuggestions(ctx, n.ID, []store.Suggestion{*sg})
 	if err != nil {
 		return nil, err
@@ -204,6 +205,7 @@ func (s *Server) acceptSuggestion(ctx context.Context, id *Identity, n *store.No
 	if err := s.store.DecideSuggestion(ctx, n.ID, sg.ID, "accepted", id.displayName(), ev); err != nil {
 		return err
 	}
+	s.rememberMentions(ctx, n, sg.Proposed)
 	s.suggestionsChanged(n.ID)
 	return nil
 }

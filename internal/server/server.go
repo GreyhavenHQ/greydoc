@@ -102,6 +102,9 @@ func Open(cfg config.Config) (*Server, error) {
 		}
 	}
 	s.history = &history.Processor{Store: st}
+	if !cfg.LocalMode() {
+		s.history.OnRevision = s.notifyDocMentions
+	}
 	if cfg.AIEnabled() {
 		s.ai = ai.New(cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.LLMModel)
 		if s.aiPresets, err = ai.LoadPresets(cfg.AIActions); err != nil {
@@ -187,6 +190,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /auth/logout", s.handleAuthLogout)
 	s.mux.HandleFunc("GET /api/me", s.handleMe)
 	s.mux.HandleFunc("GET /api/users", s.handleSearchUsers)
+	s.mux.HandleFunc("GET /api/users/names", s.handleUserNames)
+	s.mux.HandleFunc("GET /api/notifications", s.handleNotifications)
+	s.mux.HandleFunc("POST /api/notifications/read", s.handleReadNotifications)
 	s.mux.HandleFunc("GET /api/tokens", s.handleListTokens)
 	s.mux.HandleFunc("POST /api/tokens", s.handleCreateToken)
 	s.mux.HandleFunc("DELETE /api/tokens/{id}", s.handleDeleteToken)

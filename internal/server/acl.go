@@ -236,7 +236,32 @@ func (s *Server) handleSearchUsers(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"users": users})
+	writeJSON(w, http.StatusOK, map[string]any{"users": s.withReadAccess(r, users)})
+}
+
+type userOut struct {
+	store.User
+	CanRead *bool `json:"can_read,omitempty"`
+}
+
+// withReadAccess adds can_read for the note= document, when the caller can read it.
+func (s *Server) withReadAccess(r *http.Request, users []store.User) []userOut {
+	out := make([]userOut, len(users))
+	for i, u := range users {
+		out[i] = userOut{User: u}
+	}
+	n, err := s.store.NoteByAlias(r.Context(), r.URL.Query().Get("note"))
+	if err != nil || n.DeletedAt != "" {
+		return out
+	}
+	if l, err := s.noteLevel(r.Context(), identityFrom(r.Context()), n, shareToken(r)); err != nil || l < permission.Read {
+		return out
+	}
+	for i := range out {
+		ok := s.canRead(r.Context(), out[i].User, n)
+		out[i].CanRead = &ok
+	}
+	return out
 }
 
 // handleResolveShare turns a short view-only link, /v/<token>, into the note it opens.
