@@ -90,6 +90,17 @@ export interface Group {
   created_at: string
   member_count: number
   note_count: number
+  // members holds the first few members, in the group list only.
+  members?: User[]
+}
+
+export interface GroupNote {
+  id: string
+  alias: string
+  title: string
+  owner: string
+  level: Level
+  in_trash: boolean
 }
 
 export interface GroupRef {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronDown, Plus, Trash2, UserMinus, UserPlus, Users } from 'lucide-react'
+import { ChevronDown, FileText, Plus, Trash2, UserMinus, UserPlus, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { AppHeader } from '@/components/AppHeader'
 import { Button } from '@/components/ui/button'
@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { api, type Group, type User } from '@/lib/api'
+import { api, type Group, type GroupNote, type User } from '@/lib/api'
 import { loginHref, useMe } from '@/lib/me'
 import { cn, handle } from '@/lib/utils'
 
@@ -16,7 +16,32 @@ const fail = (e: unknown) => toast.error(e instanceof Error ? e.message : String
 
 const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
-type Detail = { group: Group; members: User[] }
+type Detail = { group: Group; members: User[]; notes: GroupNote[] }
+
+const levelLabels: Record<string, string> = { read: 'Can view', comment: 'Can comment', write: 'Can edit' }
+
+function Initial({ user, className }: { user: User; className?: string }) {
+  const name = user.display_name || user.username
+  return (
+    <span title={name} className={cn('flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold', className)}>
+      {name.slice(0, 1).toUpperCase()}
+    </span>
+  )
+}
+
+function AvatarStack({ group }: { group: Group }) {
+  const shown = group.members ?? []
+  const more = group.member_count - shown.length
+  if (shown.length === 0) return null
+  return (
+    <div className="hidden items-center -space-x-2 sm:flex" aria-hidden>
+      {shown.map((u) => (
+        <Initial key={u.id} user={u} className="border ring-2 ring-card" />
+      ))}
+      {more > 0 && <span className="flex h-7 min-w-7 items-center justify-center rounded-full border bg-muted px-1.5 text-xs text-muted-foreground ring-2 ring-card">+{more}</span>}
+    </div>
+  )
+}
 
 function CreateGroup({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (o: boolean) => void; onCreated: (g: Group) => void }) {
   const [name, setName] = useState('')
@@ -82,9 +107,7 @@ function CreateGroup({ open, onOpenChange, onCreated }: { open: boolean; onOpenC
 function MemberRow({ user, onRemove }: { user: User; onRemove?: () => void }) {
   return (
     <li className="flex h-11 items-center gap-3">
-      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">
-        {(user.display_name || user.username).slice(0, 1).toUpperCase()}
-      </span>
+      <Initial user={user} />
       <span className="min-w-0 flex-1 truncate text-sm">
         {user.display_name || user.username} <span className="text-muted-foreground">{handle(user.username)}</span>
       </span>
@@ -124,7 +147,7 @@ function GroupDetail({ id, onChanged, onClose }: { id: string; onChanged: () => 
   }, [query])
 
   if (!detail) return <div className="h-40" />
-  const { group, members } = detail
+  const { group, members, notes } = detail
   const linked = group.oidc_group !== ''
   const dirty = name !== group.name || description !== group.description || oidc !== group.oidc_group
   const candidates = found.filter((u) => !members.some((m) => m.id === u.id))
@@ -217,6 +240,27 @@ function GroupDetail({ id, onChanged, onClose }: { id: string; onChanged: () => 
           <ul className="flex flex-col divide-y" data-testid="group-members">
             {members.map((m) => (
               <MemberRow key={m.id} user={m} onRemove={linked ? undefined : () => member(m.username, false)} />
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <h3 className="text-sm font-medium">Documents · {notes.length}</h3>
+        {notes.length === 0 ? (
+          <p className="py-2 text-sm text-muted-foreground">No document is shared with this group yet. Owners share from the Share dialog of a document.</p>
+        ) : (
+          <ul className="flex flex-col divide-y" data-testid="group-notes">
+            {notes.map((n) => (
+              <li key={n.id} className="flex h-11 items-center gap-3 text-sm">
+                <FileText className="size-4 shrink-0 text-muted-foreground" />
+                <Link to={'/n/' + n.alias} className="min-w-0 flex-1 truncate hover:underline">
+                  {n.title || n.alias}
+                  {n.in_trash && <span className="ml-2 text-xs text-muted-foreground">in the trash</span>}
+                </Link>
+                <span className="hidden truncate text-muted-foreground sm:block">{n.owner}</span>
+                <span className="w-24 shrink-0 text-right text-muted-foreground">{levelLabels[n.level] ?? n.level}</span>
+              </li>
             ))}
           </ul>
         )}
@@ -315,6 +359,7 @@ export default function Groups() {
                             {g.description ? ` · ${g.description}` : ''}
                           </div>
                         </div>
+                        <AvatarStack group={g} />
                         <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')} />
                       </button>
                       {open && <GroupDetail id={g.id} onChanged={load} onClose={() => setSelected(null)} />}

@@ -159,7 +159,7 @@ Admins manage groups on the **Groups** page in the account menu. A group is one 
 - **Managed in greydoc.** An admin adds and removes members. A person must sign in once before an admin can add them.
 - **From an OIDC group.** The members are the people whose OIDC groups include the linked name, as of their last sign-in. Change the members in your identity provider.
 
-Removing a member or deleting a group ends the access at once, also in an open editor. Deleting a group removes its grants. Group changes show in the audit log. Groups are not available in local mode.
+An open group lists its members and the documents shared with it. Removing a member or deleting a group ends the access at once, also in an open editor. Deleting a group removes its grants. Group changes show in the audit log. Groups are not available in local mode.
 
 | HedgeDoc 1 mode | greydoc access |
 |---|---|
