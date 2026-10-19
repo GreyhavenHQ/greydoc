@@ -12,6 +12,8 @@ type Viewer struct {
 	// Admin sees every note's trash and audit events.
 	Admin  bool
 	UserID string
+	// Groups are the viewer's app_group ids.
+	Groups []string
 }
 
 type Scope string
@@ -53,13 +55,17 @@ func (s *Store) visibleWhere(v Viewer) (string, []any) {
 	if v.Local {
 		return "1 = 1", nil
 	}
-	signedIn := ""
+	groups := append([]string{GroupEveryone}, v.Groups...)
 	if v.UserID != "" {
-		signedIn = GroupSignedIn
+		groups = append(groups, GroupSignedIn)
 	}
 	where := `(n.owner_id = ? OR EXISTS (SELECT 1 FROM note_user_grant ug WHERE ug.note_id = n.id AND ug.user_id = ?)
-		OR EXISTS (SELECT 1 FROM note_group_grant gg WHERE gg.note_id = n.id AND gg.group_name IN (?, ?)))`
-	return where, []any{v.UserID, v.UserID, GroupEveryone, signedIn}
+		OR EXISTS (SELECT 1 FROM note_group_grant gg WHERE gg.note_id = n.id AND gg.group_name IN (` + placeholders(len(groups)) + `)))`
+	args := []any{v.UserID, v.UserID}
+	for _, g := range groups {
+		args = append(args, g)
+	}
+	return where, args
 }
 
 func (s *Store) ListNotes(ctx context.Context, f ListFilter) ([]NoteSummary, error) {
@@ -79,8 +85,16 @@ func (s *Store) ListNotes(ctx context.Context, f ListFilter) ([]NoteSummary, err
 		where += " AND n.owner_id = ?"
 		args = append(args, f.Viewer.UserID)
 	case ScopeShared:
-		where += ` AND (n.owner_id IS NULL OR n.owner_id <> ?) AND EXISTS (SELECT 1 FROM note_user_grant ug WHERE ug.note_id = n.id AND ug.user_id = ?)`
+		gw := "1 = 0"
+		if len(f.Viewer.Groups) > 0 {
+			gw = "gg.group_name IN (" + placeholders(len(f.Viewer.Groups)) + ")"
+		}
+		where += ` AND (n.owner_id IS NULL OR n.owner_id <> ?) AND (EXISTS (SELECT 1 FROM note_user_grant ug WHERE ug.note_id = n.id AND ug.user_id = ?)
+			OR EXISTS (SELECT 1 FROM note_group_grant gg WHERE gg.note_id = n.id AND ` + gw + `))`
 		args = append(args, f.Viewer.UserID, f.Viewer.UserID)
+		for _, g := range f.Viewer.Groups {
+			args = append(args, g)
+		}
 	}
 	if f.Tag != "" {
 		where += " AND EXISTS (SELECT 1 FROM note_tag t WHERE t.note_id = n.id AND t.tag = ?)"
@@ -180,4 +194,9 @@ func (s *Store) VisitCount(ctx context.Context, noteID string) (int, error) {
 	var n int
 	err := s.db.QueryRowContext(ctx, s.q(`SELECT COUNT(*) FROM note_visit WHERE note_id = ?`), noteID).Scan(&n)
 	return n, err
+}
+
+// placeholders returns n comma-separated ? markers.
+func placeholders(n int) string {
+	return strings.TrimSuffix(strings.Repeat("?, ", n), ", ")
 }

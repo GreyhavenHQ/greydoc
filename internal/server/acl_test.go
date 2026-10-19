@@ -1,15 +1,22 @@
 package server_test
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/greyhavenhq/greydoc/internal/permission"
 )
 
 func TestNotePermissionsFlow(t *testing.T) {
 	e, idp := newOIDCEnv(t)
-	owner := e.login(idp, map[string]any{"sub": "o", "preferred_username": "owner", "groups": []string{"eng"}})
+	owner := e.login(idp, map[string]any{"sub": "o", "preferred_username": "owner", "groups": []string{"eng", "sales"}})
 	bob := e.login(idp, map[string]any{"sub": "b", "preferred_username": "bob", "groups": []string{"sales"}})
+	sales, err := e.srv.Store().CreateGroup(context.Background(), "Sales", "", "sales", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	alias := e.createNote(owner, "# Plan")
 
 	// Default: only the owner.
@@ -32,15 +39,16 @@ func TestNotePermissionsFlow(t *testing.T) {
 	if code, _ := e.do(bob, "PUT", "/api/notes/"+alias+"/permissions/users/bob", map[string]string{"level": "write"}); code != 403 {
 		t.Fatalf("bob escalated: %d", code)
 	}
-	// Only the two special groups can be granted.
-	if code, body := e.do(owner, "PUT", "/api/notes/"+alias+"/permissions/groups/sales", map[string]string{"level": "write"}); code != 400 || !strings.Contains(body, "bad_group") {
-		t.Fatalf("named group grant: %d %s", code, body)
+	// Group grant.
+	if code, _ := e.do(owner, "PUT", "/api/notes/"+alias+"/permissions/groups/"+sales.ID, map[string]string{"level": "write"}); code != 200 {
+		t.Fatal("group grant")
 	}
-	if code, _ := e.do(owner, "PUT", "/api/notes/"+alias+"/permissions/groups/_signed_in", map[string]string{"level": "read"}); code != 200 {
-		t.Fatalf("signed-in grant: %d", code)
+	if _, body := e.do(bob, "GET", "/api/notes/"+alias, nil); !strings.Contains(body, `"level":"write"`) {
+		t.Fatalf("group grant not applied: %s", body)
 	}
-	if _, body := e.do(bob, "GET", "/api/notes/"+alias, nil); !strings.Contains(body, `"level":"comment"`) {
-		t.Fatalf("bob level: %s", body)
+	// Only the special groups and greydoc groups can be granted.
+	if code, body := e.do(owner, "PUT", "/api/notes/"+alias+"/permissions/groups/sales", map[string]string{"level": "write"}); code != 404 || !strings.Contains(body, "unknown_group") {
+		t.Fatalf("OIDC group name grant: %d %s", code, body)
 	}
 	// Full is not grantable.
 	if code, _ := e.do(owner, "PUT", "/api/notes/"+alias+"/permissions/users/bob", map[string]string{"level": "full"}); code != 400 {
@@ -48,11 +56,11 @@ func TestNotePermissionsFlow(t *testing.T) {
 	}
 	// Only the owner sees who else has access.
 	_, body = e.do(owner, "GET", "/api/notes/"+alias+"/permissions", nil)
-	if !strings.Contains(body, `"username":"bob"`) || !strings.Contains(body, `"group":"_signed_in"`) {
+	if !strings.Contains(body, `"username":"bob"`) || !strings.Contains(body, `"group":"`+sales.ID+`","name":"Sales"`) {
 		t.Fatalf("owner view: %s", body)
 	}
 	_, body = e.do(bob, "GET", "/api/notes/"+alias+"/permissions", nil)
-	if strings.Contains(body, `"username":"bob"`) || !strings.Contains(body, `"agent_policy"`) {
+	if strings.Contains(body, `"username":"bob"`) || strings.Contains(body, sales.ID) || !strings.Contains(body, `"agent_policy"`) {
 		t.Fatalf("non-owner view leaks grants: %s", body)
 	}
 }
@@ -141,5 +149,49 @@ func TestCrossOriginMutationRefused(t *testing.T) {
 	code, _ = e.do(nil, "POST", "/api/notes", map[string]string{"content": "x"}, "Origin", e.ts.URL)
 	if code != 201 {
 		t.Fatalf("same-origin create: %d", code)
+	}
+}
+
+func TestGroupGrantsAccess(t *testing.T) {
+	e, idp := newOIDCEnv(t)
+	ctx := context.Background()
+	st := e.srv.Store()
+	alice := e.login(idp, map[string]any{"sub": "a", "preferred_username": "alice", "groups": []string{"eng"}})
+	bob := e.login(idp, map[string]any{"sub": "b", "preferred_username": "bob"})
+	carol := e.login(idp, map[string]any{"sub": "c", "preferred_username": "carol", "groups": []string{"eng"}})
+	dave := e.login(idp, map[string]any{"sub": "d", "preferred_username": "dave", "groups": []string{"ops"}})
+	design, _ := st.CreateGroup(ctx, "Design", "", "", nil)
+	eng, _ := st.CreateGroup(ctx, "Engineering", "", "eng", nil)
+	ua, _ := st.UserByUsername(ctx, "alice")
+	ub, _ := st.UserByUsername(ctx, "bob")
+	_ = st.AddGroupMember(ctx, design.ID, ua.ID, nil)
+	_ = st.AddGroupMember(ctx, design.ID, ub.ID, nil)
+	alias := e.createNote(alice, "# Spec")
+	n, _ := st.NoteByAlias(ctx, alias)
+
+	if code, b := e.do(alice, "PUT", "/api/notes/"+alias+"/permissions/groups/"+design.ID, map[string]string{"level": "write"}); code != 200 {
+		t.Fatalf("grant design: %d %s", code, b)
+	}
+	if code, body := e.do(bob, "GET", "/api/notes/"+alias, nil); code != 200 || !strings.Contains(body, `"level":"write"`) {
+		t.Fatalf("bob through design: %d %s", code, body)
+	}
+	if _, body := e.do(bob, "GET", "/api/notes?scope=shared", nil); !strings.Contains(body, `"alias":"`+alias+`"`) {
+		t.Fatalf("not shared with bob: %s", body)
+	}
+	if code, _ := e.do(carol, "GET", "/api/notes/"+alias, nil); code != 403 {
+		t.Fatalf("carol before the eng grant: %d", code)
+	}
+	if code, _ := e.do(alice, "PUT", "/api/notes/"+alias+"/permissions/groups/"+eng.ID, map[string]string{"level": "read"}); code != 200 {
+		t.Fatal("grant eng")
+	}
+	if code, body := e.do(carol, "GET", "/api/notes/"+alias, nil); code != 200 || !strings.Contains(body, `"level":"read"`) {
+		t.Fatalf("carol through the linked group: %d %s", code, body)
+	}
+	// An OIDC group name without a linked group gives nothing.
+	if err := st.SetGroupGrant(ctx, n.ID, "ops", permission.Write, nil); err != nil {
+		t.Fatal(err)
+	}
+	if code, _ := e.do(dave, "GET", "/api/notes/"+alias, nil); code != 403 {
+		t.Fatalf("raw OIDC group name gave access: %d", code)
 	}
 }
