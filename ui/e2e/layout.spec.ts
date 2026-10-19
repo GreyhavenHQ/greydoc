@@ -87,7 +87,9 @@ test('[[alias]] links to another note and the editor completes it', async ({ pag
   await page.keyboard.press('Control+End')
   await page.keyboard.type(' Also [[Target note')
   const option = page.locator('.cm-tooltip-autocomplete li', { hasText: 'Target note for links' })
-  await expect(option).toBeVisible()
+  await expect(option).toHaveAttribute('aria-selected', 'true')
+  // CodeMirror ignores Enter for 75 ms (interactionDelay) after the completion list opens.
+  await page.waitForTimeout(150)
   await page.keyboard.press('Enter')
   await expect(page.getByTestId('editor').locator('.cm-content')).toContainText('Also [[link-target|Target note for links]]')
   await expect(page.getByTestId('editor').locator('.cm-content')).not.toContainText(']]]')
