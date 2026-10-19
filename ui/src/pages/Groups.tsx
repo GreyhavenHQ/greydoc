@@ -79,7 +79,7 @@ function CreateGroup({ open, onOpenChange, onCreated }: { open: boolean; onOpenC
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="greydoc">Managed in greydoc</SelectItem>
-                <SelectItem value="oidc">From an OIDC group</SelectItem>
+                <SelectItem value="oidc">Managed via OIDC</SelectItem>
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
@@ -345,14 +345,12 @@ export default function Groups() {
                         <div className="min-w-0 flex-1">
                           <div className="truncate font-medium">{g.name}</div>
                           <div className="truncate text-xs text-muted-foreground">
-                            {g.oidc_group ? (
+                            {g.oidc_group && (
                               <>
-                                From OIDC <span className="font-mono">{g.oidc_group}</span>
+                                Managed via OIDC <span className="font-mono">{g.oidc_group}</span>
+                                {' · '}
                               </>
-                            ) : (
-                              'Managed in greydoc'
                             )}
-                            {' · '}
                             {count(g.member_count, 'member', 'members')}
                             {' · '}
                             {count(g.note_count, 'document', 'documents')}
