@@ -6,42 +6,103 @@ on:
   pull_request:
 
 # Every job runs the justfile recipes inside the dev image, as local development does.
+# The job runs in a container on a shared Docker daemon: the checkout is copied in, never mounted,
+# and every container, image and network carries a name unique to the run and the job.
+env:
+  CACHE_VOLUMES: -v greydoc-ci_gomod:/go/pkg/mod -v greydoc-ci_gocache:/root/.cache/go-build -v greydoc-ci_pnpmstore:/root/.pnpm-store
+
 jobs:
   go:
     runs-on: ubuntu-latest
+    env:
+      NAME: greydoc-ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
     steps:
       - uses: actions/checkout@v4
-      - run: docker compose -f docker-compose.dev.yml build dev
-      - run: docker compose -f docker-compose.dev.yml run --rm dev sh -c 'go vet ./... && just lint && just race && just build'
+      - run: docker build -f Dockerfile.dev -t "$NAME" .
+      - run: |
+          docker rm -f "$NAME" || true
+          docker create --name "$NAME" -w /src $CACHE_VOLUMES "$NAME" sh -c 'go vet ./... && just lint && just race && just build'
+          docker cp ./. "$NAME:/src"
+          docker start -a "$NAME"
+      - if: always()
+        run: |
+          docker rm -f "$NAME" || true
+          docker rmi "$NAME" || true
 
   postgres:
     runs-on: ubuntu-latest
+    env:
+      NAME: greydoc-ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
     steps:
       - uses: actions/checkout@v4
-      - run: docker compose -f docker-compose.dev.yml build dev
-      - run: docker compose -f docker-compose.dev.yml --profile postgres up -d postgres
-      - run: sleep 5 && docker compose -f docker-compose.dev.yml run --rm dev just test-pg
+      - run: docker build -f Dockerfile.dev -t "$NAME" .
+      - run: |
+          docker rm -f "$NAME" "$NAME-pg" || true
+          docker network rm "$NAME" || true
+          docker network create "$NAME"
+          docker run -d --name "$NAME-pg" --network "$NAME" --network-alias postgres \
+            -e POSTGRES_USER=greydoc -e POSTGRES_PASSWORD=greydoc -e POSTGRES_DB=greydoc postgres:17-alpine
+          # Over TCP only: the init server listens on the socket alone, then restarts.
+          for i in $(seq 1 30); do docker exec "$NAME-pg" pg_isready -q -h 127.0.0.1 -U greydoc && break; sleep 1; done
+          docker exec "$NAME-pg" pg_isready -h 127.0.0.1 -U greydoc
+      - run: |
+          docker create --name "$NAME" --network "$NAME" -w /src $CACHE_VOLUMES "$NAME" just test-pg
+          docker cp ./. "$NAME:/src"
+          docker start -a "$NAME"
+      - if: always()
+        run: |
+          docker rm -f "$NAME" "$NAME-pg" || true
+          docker network rm "$NAME" || true
+          docker rmi "$NAME" || true
 
   ui:
     runs-on: ubuntu-latest
+    env:
+      NAME: greydoc-ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
     steps:
       - uses: actions/checkout@v4
-      - run: docker compose -f docker-compose.dev.yml build dev
-      - run: docker compose -f docker-compose.dev.yml run --rm dev sh -c 'just ui-test && just ui'
+      - run: docker build -f Dockerfile.dev -t "$NAME" .
+      - run: |
+          docker rm -f "$NAME" || true
+          docker create --name "$NAME" -w /src $CACHE_VOLUMES "$NAME" sh -c 'just ui-test && just ui'
+          docker cp ./. "$NAME:/src"
+          docker start -a "$NAME"
+      - if: always()
+        run: |
+          docker rm -f "$NAME" || true
+          docker rmi "$NAME" || true
 
   e2e:
     runs-on: ubuntu-latest
+    env:
+      NAME: greydoc-ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
     steps:
       - uses: actions/checkout@v4
-      - run: docker compose -f docker-compose.dev.yml build dev
-      - run: docker compose -f docker-compose.dev.yml run --rm dev just e2e
+      - run: docker build -f Dockerfile.dev -t "$NAME" .
+      - run: |
+          docker rm -f "$NAME" || true
+          docker create --name "$NAME" -w /src $CACHE_VOLUMES "$NAME" just e2e
+          docker cp ./. "$NAME:/src"
+          docker start -a "$NAME"
+      - if: always()
+        run: |
+          docker rm -f "$NAME" || true
+          docker rmi "$NAME" || true
 
   docker:
     runs-on: ubuntu-latest
+    env:
+      NAME: greydoc-ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -t greydoc .
+      - run: docker build -t "$NAME" .
+      # A published port is not reachable from the job container, so the check runs inside the smoke container.
       - run: |
-          docker run -d --name smoke -e GREYDOC_ALLOW_NONLOCAL=1 -p 127.0.0.1:3000:3000 greydoc
-          for i in $(seq 1 20); do curl -fs http://127.0.0.1:3000/healthz && exit 0; sleep 1; done
-          docker logs smoke; exit 1
+          docker rm -f "$NAME" || true
+          docker run -d --name "$NAME" -e GREYDOC_ALLOW_NONLOCAL=1 "$NAME"
+          for i in $(seq 1 20); do docker exec "$NAME" wget -q -O /dev/null http://127.0.0.1:3000/healthz && exit 0; sleep 1; done
+          docker logs "$NAME"; exit 1
+      - if: always()
+        run: |
+          docker rm -f "$NAME" || true
+          docker rmi "$NAME" || true

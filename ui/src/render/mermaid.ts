@@ -27,18 +27,28 @@ export function themeMode(): Mode {
   return document.documentElement.classList.contains('dark') ? 'dark' : 'light'
 }
 
-const inflight = new Map<string, Promise<string>>()
+type Pending = { job: Promise<string>; stale: (() => boolean)[] | null }
+const inflight = new Map<string, Pending>()
 // Mermaid keeps global state while rendering, so renders run one at a time.
 let queue: Promise<unknown> = Promise.resolve()
 
-// renderMermaid returns SVG markup, or an error box. Results are cached per theme and source.
-export function renderMermaid(src: string, mode: Mode = themeMode()): Promise<string> {
+// renderMermaid returns SVG markup or an error box, cached per theme and source. It returns '' when every caller is stale.
+export function renderMermaid(src: string, mode: Mode = themeMode(), stale?: () => boolean): Promise<string> {
   const key = mode + '\n' + src
   const hit = cache.get(key)
   if (hit) return Promise.resolve(hit)
   const pending = inflight.get(key)
-  if (pending) return pending
+  if (pending) {
+    if (!stale) pending.stale = null
+    else pending.stale?.push(stale)
+    return pending.job
+  }
+  const entry: Pending = { job: Promise.resolve(''), stale: stale ? [stale] : null }
   const job = queue.then(async () => {
+    if (entry.stale?.every((s) => s())) {
+      inflight.delete(key)
+      return ''
+    }
     const id = 'mermaid-' + ++counter
     let out: string
     try {
@@ -63,7 +73,8 @@ export function renderMermaid(src: string, mode: Mode = themeMode()): Promise<st
     return out
   })
   queue = job.catch(() => undefined)
-  inflight.set(key, job)
+  entry.job = job
+  inflight.set(key, entry)
   return job
 }
 
@@ -234,8 +245,8 @@ export function hydrateMermaid(root: HTMLElement, opts: { interactive?: boolean;
       return
     }
     jobs.push(
-      renderMermaid(src, mode).then((svg) => {
-        if (block.isConnected && block.dataset.source === src) mount(block, svg, interactive, opts.natural)
+      renderMermaid(src, mode, () => !block.isConnected || block.dataset.source !== src).then((svg) => {
+        if (svg && block.isConnected && block.dataset.source === src) mount(block, svg, interactive, opts.natural)
       }),
     )
   })
