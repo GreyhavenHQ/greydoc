@@ -20,6 +20,23 @@ CREATE TABLE IF NOT EXISTS user_group (
     group_name TEXT NOT NULL,
     PRIMARY KEY (user_id, group_name)
 );
+CREATE INDEX IF NOT EXISTS idx_user_group_name ON user_group(group_name);
+-- A group gives document access. oidc_group NULL means admins manage its members in greydoc.
+-- Otherwise its members are the users whose OIDC groups include oidc_group.
+CREATE TABLE IF NOT EXISTS app_group (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    description TEXT NOT NULL DEFAULT '',
+    oidc_group TEXT UNIQUE,
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS app_group_member (
+    group_id TEXT NOT NULL REFERENCES app_group(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+    added_at TEXT NOT NULL,
+    PRIMARY KEY (group_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_app_group_member_user ON app_group_member(user_id);
 -- The cookie holds an opaque token. Only its keyed hash is stored. Logout deletes the row.
 CREATE TABLE IF NOT EXISTS session (
     id TEXT PRIMARY KEY,
@@ -69,7 +86,7 @@ CREATE TABLE IF NOT EXISTS note_user_grant (
     level TEXT NOT NULL,
     PRIMARY KEY (note_id, user_id)
 );
--- group_name is _everyone or _signed_in. Named groups are not supported.
+-- group_name is an app_group id or a special group: _everyone, _signed_in.
 CREATE TABLE IF NOT EXISTS note_group_grant (
     note_id TEXT NOT NULL REFERENCES note(id) ON DELETE CASCADE,
     group_name TEXT NOT NULL,
