@@ -35,8 +35,8 @@ test('a mention in the text notifies once when the revision closes, and Esc keep
   const alias = await newNote(bob, 'Hi ')
   await bob.request.put(`/api/notes/${alias}/permissions/users/alice`, { data: { level: 'comment' } })
   await bob.keyboard.type('@ali')
-  await expect(bob.locator('.cm-tooltip-autocomplete')).toContainText('Alice Martin')
-  await bob.keyboard.press('Enter')
+  // A click picks at once. Enter is ignored for 75 ms after the list opens (CodeMirror interactionDelay).
+  await bob.locator('.cm-tooltip-autocomplete li', { hasText: 'Alice Martin' }).click()
   await expect(bob.locator('.cm-content .mention')).toHaveText('@Alice Martin')
 
   await bob.keyboard.type('and @ali')
