@@ -104,8 +104,8 @@ func TestGroupAdminLifecycle(t *testing.T) {
 	alias := e.createNote(alice, "# Spec")
 	e.do(alice, "PUT", "/api/notes/"+alias+"/permissions/groups/"+design.ID, map[string]string{"level": "read"})
 	_, body = e.do(admin, "GET", "/api/admin/groups/"+design.ID, nil)
-	if !strings.Contains(body, `"note_count":1`) || !strings.Contains(body, `"alias":"`+alias+`","title":"Spec","owner":"alice","level":"read","in_trash":false`) {
-		t.Fatalf("group notes: %s", body)
+	if !strings.Contains(body, `"note_count":1`) {
+		t.Fatalf("note count: %s", body)
 	}
 	_, body = e.do(admin, "GET", "/api/admin/groups", nil)
 	if !strings.Contains(body, `"members":[{"id"`) {
@@ -199,6 +199,18 @@ func TestShareWithGroups(t *testing.T) {
 	}
 	if code := grant(eng.ID, "write"); code != 200 {
 		t.Fatalf("own group: %d", code)
+	}
+	// Members filter the document list by group. Others may not.
+	e.createNote(alice, "# Unshared")
+	if code, b := e.do(alice, "GET", "/api/notes?scope=all&group="+eng.ID, nil); code != 200 || !strings.Contains(b, `"alias":"`+alias+`"`) ||
+		strings.Contains(b, "Unshared") || !strings.Contains(b, `"group":{"id":"`+eng.ID+`","name":"Engineering"}`) {
+		t.Fatalf("group filter: %d %s", code, b)
+	}
+	if code, _ := e.do(alice, "GET", "/api/notes?group="+design.ID, nil); code != 403 {
+		t.Fatalf("filter by a group alice is not in: %d", code)
+	}
+	if code, _ := e.do(alice, "GET", "/api/notes?group=nope", nil); code != 404 {
+		t.Fatalf("filter by unknown group: %d", code)
 	}
 	if code, b := e.do(alice, "DELETE", "/api/notes/"+alias+"/permissions/groups/stale", nil); code != 200 {
 		t.Fatalf("removing a stale grant: %d %s", code, b)

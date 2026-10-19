@@ -142,12 +142,7 @@ func (s *Server) writeGroupDetail(w http.ResponseWriter, r *http.Request, groupI
 		internalError(w, err)
 		return
 	}
-	notes, err := s.store.GroupNotes(r.Context(), g.ID)
-	if err != nil {
-		internalError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"group": g, "members": members, "notes": notes})
+	writeJSON(w, http.StatusOK, map[string]any{"group": g, "members": members})
 }
 
 func (s *Server) handleGetGroup(w http.ResponseWriter, r *http.Request) {

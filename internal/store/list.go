@@ -29,6 +29,8 @@ type ListFilter struct {
 	Viewer Viewer
 	Scope  Scope
 	Tag    string
+	// Group keeps the notes that grant this app_group id a level.
+	Group string
 	// IDs restricts the list, for search results, and keeps their order.
 	IDs    []string
 	Limit  int
@@ -99,6 +101,10 @@ func (s *Store) ListNotes(ctx context.Context, f ListFilter) ([]NoteSummary, err
 	if f.Tag != "" {
 		where += " AND EXISTS (SELECT 1 FROM note_tag t WHERE t.note_id = n.id AND t.tag = ?)"
 		args = append(args, f.Tag)
+	}
+	if f.Group != "" {
+		where += " AND EXISTS (SELECT 1 FROM note_group_grant fg WHERE fg.note_id = n.id AND fg.group_name = ?)"
+		args = append(args, f.Group)
 	}
 	if f.IDs != nil {
 		if len(f.IDs) == 0 {
