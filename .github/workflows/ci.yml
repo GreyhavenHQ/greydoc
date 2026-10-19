@@ -6,13 +6,28 @@ on:
   pull_request:
 
 # Every job runs the justfile recipes inside the dev image, as local development does.
+# The job runs in a container on a shared Docker daemon: the checkout is copied in, never mounted,
+# and every container, image and network carries a name unique to the run and the job.
+env:
+  CACHE_VOLUMES: -v greydoc-ci_gomod:/go/pkg/mod -v greydoc-ci_gocache:/root/.cache/go-build -v greydoc-ci_pnpmstore:/root/.pnpm-store
+
 jobs:
   go:
     runs-on: ubuntu-latest
+    env:
+      NAME: greydoc-ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
     steps:
       - uses: actions/checkout@v4
-      - run: docker compose -f docker-compose.dev.yml build dev
-      - run: docker compose -f docker-compose.dev.yml run --rm dev sh -c 'go vet ./... && just lint && just race && just build'
+      - run: docker build -f Dockerfile.dev -t "$NAME" .
+      - run: |
+          docker rm -f "$NAME" || true
+          docker create --name "$NAME" -w /src $CACHE_VOLUMES "$NAME" sh -c 'go vet ./... && just lint && just race && just build'
+          docker cp ./. "$NAME:/src"
+          docker start -a "$NAME"
+      - if: always()
+        run: |
+          docker rm -f "$NAME" || true
+          docker rmi "$NAME" || true
 
   postgres:
     runs-on: ubuntu-latest
@@ -24,17 +39,37 @@ jobs:
 
   ui:
     runs-on: ubuntu-latest
+    env:
+      NAME: greydoc-ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
     steps:
       - uses: actions/checkout@v4
-      - run: docker compose -f docker-compose.dev.yml build dev
-      - run: docker compose -f docker-compose.dev.yml run --rm dev sh -c 'just ui-test && just ui'
+      - run: docker build -f Dockerfile.dev -t "$NAME" .
+      - run: |
+          docker rm -f "$NAME" || true
+          docker create --name "$NAME" -w /src $CACHE_VOLUMES "$NAME" sh -c 'just ui-test && just ui'
+          docker cp ./. "$NAME:/src"
+          docker start -a "$NAME"
+      - if: always()
+        run: |
+          docker rm -f "$NAME" || true
+          docker rmi "$NAME" || true
 
   e2e:
     runs-on: ubuntu-latest
+    env:
+      NAME: greydoc-ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
     steps:
       - uses: actions/checkout@v4
-      - run: docker compose -f docker-compose.dev.yml build dev
-      - run: docker compose -f docker-compose.dev.yml run --rm dev just e2e
+      - run: docker build -f Dockerfile.dev -t "$NAME" .
+      - run: |
+          docker rm -f "$NAME" || true
+          docker create --name "$NAME" -w /src $CACHE_VOLUMES "$NAME" just e2e
+          docker cp ./. "$NAME:/src"
+          docker start -a "$NAME"
+      - if: always()
+        run: |
+          docker rm -f "$NAME" || true
+          docker rmi "$NAME" || true
 
   docker:
     runs-on: ubuntu-latest
