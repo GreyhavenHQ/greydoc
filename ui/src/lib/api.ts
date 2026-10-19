@@ -94,15 +94,6 @@ export interface Group {
   members?: User[]
 }
 
-export interface GroupNote {
-  id: string
-  alias: string
-  title: string
-  owner: string
-  level: Level
-  in_trash: boolean
-}
-
 export interface GroupRef {
   id: string
   name: string

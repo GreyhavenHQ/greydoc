@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { api, type Group, type GroupNote, type User } from '@/lib/api'
+import { api, type Group, type User } from '@/lib/api'
 import { loginHref, useMe } from '@/lib/me'
 import { cn, handle } from '@/lib/utils'
 
@@ -16,9 +16,7 @@ const fail = (e: unknown) => toast.error(e instanceof Error ? e.message : String
 
 const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
-type Detail = { group: Group; members: User[]; notes: GroupNote[] }
-
-const levelLabels: Record<string, string> = { read: 'Can view', comment: 'Can comment', write: 'Can edit' }
+type Detail = { group: Group; members: User[] }
 
 function Initial({ user, className }: { user: User; className?: string }) {
   const name = user.display_name || user.username
@@ -147,7 +145,7 @@ function GroupDetail({ id, onChanged, onClose }: { id: string; onChanged: () => 
   }, [query])
 
   if (!detail) return <div className="h-40" />
-  const { group, members, notes } = detail
+  const { group, members } = detail
   const linked = group.oidc_group !== ''
   const dirty = name !== group.name || description !== group.description || oidc !== group.oidc_group
   const candidates = found.filter((u) => !members.some((m) => m.id === u.id))
@@ -245,34 +243,22 @@ function GroupDetail({ id, onChanged, onClose }: { id: string; onChanged: () => 
         )}
       </section>
 
-      <section className="flex flex-col gap-2">
-        <h3 className="text-sm font-medium">Documents · {notes.length}</h3>
-        {notes.length === 0 ? (
-          <p className="py-2 text-sm text-muted-foreground">No document is shared with this group yet. Owners share from the Share dialog of a document.</p>
-        ) : (
-          <ul className="flex flex-col divide-y" data-testid="group-notes">
-            {notes.map((n) => (
-              <li key={n.id} className="flex h-11 items-center gap-3 text-sm">
-                <FileText className="size-4 shrink-0 text-muted-foreground" />
-                <Link to={'/n/' + n.alias} className="min-w-0 flex-1 truncate hover:underline">
-                  {n.title || n.alias}
-                  {n.in_trash && <span className="ml-2 text-xs text-muted-foreground">in the trash</span>}
-                </Link>
-                <span className="hidden truncate text-muted-foreground sm:block">{n.owner}</span>
-                <span className="w-24 shrink-0 text-right text-muted-foreground">{levelLabels[n.level] ?? n.level}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
       <div className="flex items-center justify-between border-t pt-4">
         <Button variant="ghost" className="-ml-3 text-destructive hover:text-destructive" onClick={destroy}>
           <Trash2 className="size-4" /> Delete group
         </Button>
-        <Button variant="outline" onClick={onClose}>
-          Close
-        </Button>
+        <div className="flex gap-2">
+          {group.note_count > 0 && (
+            <Button variant="ghost" asChild>
+              <Link to={'/?group=' + group.id}>
+                <FileText className="size-4" /> Show {count(group.note_count, 'document', 'documents')}
+              </Link>
+            </Button>
+          )}
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        </div>
       </div>
     </div>
   )

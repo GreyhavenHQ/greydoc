@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ChevronDown, Eye, FileText, FileUp, Pin, PinOff, Presentation, Search, Tag, X } from 'lucide-react'
+import { ChevronDown, Eye, FileText, FileUp, Pin, PinOff, Presentation, Search, Tag, Users, X } from 'lucide-react'
 import { AppHeader, NewNoteButton } from '@/components/AppHeader'
 import { SignInCard } from '@/pages/Login'
 import { Input } from '@/components/ui/input'
@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
-import { api, noteTitle, type NoteSummary, type TagCount } from '@/lib/api'
+import { api, noteTitle, type GroupRef, type NoteSummary, type TagCount } from '@/lib/api'
 import { useMe } from '@/lib/me'
 import { importFiles, isImportable } from '@/lib/importNotes'
 import { relativeTime } from '@/lib/time'
@@ -24,6 +24,8 @@ export default function Home() {
   const [params, setParams] = useSearchParams()
   const scope = (params.get('scope') as Scope) || 'recent'
   const tag = params.get('tag') ?? ''
+  const group = params.get('group') ?? ''
+  const [groupInfo, setGroupInfo] = useState<GroupRef | null>(null)
   const [query, setQuery] = useState(params.get('q') ?? '')
   const [notes, setNotes] = useState<NoteSummary[] | null>(null)
   const [tags, setTags] = useState<TagCount[]>([])
@@ -43,13 +45,23 @@ export default function Home() {
   const q = params.get('q') ?? ''
   useEffect(() => {
     if (!me?.authenticated) return
-    const effectiveScope = q || tag ? 'all' : scope
+    const effectiveScope = q || tag || group ? 'all' : scope
     const sp = new URLSearchParams({ scope: effectiveScope })
     if (tag) sp.set('tag', tag)
+    if (group) sp.set('group', group)
     if (q) sp.set('q', q)
     setNotes(null)
-    api.get<{ notes: NoteSummary[] }>('/api/notes?' + sp).then((r) => setNotes(r.notes))
-  }, [me, scope, tag, q, reload])
+    api.get<{ notes: NoteSummary[]; group?: GroupRef }>('/api/notes?' + sp).then(
+      (r) => {
+        setNotes(r.notes)
+        setGroupInfo(r.group ?? null)
+      },
+      () => {
+        setNotes([])
+        setGroupInfo(null)
+      },
+    )
+  }, [me, scope, tag, group, q, reload])
 
   useEffect(() => {
     if (!me?.authenticated) return
@@ -115,7 +127,7 @@ export default function Home() {
       </AppHeader>
       <main className="mx-auto max-w-5xl px-4 py-8">
         <div className="mb-6 flex flex-wrap items-center gap-3">
-          {!q && !tag ? (
+          {!q && !tag && !group ? (
             <Tabs value={scope} onValueChange={(v) => update({ scope: v === 'recent' ? '' : v })}>
               <TabsList>
                 {scopes.map((s) => (
@@ -128,6 +140,15 @@ export default function Home() {
           ) : (
             <div className="flex items-center gap-2 text-sm">
               <span className="text-muted-foreground">Showing</span>
+              {group && (
+                <Badge variant="secondary" className="gap-1">
+                  <Users className="size-3" />
+                  {groupInfo?.name ?? 'group'}
+                  <button aria-label="Clear group" onClick={() => update({ group: '' })}>
+                    <X className="size-3" />
+                  </button>
+                </Badge>
+              )}
               {tag && (
                 <Badge variant="secondary" className="gap-1">
                   #{tag}
@@ -166,7 +187,7 @@ export default function Home() {
           <div className="flex flex-col items-center gap-4 rounded-lg border border-dashed py-16 text-center">
             <FileText className="size-8 text-muted-foreground" />
             <p className="text-muted-foreground">
-              {q || tag ? 'No documents match.' : scope === 'recent' ? 'Documents you open appear here.' : 'No documents yet.'}
+              {group && !q && !tag ? 'None of the documents shared with this group is open to you.' : q || tag || group ? 'No documents match.' : scope === 'recent' ? 'Documents you open appear here.' : 'No documents yet.'}
             </p>
             <NewNoteButton size="lg" />
           </div>
