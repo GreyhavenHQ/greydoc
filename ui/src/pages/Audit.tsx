@@ -18,6 +18,7 @@ const kinds = [
   { id: 'all', label: 'Everything' },
   { id: 'note', label: 'Documents: create, trash, restore, delete' },
   { id: 'permission', label: 'Permissions' },
+  { id: 'group', label: 'Groups' },
   { id: 'comment', label: 'Comments' },
   { id: 'suggestion', label: 'Suggestions' },
   { id: 'revision', label: 'Restored versions' },

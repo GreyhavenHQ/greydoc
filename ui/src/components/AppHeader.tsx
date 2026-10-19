@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { BookOpen, CircleHelp, LogIn, LogOut, Moon, Plus, ScrollText, Settings, Sun, Trash2 } from 'lucide-react'
+import { BookOpen, CircleHelp, LogIn, LogOut, Moon, Plus, ScrollText, Settings, Sun, Trash2, Users } from 'lucide-react'
 import { SyntaxHelp } from '@/components/SyntaxHelp'
 import { NotificationBell } from '@/components/NotificationBell'
 import { Logo } from '@/components/Logo'
@@ -89,6 +89,13 @@ export function UserMenu() {
             <ScrollText className="size-4" /> Audit log
           </Link>
         </DropdownMenuItem>
+        {me.admin && !me.local_mode && (
+          <DropdownMenuItem asChild>
+            <Link to="/admin/groups">
+              <Users className="size-4" /> Groups
+            </Link>
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem asChild>
           <Link to="/trash">
             <Trash2 className="size-4" /> Trash
