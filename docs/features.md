@@ -78,6 +78,16 @@ Everyone who opens a document edits the same text. You see the cursors and the n
 
 Write `[[` in the editor. A list of documents opens, and the search narrows it as you type. Pick a document to insert a link such as `[[q4-roadmap|Q4 platform roadmap]]`. The part before `|` is the address of the document, and the part after it is the text of the link. Edit the text as you like. If someone renames the document, the address stays the same, and the link keeps working. A link without text, such as `[[q4-roadmap]]`, shows the current title of the document. A link to an address with no document shows as a dashed link.
 
+To link to one section of another document, add `#` and the section after the address: `[[q4-roadmap#risks]]` or `[[q4-roadmap#risks|the risks]]`. In the editor, type `#` after the address, and a list of the headings of that document opens. Pick a heading to insert the link. A link without text shows the title of the document and the heading, such as "Q4 platform roadmap › Risks". If the document has no such heading, for example after someone renames it, the link shows as a dashed link.
+
+### Links to headings
+
+Every heading has an address. Put the pointer on a heading, and a link icon shows to its left. Click the icon to copy the address of that heading. Send this address to someone, and the document opens at that heading.
+
+The address of a heading is the document address, `#` and the heading text in lowercase, with a `-` in place of each space. Characters other than letters, digits and `-` are removed. For example, `## Release plan` gets `#release-plan`. If two headings have the same text, the second one gets `-1` at the end, the third `-2`, and so on.
+
+To link to a heading in the same document, write `[the release plan](#release-plan)`. Addresses from HedgeDoc 1 with capital letters, such as `#Release-Plan`, also work.
+
 ### Images
 
 Paste an image or drop it in the editor. greydoc uploads it and inserts the Markdown link.

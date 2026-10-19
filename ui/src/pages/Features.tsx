@@ -15,7 +15,7 @@ export default function Features() {
       <main data-testid="features-page">
         <WithToc show>
           <div className="px-6 py-10">
-            <Preview source={features} />
+            <Preview source={features} followHash />
           </div>
         </WithToc>
       </main>
