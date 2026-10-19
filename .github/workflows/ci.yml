@@ -91,10 +91,18 @@ jobs:
 
   docker:
     runs-on: ubuntu-latest
+    env:
+      NAME: greydoc-ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -t greydoc .
+      - run: docker build -t "$NAME" .
+      # A published port is not reachable from the job container, so the check runs inside the smoke container.
       - run: |
-          docker run -d --name smoke -e GREYDOC_ALLOW_NONLOCAL=1 -p 127.0.0.1:3000:3000 greydoc
-          for i in $(seq 1 20); do curl -fs http://127.0.0.1:3000/healthz && exit 0; sleep 1; done
-          docker logs smoke; exit 1
+          docker rm -f "$NAME" || true
+          docker run -d --name "$NAME" -e GREYDOC_ALLOW_NONLOCAL=1 "$NAME"
+          for i in $(seq 1 20); do docker exec "$NAME" wget -q -O /dev/null http://127.0.0.1:3000/healthz && exit 0; sleep 1; done
+          docker logs "$NAME"; exit 1
+      - if: always()
+        run: |
+          docker rm -f "$NAME" || true
+          docker rmi "$NAME" || true
