@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator'
 import { api, type AgentPolicy, type GroupRef, type Level, type User } from '@/lib/api'
 import { useMe } from '@/lib/me'
+import { handle } from '@/lib/utils'
 
 interface Permissions {
   owner: User | null
@@ -130,8 +131,9 @@ export function ShareDialog({ alias, isOwner, open, onOpenChange }: { alias: str
                 </div>
                 {namedGroups.map((g) => (
                   <div key={g.group} className="flex items-center justify-between">
-                    <span>
-                      Group {g.name || <span className="text-muted-foreground">(deleted)</span>}
+                    <span className="flex items-center gap-2">
+                      <Users className="size-4 text-muted-foreground" />
+                      {g.name || <span className="text-muted-foreground">deleted group</span>}
                     </span>
                     <LevelSelect value={g.level} onChange={(l) => setGroup(g.group, l)} disabled={!isOwner} />
                   </div>
@@ -139,7 +141,7 @@ export function ShareDialog({ alias, isOwner, open, onOpenChange }: { alias: str
                 {perm.users.map((u) => (
                   <div key={u.user_id} className="flex items-center justify-between">
                     <span>
-                      {u.display_name || u.username} <span className="text-muted-foreground">@{u.username}</span>
+                      {u.display_name || u.username} <span className="text-muted-foreground">{handle(u.username)}</span>
                     </span>
                     <LevelSelect value={u.level} onChange={(l) => setUser(u.username, l)} disabled={!isOwner} />
                   </div>
@@ -152,16 +154,16 @@ export function ShareDialog({ alias, isOwner, open, onOpenChange }: { alias: str
                     <Input id="share-user" value={userQuery} onChange={(e) => setUserQuery(e.target.value)} placeholder="Name or group" className="h-8" />
                     {userQuery && (
                       <div className="flex flex-col rounded-md border">
-                        {found.users.map((u) => (
+                        {found.users.filter((u) => u.id !== perm.owner?.id).map((u) => (
                           <button key={u.id} className="flex items-center gap-2 px-2 py-1.5 text-left hover:bg-muted" onClick={() => { setUser(u.username, 'write'); setUserQuery('') }}>
-                            <UserPlus className="size-3.5" /> {u.display_name || u.username} <span className="text-muted-foreground">@{u.username}</span>
+                            <UserPlus className="size-3.5" /> {u.display_name || u.username} <span className="text-muted-foreground">{handle(u.username)}</span>
                           </button>
                         ))}
                         {found.groups
                           .filter((g) => !namedGroups.some((x) => x.group === g.id))
                           .map((g) => (
                             <button key={g.id} className="flex items-center gap-2 px-2 py-1.5 text-left hover:bg-muted" onClick={() => { setGroup(g.id, 'write'); setUserQuery('') }}>
-                              <Users className="size-3.5" /> Group {g.name}
+                              <Users className="size-3.5" /> {g.name} <span className="text-muted-foreground">group</span>
                             </button>
                           ))}
                         {found.users.length === 0 && found.groups.length === 0 && <div className="px-2 py-1.5 text-muted-foreground">Nobody matches. You can only add groups you belong to.</div>}
