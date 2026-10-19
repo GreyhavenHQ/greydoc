@@ -163,7 +163,7 @@ function GroupDetail({ id, onChanged, onClose }: { id: string; onChanged: () => 
   }
 
   return (
-    <div className="flex flex-col gap-6 border-t bg-muted/30 px-4 py-5 sm:pl-12" data-testid="group-detail">
+    <div className="flex flex-col gap-6 border-t bg-muted/30 px-4 py-5" data-testid="group-detail">
       <form onSubmit={save} className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="edit-name">Name</Label>
