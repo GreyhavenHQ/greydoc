@@ -104,8 +104,12 @@ func TestGroupAdminLifecycle(t *testing.T) {
 	alias := e.createNote(alice, "# Spec")
 	e.do(alice, "PUT", "/api/notes/"+alias+"/permissions/groups/"+design.ID, map[string]string{"level": "read"})
 	_, body = e.do(admin, "GET", "/api/admin/groups/"+design.ID, nil)
-	if !strings.Contains(body, `"note_count":1`) {
-		t.Fatalf("note count: %s", body)
+	if !strings.Contains(body, `"note_count":1`) || !strings.Contains(body, `"alias":"`+alias+`","title":"Spec","owner":"alice","level":"read","in_trash":false`) {
+		t.Fatalf("group notes: %s", body)
+	}
+	_, body = e.do(admin, "GET", "/api/admin/groups", nil)
+	if !strings.Contains(body, `"members":[{"id"`) {
+		t.Fatalf("member preview: %s", body)
 	}
 	if code, b := e.do(admin, "DELETE", "/api/admin/groups/"+design.ID, nil); code != 200 || !strings.Contains(b, `"notes":1`) {
 		t.Fatalf("delete: %d %s", code, b)

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 
+	"github.com/greyhavenhq/greydoc/internal/permission"
 	"github.com/greyhavenhq/greydoc/internal/secrets"
 )
 
@@ -261,6 +262,43 @@ func (s *Store) UserGroupIDs(ctx context.Context, userID string) ([]string, erro
 			return nil, err
 		}
 		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
+// GroupNote is a note that grants a group a level.
+type GroupNote struct {
+	ID      string           `json:"id"`
+	Alias   string           `json:"alias"`
+	Title   string           `json:"title"`
+	Owner   string           `json:"owner"`
+	Level   permission.Level `json:"level"`
+	InTrash bool             `json:"in_trash"`
+}
+
+func (s *Store) GroupNotes(ctx context.Context, groupID string) ([]GroupNote, error) {
+	rows, err := s.db.QueryContext(ctx, s.q(`SELECT n.id, COALESCE(a.name, ''), n.title,
+		CASE WHEN u.display_name <> '' THEN u.display_name ELSE COALESCE(u.username, '') END, gg.level,
+		CASE WHEN n.deleted_at IS NULL THEN 0 ELSE 1 END
+		FROM note_group_grant gg JOIN note n ON n.id = gg.note_id
+		LEFT JOIN note_alias a ON a.note_id = n.id AND a.is_primary = 1
+		LEFT JOIN app_user u ON u.id = n.owner_id
+		WHERE gg.group_name = ? ORDER BY LOWER(n.title), n.id`), groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []GroupNote{}
+	for rows.Next() {
+		var n GroupNote
+		var lvl string
+		var trash int
+		if err := rows.Scan(&n.ID, &n.Alias, &n.Title, &n.Owner, &lvl, &trash); err != nil {
+			return nil, err
+		}
+		n.Level, _ = permission.ParseLevel(lvl)
+		n.InTrash = trash == 1
+		out = append(out, n)
 	}
 	return out, rows.Err()
 }

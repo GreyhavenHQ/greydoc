@@ -24,6 +24,8 @@ func (s *Server) adminFor(w http.ResponseWriter, r *http.Request) (*Identity, bo
 	return nil, false
 }
 
+const memberPreview = 5
+
 func writeGroupError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, store.ErrNotFound):
@@ -90,7 +92,21 @@ func (s *Server) handleListGroups(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"groups": gs})
+	type listed struct {
+		store.Group
+		// Members holds the first few members, for the avatars of the list.
+		Members []store.User `json:"members"`
+	}
+	out := make([]listed, len(gs))
+	for i := range gs {
+		members, err := s.store.GroupMembers(r.Context(), &gs[i])
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		out[i] = listed{Group: gs[i], Members: members[:min(len(members), memberPreview)]}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"groups": out})
 }
 
 func (s *Server) handleCreateGroup(w http.ResponseWriter, r *http.Request) {
@@ -126,7 +142,12 @@ func (s *Server) writeGroupDetail(w http.ResponseWriter, r *http.Request, groupI
 		internalError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"group": g, "members": members})
+	notes, err := s.store.GroupNotes(r.Context(), g.ID)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"group": g, "members": members, "notes": notes})
 }
 
 func (s *Server) handleGetGroup(w http.ResponseWriter, r *http.Request) {
