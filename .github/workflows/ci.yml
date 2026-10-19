@@ -31,11 +31,29 @@ jobs:
 
   postgres:
     runs-on: ubuntu-latest
+    env:
+      NAME: greydoc-ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
     steps:
       - uses: actions/checkout@v4
-      - run: docker compose -f docker-compose.dev.yml build dev
-      - run: docker compose -f docker-compose.dev.yml --profile postgres up -d postgres
-      - run: sleep 5 && docker compose -f docker-compose.dev.yml run --rm dev just test-pg
+      - run: docker build -f Dockerfile.dev -t "$NAME" .
+      - run: |
+          docker rm -f "$NAME" "$NAME-pg" || true
+          docker network rm "$NAME" || true
+          docker network create "$NAME"
+          docker run -d --name "$NAME-pg" --network "$NAME" --network-alias postgres \
+            -e POSTGRES_USER=greydoc -e POSTGRES_PASSWORD=greydoc -e POSTGRES_DB=greydoc postgres:17-alpine
+          # Over TCP only: the init server listens on the socket alone, then restarts.
+          for i in $(seq 1 30); do docker exec "$NAME-pg" pg_isready -q -h 127.0.0.1 -U greydoc && break; sleep 1; done
+          docker exec "$NAME-pg" pg_isready -h 127.0.0.1 -U greydoc
+      - run: |
+          docker create --name "$NAME" --network "$NAME" -w /src $CACHE_VOLUMES "$NAME" just test-pg
+          docker cp ./. "$NAME:/src"
+          docker start -a "$NAME"
+      - if: always()
+        run: |
+          docker rm -f "$NAME" "$NAME-pg" || true
+          docker network rm "$NAME" || true
+          docker rmi "$NAME" || true
 
   ui:
     runs-on: ubuntu-latest
