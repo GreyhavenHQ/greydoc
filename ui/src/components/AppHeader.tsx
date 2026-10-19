@@ -90,13 +90,6 @@ export function UserMenu() {
             <ScrollText className="size-4" /> Audit log
           </Link>
         </DropdownMenuItem>
-        {me.admin && !me.local_mode && (
-          <DropdownMenuItem asChild>
-            <Link to="/admin/groups">
-              <Users className="size-4" /> Groups
-            </Link>
-          </DropdownMenuItem>
-        )}
         <DropdownMenuItem asChild>
           <Link to="/trash">
             <Trash2 className="size-4" /> Trash
@@ -107,6 +100,17 @@ export function UserMenu() {
             <BookOpen className="size-4" /> Features
           </Link>
         </DropdownMenuItem>
+        {me.admin && !me.local_mode && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link to="/admin/groups">
+                <Users className="size-4" /> Groups
+              </Link>
+            </DropdownMenuItem>
+          </>
+        )}
+        <DropdownMenuSeparator />
         {me.local_mode ? (
           <DropdownMenuItem
             onSelect={() => {
