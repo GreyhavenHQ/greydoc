@@ -159,3 +159,94 @@ func TestRemovingMemberClosesOpenEditor(t *testing.T) {
 		}
 	}
 }
+
+func TestShareWithGroups(t *testing.T) {
+	e, idp := adminEnv(t)
+	admin := e.login(idp, map[string]any{"sub": "x", "preferred_username": "root", "groups": []string{"admins"}})
+	alice := e.login(idp, map[string]any{"sub": "a", "preferred_username": "alice", "groups": []string{"eng"}})
+	_, body := e.do(admin, "POST", "/api/admin/groups", map[string]string{"name": "Design"})
+	var design groupView
+	_ = json.Unmarshal([]byte(body), &design)
+	_, body = e.do(admin, "POST", "/api/admin/groups", map[string]string{"name": "Engineering", "oidc_group": "eng"})
+	var eng groupView
+	_ = json.Unmarshal([]byte(body), &eng)
+	alias := e.createNote(alice, "# Spec")
+
+	// The picker lists only the caller's groups. Admins see all.
+	if _, b := e.do(alice, "GET", "/api/users?q=", nil); !strings.Contains(b, `{"id":"`+eng.ID+`","name":"Engineering"}`) || strings.Contains(b, "Design") {
+		t.Fatalf("alice picker: %s", b)
+	}
+	if _, b := e.do(alice, "GET", "/api/users?q=des", nil); strings.Contains(b, "Engineering") {
+		t.Fatalf("filter: %s", b)
+	}
+	if _, b := e.do(admin, "GET", "/api/users?q=", nil); !strings.Contains(b, "Design") || !strings.Contains(b, "Engineering") {
+		t.Fatalf("admin picker: %s", b)
+	}
+
+	grant := func(group, level string) int {
+		code, _ := e.do(alice, "PUT", "/api/notes/"+alias+"/permissions/groups/"+group, map[string]string{"level": level})
+		return code
+	}
+	if code := grant(design.ID, "write"); code != 403 {
+		t.Fatalf("group alice is not in: %d", code)
+	}
+	if code := grant("nope", "write"); code != 404 {
+		t.Fatalf("unknown group: %d", code)
+	}
+	if code := grant(eng.ID, "write"); code != 200 {
+		t.Fatalf("own group: %d", code)
+	}
+	if code, b := e.do(alice, "DELETE", "/api/notes/"+alias+"/permissions/groups/stale", nil); code != 200 {
+		t.Fatalf("removing a stale grant: %d %s", code, b)
+	}
+
+	adminNote := e.createNote(admin, "# Admin")
+	if code, _ := e.do(admin, "PUT", "/api/notes/"+adminNote+"/permissions/groups/"+design.ID, map[string]string{"level": "read"}); code != 200 {
+		t.Fatalf("admin grants any group: %d", code)
+	}
+
+	// Imports name groups.
+	code, b := e.do(alice, "POST", "/api/notes", map[string]any{"content": "# Imp", "permissions": map[string]any{"groups": map[string]string{"engineering": "comment"}}})
+	if code != 201 {
+		t.Fatalf("import with group: %d %s", code, b)
+	}
+	var created struct{ Alias string }
+	_ = json.Unmarshal([]byte(b), &created)
+	if _, b := e.do(alice, "GET", "/api/notes/"+created.Alias+"/permissions", nil); !strings.Contains(b, `"group":"`+eng.ID+`","name":"Engineering","level":"comment"`) {
+		t.Fatalf("imported grant: %s", b)
+	}
+	if code, _ := e.do(alice, "POST", "/api/notes", map[string]any{"content": "x", "permissions": map[string]any{"groups": map[string]string{"Design": "read"}}}); code != 400 {
+		t.Fatalf("import with a group alice is not in: %d", code)
+	}
+	if code, _ := e.do(alice, "POST", "/api/notes", map[string]any{"content": "x", "permissions": map[string]any{"groups": map[string]string{"ghosts": "read"}}}); code != 400 {
+		t.Fatalf("import with unknown group: %d", code)
+	}
+}
+
+func TestBundleKeepsGroupGrantsByName(t *testing.T) {
+	ctx := context.Background()
+	src := newTestEnv(t)
+	if _, err := src.srv.Store().CreateGroup(ctx, "Design", "", "", nil); err != nil {
+		t.Fatal(err)
+	}
+	code, body := src.do(nil, "POST", "/api/notes", map[string]any{"content": "# Trip\n", "alias": "trip",
+		"permissions": map[string]any{"groups": map[string]string{"Design": "write"}}})
+	if code != 201 {
+		t.Fatalf("%d %s", code, body)
+	}
+	_, raw := src.get("/api/notes/trip/export.zip")
+
+	dst := newTestEnv(t)
+	g, _ := dst.srv.Store().CreateGroup(ctx, "design", "", "", nil)
+	if code, body := importBundle(t, dst, "trip.zip", []byte(raw)); code != 201 {
+		t.Fatalf("import: %d %s", code, body)
+	}
+	if _, b := dst.get("/api/notes/trip/permissions"); !strings.Contains(b, `"group":"`+g.ID+`"`) {
+		t.Fatalf("grant not mapped: %s", b)
+	}
+
+	other := newTestEnv(t)
+	if code, body := importBundle(t, other, "trip.zip", []byte(raw)); code != 201 {
+		t.Fatalf("import without the group: %d %s", code, body)
+	}
+}
