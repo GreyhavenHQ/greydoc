@@ -2,7 +2,9 @@ package store
 
 import (
 	"context"
+
 	"fmt"
+	"github.com/greyhavenhq/greydoc/internal/notemeta"
 	"strings"
 )
 
@@ -54,9 +56,11 @@ type NoteSummary struct {
 	VisitedAt    string   `json:"visited_at,omitempty"`
 	Pinned       bool     `json:"pinned"`
 	Snippet      string   `json:"snippet,omitempty"`
-	ViewCount    int64    `json:"view_count"`
-	Slides       bool     `json:"slides"`
-	FolderID     string   `json:"folder_id,omitempty"`
+	// Excerpt is the first line of text, for lists.
+	Excerpt   string `json:"excerpt,omitempty"`
+	ViewCount int64  `json:"view_count"`
+	Slides    bool   `json:"slides"`
+	FolderID  string `json:"folder_id,omitempty"`
 	// FolderName is empty when the viewer cannot see the folder.
 	FolderName string `json:"folder_name,omitempty"`
 }
@@ -167,7 +171,7 @@ func (s *Store) ListNotes(ctx context.Context, f ListFilter) ([]NoteSummary, err
 		args = append(fargs, args...)
 	}
 	rows, err := s.db.QueryContext(ctx, s.q(`SELECT n.id, a.name, n.title, n.description, COALESCE(u.display_name, ''), COALESCE(n.owner_id, ''), n.updated_at,
-		COALESCE(v.visited_at, ''), COALESCE(v.pinned, 0), n.view_count, n.slides, COALESCE(n.folder_id, ''), `+folderName+`
+		COALESCE(v.visited_at, ''), COALESCE(v.pinned, 0), n.view_count, n.slides, COALESCE(n.folder_id, ''), `+folderName+`, SUBSTR(n.content, 1, 600)
 		FROM note n JOIN note_alias a ON a.note_id = n.id AND a.is_primary = 1
 		LEFT JOIN app_user u ON u.id = n.owner_id LEFT JOIN folder fo ON fo.id = n.folder_id `+join+`
 		WHERE `+where+` ORDER BY `+order+` LIMIT ? OFFSET ?`), args...)
@@ -178,12 +182,14 @@ func (s *Store) ListNotes(ctx context.Context, f ListFilter) ([]NoteSummary, err
 	for rows.Next() {
 		var n NoteSummary
 		var pinned, slides int
-		if err := rows.Scan(&n.ID, &n.PrimaryAlias, &n.Title, &n.Description, &n.OwnerName, &n.OwnerID, &n.UpdatedAt, &n.VisitedAt, &pinned, &n.ViewCount, &slides, &n.FolderID, &n.FolderName); err != nil {
+		var head string
+		if err := rows.Scan(&n.ID, &n.PrimaryAlias, &n.Title, &n.Description, &n.OwnerName, &n.OwnerID, &n.UpdatedAt, &n.VisitedAt, &pinned, &n.ViewCount, &slides, &n.FolderID, &n.FolderName, &head); err != nil {
 			rows.Close()
 			return nil, err
 		}
 		n.Pinned = pinned == 1
 		n.Slides = slides == 1
+		n.Excerpt = notemeta.Excerpt(head, 160)
 		out = append(out, n)
 	}
 	rows.Close()
