@@ -1,6 +1,7 @@
 package store
 
 import (
+	"fmt"
 	"slices"
 	"testing"
 
@@ -145,6 +146,87 @@ func TestListNotesOwnerID(t *testing.T) {
 		}
 		if got[owned.ID] != alice.ID || got[unowned.ID] != "" {
 			t.Fatalf("owner ids %v", got)
+		}
+	})
+}
+
+func TestListNotesPinnedFirst(t *testing.T) {
+	eachDialect(t, func(t *testing.T, st *Store) {
+		alice, _ := st.UpsertOIDCUser(ctx, "a", "alice", "Alice", "", nil)
+		bob, _ := st.UpsertOIDCUser(ctx, "b", "bob", "Bob", "", nil)
+		folder, err := st.CreateFolder(ctx, NewFolder{OwnerID: alice.ID, Name: "F"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids := map[string]string{}
+		for _, n := range []struct{ alias, title, updated string }{
+			{"zeta", "Zeta", "2024-01-01T00:00:00.000000Z"},
+			{"alpha", "alpha", "2024-01-02T00:00:00.000000Z"},
+			{"empty", "", "2024-01-03T00:00:00.000000Z"},
+			{"mid", "Mid", "2024-01-04T00:00:00.000000Z"},
+			{"plain", "Plain", "2024-01-05T00:00:00.000000Z"},
+		} {
+			note, err := st.CreateNote(ctx, NewNote{OwnerID: alice.ID, Alias: n.alias, UpdatedAt: n.updated, Users: map[string]permission.Level{bob.ID: permission.Read}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			ids[n.alias] = note.ID
+			if err := st.SaveNoteState(ctx, note.ID, NoteState{Title: n.title, Tags: []string{"t"}}); err != nil {
+				t.Fatal(err)
+			}
+			if err := st.MoveNote(ctx, note.ID, folder.ID, nil); err != nil {
+				t.Fatal(err)
+			}
+		}
+		for i, a := range []string{"zeta", "alpha", "empty"} {
+			if err := st.SetPinned(ctx, alice.ID, ids[a], true); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := st.db.Exec(st.q(`UPDATE note_visit SET visited_at = ? WHERE user_id = ? AND note_id = ?`), fmt.Sprintf("2024-02-0%dT00:00:00.000000Z", i+1), alice.ID, ids[a]); err != nil {
+				t.Fatal(err)
+			}
+		}
+		_ = st.RecordVisit(ctx, alice.ID, ids["mid"])
+		aliases := func(v Viewer, f ListFilter) []string {
+			f.Viewer = v
+			ns, err := st.ListNotes(ctx, f)
+			if err != nil {
+				t.Fatal(err)
+			}
+			out := []string{}
+			for _, n := range ns {
+				out = append(out, n.PrimaryAlias)
+			}
+			return out
+		}
+		av, bv := Viewer{UserID: alice.ID}, Viewer{UserID: bob.ID}
+		want := []string{"alpha", "empty", "zeta", "plain", "mid"}
+		for name, f := range map[string]ListFilter{
+			"all":    {Scope: ScopeAll},
+			"mine":   {Scope: ScopeMine},
+			"folder": {Scope: ScopeAll, Folder: folder.ID},
+			"tag":    {Scope: ScopeAll, Tag: "t"},
+		} {
+			if got := aliases(av, f); !slices.Equal(got, want) {
+				t.Errorf("%s: %v, want %v", name, got, want)
+			}
+		}
+		var paged []string
+		for off := 0; off < 6; off += 2 {
+			paged = append(paged, aliases(av, ListFilter{Scope: ScopeAll, Limit: 2, Offset: off})...)
+		}
+		if !slices.Equal(paged, want) {
+			t.Errorf("pages: %v, want %v", paged, want)
+		}
+		if got, want := aliases(bv, ListFilter{Scope: ScopeAll}), []string{"plain", "mid", "empty", "alpha", "zeta"}; !slices.Equal(got, want) {
+			t.Errorf("bob: %v, want %v", got, want)
+		}
+		if got, want := aliases(av, ListFilter{Scope: ScopeRecent}), []string{"empty", "alpha", "zeta", "mid"}; !slices.Equal(got, want) {
+			t.Errorf("recent: %v, want %v", got, want)
+		}
+		search := []string{ids["zeta"], ids["mid"], ids["alpha"]}
+		if got, want := aliases(av, ListFilter{Scope: ScopeAll, IDs: search}), []string{"zeta", "mid", "alpha"}; !slices.Equal(got, want) {
+			t.Errorf("search: %v, want %v", got, want)
 		}
 	})
 }
