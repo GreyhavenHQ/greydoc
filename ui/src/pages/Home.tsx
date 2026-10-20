@@ -83,7 +83,6 @@ export default function Home() {
   const [nameDialog, setNameDialog] = useState<null | { title: string; value: string; submit: (name: string) => Promise<void> }>(null)
   const navigate = useNavigate()
   const refresh = () => setReload((n) => n + 1)
-  const drop = useDropImport(refresh, (alias) => navigate('/n/' + alias))
   const local = !!me?.local_mode
 
   const update = (patch: Record<string, string>) => {
@@ -236,6 +235,15 @@ export default function Home() {
   const folder = folderId && view?.folder.id === folderId ? view : null
   const canWrite = folder ? atLeast(folder.level, 'write') : true
   const isFolderOwner = folder ? folder.level === 'full' : false
+  const drop = useDropImport({
+    // Drops land in a place on screen: My documents or an open folder. Other views list documents from many places.
+    enabled: !flat && (folderId ? !!folder : scope === 'mine'),
+    folder: folder ? { id: folder.folder.id, name: folder.folder.name } : undefined,
+    canWrite,
+    rootLabel: local ? 'Documents' : scopeTitles.mine,
+    onDone: refresh,
+    open: (alias) => navigate('/n/' + alias),
+  })
   const selection = useMemo(() => splitSelection(selected), [selected])
   const scopes = useMemo<{ id: Scope; label: string }[]>(
     () =>
@@ -355,10 +363,10 @@ export default function Home() {
   return (
     <div className="min-h-screen" {...drop.handlers}>
       {drop.over && (
-        <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm" data-testid="drop-overlay">
-          <div className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-primary/60 bg-card px-16 py-12 text-center shadow-lg">
+        <div className="pointer-events-none fixed inset-0 z-50 flex items-end justify-center border-2 border-dashed border-primary/60 pb-10" data-testid="drop-overlay">
+          <div className="flex flex-col items-center gap-2 rounded-xl border bg-card px-10 py-6 text-center shadow-lg">
             <FileUp className="size-8 text-primary" />
-            <div className="font-medium">Drop to import</div>
+            <div className="font-medium">{drop.label}</div>
             <div className="text-sm text-muted-foreground">A greydoc .zip with its uploads, or a Markdown file</div>
           </div>
         </div>
@@ -528,6 +536,7 @@ export default function Home() {
             onPin={togglePin}
             onTag={(t) => update({ tag: t })}
             onMenu={(target, x, y) => setMenu({ target, x, y })}
+            dropTarget={drop.row?.id}
           />
         )}
         {notes && hasMore && (
@@ -648,6 +657,8 @@ interface ItemListProps {
   // recent shows when the viewer last opened each document instead of when it changed.
   recent?: boolean
   onMenu: (target: MenuTarget, x: number, y: number) => void
+  // dropTarget is the folder row that files dragged over the page will land in.
+  dropTarget?: string
 }
 
 function MenuButton({ label, onOpen }: { label: string; onOpen: (x: number, y: number) => void }) {
@@ -666,7 +677,7 @@ function MenuButton({ label, onOpen }: { label: string; onOpen: (x: number, y: n
 }
 
 // ItemList shows folders, then documents, as rows: name, location, owner and last change.
-function ItemList({ folders, notes, showLocation, selected, allSelected, onSelectAll, onSelect, onPin, onTag, recent, onMenu }: ItemListProps) {
+function ItemList({ folders, notes, showLocation, selected, allSelected, onSelectAll, onSelect, onPin, onTag, recent, onMenu, dropTarget }: ItemListProps) {
   const navigate = useNavigate()
   const any = selected.size > 0
   const row = (sel: boolean) =>
@@ -688,7 +699,10 @@ function ItemList({ folders, notes, showLocation, selected, allSelected, onSelec
             return (
               <li
                 key={f.id}
-                className={row(selected.has(key))}
+                className={cn(row(selected.has(key)), dropTarget === f.id && 'bg-primary/10 ring-2 ring-primary/60 ring-inset')}
+                data-drop-folder={f.id}
+                data-drop-name={f.name}
+                data-drop-target={dropTarget === f.id || undefined}
                 onContextMenu={(e) => {
                   e.preventDefault()
                   onMenu({ kind: 'folder', folder: f }, e.clientX, e.clientY)
@@ -912,19 +926,48 @@ function TagChip({ tag, selected, onClick }: { tag: TagCount; selected: boolean;
   )
 }
 
-// useDropImport turns files dropped on the page into notes. Only drags that carry files count.
-function useDropImport(onDone: () => void, open: (alias: string) => void) {
+const readOnlyFolder = 'You cannot add documents to this folder.'
+
+interface DropTarget {
+  id: string
+  name: string
+}
+
+// rowAt finds the folder row under a drag event, from the data-drop-* attributes of ItemList.
+function rowAt(e: React.DragEvent): DropTarget | null {
+  const el = e.target instanceof Element ? e.target.closest<HTMLElement>('[data-drop-folder]') : null
+  return el ? { id: el.dataset.dropFolder!, name: el.dataset.dropName ?? '' } : null
+}
+
+// useDropImport turns files dropped on the page into notes, in the folder row under the drop, else in the page folder.
+// Only drags that carry files count. A disabled page still takes the drop, so that the browser does not open the file.
+function useDropImport(opts: {
+  enabled: boolean
+  folder?: DropTarget
+  canWrite: boolean
+  rootLabel: string
+  onDone: () => void
+  open: (alias: string) => void
+}) {
+  const { enabled, folder, canWrite, rootLabel, onDone, open } = opts
   const [over, setOver] = useState(false)
+  const [row, setRow] = useState<DropTarget | null>(null)
   const depth = useRef(0)
   const hasFiles = (e: React.DragEvent) => Array.from(e.dataTransfer.types).includes('Files')
-  const run = async (files: File[]) => {
+  const reset = () => {
+    depth.current = 0
+    setOver(false)
+    setRow(null)
+  }
+  useEffect(reset, [enabled, folder?.id])
+  const run = async (files: File[], target?: DropTarget) => {
     const ok = files.filter((f) => isImportable(f.name))
     if (ok.length === 0) {
       toast.error('Drop a greydoc .zip or a Markdown file.')
       return
     }
     const t = toast.loading(ok.length === 1 ? `Importing ${ok[0].name}…` : `Importing ${ok.length} files…`)
-    const results = await importFiles(ok)
+    const results = await importFiles(ok, target?.id)
     toast.dismiss(t)
     for (const r of results) {
       if (r.error || !r.note) {
@@ -938,30 +981,44 @@ function useDropImport(onDone: () => void, open: (alias: string) => void) {
     }
     onDone()
   }
+  const label = row ? 'Drop into ' + row.name : !canWrite ? readOnlyFolder : 'Drop into ' + (folder?.name ?? rootLabel)
   return {
-    over,
+    over: enabled && over,
+    row: enabled ? row : null,
+    label,
     handlers: {
       onDragEnter: (e: React.DragEvent) => {
-        if (!hasFiles(e)) return
+        if (!enabled || !hasFiles(e)) return
         depth.current++
         setOver(true)
       },
       onDragLeave: (e: React.DragEvent) => {
-        if (!hasFiles(e)) return
+        if (!enabled || !hasFiles(e)) return
         depth.current = Math.max(0, depth.current - 1)
-        if (depth.current === 0) setOver(false)
+        if (depth.current === 0) reset()
       },
       onDragOver: (e: React.DragEvent) => {
         if (!hasFiles(e)) return
         e.preventDefault()
+        if (!enabled) {
+          e.dataTransfer.dropEffect = 'none'
+          return
+        }
         e.dataTransfer.dropEffect = 'copy'
+        const r = rowAt(e)
+        if (r?.id !== row?.id) setRow(r)
       },
       onDrop: (e: React.DragEvent) => {
         if (!hasFiles(e)) return
         e.preventDefault()
-        depth.current = 0
-        setOver(false)
-        void run(Array.from(e.dataTransfer.files))
+        if (!enabled) return
+        const r = rowAt(e)
+        reset()
+        if (!r && !canWrite) {
+          toast.error(readOnlyFolder)
+          return
+        }
+        void run(Array.from(e.dataTransfer.files), r ?? folder)
       },
     },
   }
