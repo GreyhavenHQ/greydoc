@@ -96,15 +96,25 @@ func (s *Server) readUpload(w http.ResponseWriter, r *http.Request) (uploadFile,
 
 // storeUpload writes a checked file to the uploads directory and records it on the note.
 func (s *Server) storeUpload(ctx context.Context, noteID, userID string, f uploadFile) (*store.Media, error) {
+	name, err := s.writeUpload(f)
+	if err != nil {
+		return nil, err
+	}
+	m := uploadMedia(noteID, userID, name, f)
+	return m, s.store.AddMedia(ctx, m)
+}
+
+// writeUpload writes the file under a new stored name and returns that name.
+func (s *Server) writeUpload(f uploadFile) (string, error) {
 	name := secrets.NewID() + f.ext
 	if err := os.MkdirAll(s.uploadsDir(), 0o755); err != nil {
-		return nil, err
+		return "", err
 	}
-	if err := os.WriteFile(filepath.Join(s.uploadsDir(), name), f.data, 0o644); err != nil {
-		return nil, err
-	}
-	m := &store.Media{NoteID: noteID, StoredName: name, Filename: f.name, ContentType: f.contentType, Size: int64(len(f.data)), UploadedBy: userID}
-	return m, s.store.AddMedia(ctx, m)
+	return name, os.WriteFile(filepath.Join(s.uploadsDir(), name), f.data, 0o644)
+}
+
+func uploadMedia(noteID, userID, name string, f uploadFile) *store.Media {
+	return &store.Media{NoteID: noteID, StoredName: name, Filename: f.name, ContentType: f.contentType, Size: int64(len(f.data)), UploadedBy: userID}
 }
 
 func (s *Server) handleServeUpload(w http.ResponseWriter, r *http.Request) {
