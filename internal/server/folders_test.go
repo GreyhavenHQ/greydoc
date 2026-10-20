@@ -194,3 +194,35 @@ func TestFolderGrantRemovalClosesEditor(t *testing.T) {
 		t.Fatal("editor still open one second after the folder grant was removed")
 	}
 }
+
+func TestMCPFolders(t *testing.T) {
+	e, idp := newOIDCEnv(t)
+	alice := e.login(idp, map[string]any{"sub": "a", "preferred_username": "alice"})
+	folder := e.createFolder(alice, "Agents", "")
+	_, body := e.do(alice, "POST", "/api/tokens", map[string]string{"label": "laptop"})
+	var tok struct{ Token string }
+	_ = json.Unmarshal([]byte(body), &tok)
+	s := e.mcp(tok.Token)
+	if out, isErr := call(t, s, "list_folders", nil); isErr || !strings.Contains(out, "Agents") {
+		t.Fatalf("list_folders: %s", out)
+	}
+	out, isErr := call(t, s, "create_note", map[string]any{"content": "# From agent", "folder": folder, "agent_policy": "edit"})
+	if isErr {
+		t.Fatalf("create in folder: %s", out)
+	}
+	var n struct{ Alias string }
+	_ = json.Unmarshal([]byte(out), &n)
+	if out, _ := call(t, s, "list_notes", map[string]any{"folder": folder}); !strings.Contains(out, n.Alias) {
+		t.Fatalf("list in folder: %s", out)
+	}
+	if out, isErr := call(t, s, "move_note", map[string]any{"note": n.Alias}); isErr {
+		t.Fatalf("move out: %s", out)
+	}
+	if out, _ := call(t, s, "list_notes", map[string]any{"folder": "root", "scope": "mine"}); !strings.Contains(out, n.Alias) {
+		t.Fatalf("not at top level: %s", out)
+	}
+	other := e.createNote(alice, "suggest only")
+	if out, isErr := call(t, s, "move_note", map[string]any{"note": other, "folder": folder}); !isErr {
+		t.Fatalf("moved a note without the edit policy: %s", out)
+	}
+}
