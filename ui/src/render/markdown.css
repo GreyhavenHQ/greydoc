@@ -208,3 +208,7 @@
 .markdown-body a.header-anchor:hover { background: rgb(var(--primary)); }
 .greydoc-deck a.header-anchor { display: none; }
 @media print { .markdown-body a.header-anchor { display: none; } }
+.markdown-body .preview-thread { background: rgb(234 179 8 / 0.22); border-bottom: 2px solid rgb(234 179 8 / 0.7); cursor: pointer; }
+.markdown-body .preview-thread.preview-thread-active { background: rgb(234 179 8 / 0.42); }
+.markdown-body .preview-thread-block { box-shadow: -6px 0 0 rgb(234 179 8 / 0.7); background: rgb(234 179 8 / 0.12); cursor: pointer; }
+.markdown-body .preview-thread-block.preview-thread-active { background: rgb(234 179 8 / 0.28); }
