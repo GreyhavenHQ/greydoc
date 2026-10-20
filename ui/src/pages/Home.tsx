@@ -20,6 +20,7 @@ import {
   Share2,
   Tag,
   Trash2,
+  Users,
   X,
 } from 'lucide-react'
 import { AppHeader } from '@/components/AppHeader'
@@ -35,7 +36,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
-import { api, atLeast, noteTitle, type FolderSummary, type FolderView, type NoteSummary, type TagCount } from '@/lib/api'
+import { api, atLeast, noteTitle, type FolderSummary, type FolderView, type GroupRef, type NoteSummary, type TagCount } from '@/lib/api'
 import { folderKey, noteKey, splitSelection } from '@/lib/folders'
 import { useMe } from '@/lib/me'
 import { importFiles, isImportable } from '@/lib/importNotes'
@@ -95,7 +96,9 @@ export default function Home() {
   }
 
   const q = params.get('q') ?? ''
-  const urlFlat = !!(q || tag)
+  const group = params.get('group') ?? ''
+  const [groupInfo, setGroupInfo] = useState<GroupRef | null>(null)
+  const urlFlat = !!(q || tag || group)
   // pageQuery is the /api/notes query of the current view. Pages add limit and offset to it.
   const pageQuery = useMemo(() => {
     const sp: Record<string, string> = {}
@@ -103,6 +106,7 @@ export default function Home() {
       sp.scope = 'all'
       if (tag) sp.tag = tag
       if (q) sp.q = q
+      if (group) sp.group = group
     } else if (urlFolderId) {
       Object.assign(sp, { scope: 'all', folder: urlFolderId })
     } else if (urlScope === 'mine') {
@@ -111,7 +115,7 @@ export default function Home() {
       sp.scope = urlScope
     }
     return new URLSearchParams(sp).toString()
-  }, [urlFlat, tag, q, urlFolderId, urlScope, local])
+  }, [urlFlat, tag, q, group, urlFolderId, urlScope, local])
   // shown is the view on screen. It changes together with its data, so the old view stays until the new one is ready.
   const [shown, setShown] = useState<{ folderId?: string; scope: Scope; flat: boolean }>({ folderId: urlFolderId, scope: urlScope, flat: urlFlat })
   const [loading, setLoading] = useState(false)
@@ -128,8 +132,7 @@ export default function Home() {
   const [loadingMore, setLoadingMore] = useState(false)
   // generation drops pages that arrive after the view changed.
   const generation = useRef(0)
-  const page = (offset: number) =>
-    api.get<{ notes: NoteSummary[] }>(`/api/notes?${pageQuery}&limit=${pageSize}&offset=${offset}`).then((r) => r.notes)
+  const page = (offset: number) => api.get<{ notes: NoteSummary[]; group?: GroupRef }>(`/api/notes?${pageQuery}&limit=${pageSize}&offset=${offset}`)
 
   useEffect(() => {
     if (!me?.authenticated) return
@@ -144,8 +147,10 @@ export default function Home() {
           ? api.get<{ folders: FolderSummary[] }>('/api/folders?scope=' + urlScope).then((r) => ({ children: r.folders, view: null }))
           : Promise.resolve({ children: [], view: null })
     Promise.all([folderList, page(0)]).then(
-      ([fs, ns]) => {
+      ([fs, r]) => {
         if (gen !== generation.current) return
+        const ns = r.notes
+        setGroupInfo(r.group ?? null)
         setShown(next)
         setView(fs.view)
         setFolders(fs.children)
@@ -175,7 +180,7 @@ export default function Home() {
     const gen = generation.current
     setLoadingMore(true)
     try {
-      const more = await page(notes.length)
+      const more = (await page(notes.length)).notes
       if (gen !== generation.current) return
       setNotes((cur) => {
         const seen = new Set((cur ?? []).map((n) => n.id))
@@ -334,7 +339,9 @@ export default function Home() {
   const tab: Scope = urlFolderId ? (folderId ? (sharedRoot ? 'shared' : 'mine') : scope) : urlScope
   const recent = !flat && !folderId && scope === 'recent'
   const emptyText = flat
-    ? 'No documents match.'
+    ? group && !q && !tag
+      ? 'None of the documents shared with this group is open to you.'
+      : 'No documents match.'
     : folderId
       ? 'This folder is empty.'
       : scope === 'recent'
@@ -396,6 +403,15 @@ export default function Home() {
           ) : (
             <div className="flex items-center gap-2 text-sm">
               <span className="text-muted-foreground">Showing</span>
+              {group && (
+                <Badge variant="secondary" className="gap-1">
+                  <Users className="size-3" />
+                  {groupInfo?.name ?? 'group'}
+                  <button aria-label="Clear group" onClick={() => update({ group: '' })}>
+                    <X className="size-3" />
+                  </button>
+                </Badge>
+              )}
               {tag && (
                 <Badge variant="secondary" className="gap-1">
                   #{tag}
