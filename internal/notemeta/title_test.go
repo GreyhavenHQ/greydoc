@@ -39,3 +39,35 @@ func TestFirstHeadingStripsInlineMarkup(t *testing.T) {
 		}
 	}
 }
+
+func TestPrefixTitle(t *testing.T) {
+	cases := []struct {
+		name, in, want string
+	}{
+		{"front matter plain", "---\ntitle: Plan\n---\n# Heading", "---\ntitle: Copy of Plan\n---\n# Heading"},
+		{"front matter double quoted", "---\ntitle: \"Plan: v2\"\n---\nbody", "---\ntitle: \"Copy of Plan: v2\"\n---\nbody"},
+		{"front matter single quoted", "---\ntitle: 'Plan'\n---\nbody", "---\ntitle: 'Copy of Plan'\n---\nbody"},
+		{"front matter block scalar", "---\ntitle: |\n  Plan\n---\nbody", "---\ntitle: |\n  Plan\n---\nbody"},
+		{"opengraph title", "---\nopengraph:\n  title: Plan\n---\n# Heading", "---\nopengraph:\n  title: Plan\n---\n# Heading"},
+		{"front matter without title", "---\ntags: a\n---\n# Heading", "---\ntags: a\n---\n# Copy of Heading"},
+		{"atx heading", "intro\n## Plan ##\ntext", "intro\n## Copy of Plan ##\ntext"},
+		{"setext heading", "Plan\n====\ntext", "Copy of Plan\n====\ntext"},
+		{"heading in code fence", "```\n# not\n```\n# Plan", "```\n# not\n```\n# Copy of Plan"},
+		{"empty atx heading", "#\n# Plan", "#\n# Copy of Plan"},
+		{"no title", "just text\nmore", "just text\nmore"},
+		{"empty", "", ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := PrefixTitle(c.in, "Copy of ")
+			if got != c.want {
+				t.Fatalf("got %q, want %q", got, c.want)
+			}
+			if before := Extract(c.in).Title; before != "" && got != c.in {
+				if after := Extract(got).Title; after != "Copy of "+before {
+					t.Fatalf("title %q, want %q", after, "Copy of "+before)
+				}
+			}
+		})
+	}
+}
