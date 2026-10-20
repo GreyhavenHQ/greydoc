@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Copy, Link2, Trash2, UserPlus } from 'lucide-react'
+import { Copy, Link2, Trash2, UserPlus, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   Dialog,
@@ -13,13 +13,14 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
-import { api, type AgentPolicy, type Level, type User } from '@/lib/api'
+import { api, type AgentPolicy, type GroupRef, type Level, type User } from '@/lib/api'
 import { useMe } from '@/lib/me'
+import { handle } from '@/lib/utils'
 
 interface Permissions {
   owner: User | null
   users: { user_id: string; username: string; display_name: string; level: Level }[]
-  groups: { group: string; level: Level }[]
+  groups: { group: string; name?: string; level: Level }[]
   share_links: { id: string; token: string; label: string; created_at: string }[] | null
   agent_policy: AgentPolicy
   guest_max: Level
@@ -62,7 +63,7 @@ export function ShareDialog({ alias, isOwner, open, onOpenChange }: { alias: str
   const { me } = useMe()
   const [perm, setPerm] = useState<Permissions | null>(null)
   const [userQuery, setUserQuery] = useState('')
-  const [found, setFound] = useState<User[]>([])
+  const [found, setFound] = useState<{ users: User[]; groups: GroupRef[] }>({ users: [], groups: [] })
   const base = '/api/notes/' + alias
 
   useEffect(() => {
@@ -72,7 +73,7 @@ export function ShareDialog({ alias, isOwner, open, onOpenChange }: { alias: str
   useEffect(() => {
     if (!open || !isOwner || me?.local_mode) return
     const t = setTimeout(() => {
-      api.get<{ users: User[] }>('/api/users?q=' + encodeURIComponent(userQuery)).then((r) => setFound(r.users))
+      api.get<{ users: User[]; groups: GroupRef[] }>('/api/users?q=' + encodeURIComponent(userQuery)).then(setFound)
     }, 200)
     return () => clearTimeout(t)
   }, [userQuery, open, isOwner, me])
@@ -90,6 +91,7 @@ export function ShareDialog({ alias, isOwner, open, onOpenChange }: { alias: str
     call(() => (level === 'deny' ? api.del<Permissions>(`${base}/permissions/users/${encodeURIComponent(username)}`) : api.put<Permissions>(`${base}/permissions/users/${encodeURIComponent(username)}`, { level })))
 
   const groupLevel = (g: string) => perm?.groups.find((x) => x.group === g)?.level ?? 'deny'
+  const namedGroups = perm?.groups.filter((g) => !g.group.startsWith('_')) ?? []
 
   const createLink = async () => {
     const r = await api.post<{ url: string }>(base + '/share-links', { label: 'view-only' })
@@ -127,10 +129,19 @@ export function ShareDialog({ alias, isOwner, open, onOpenChange }: { alias: str
                   </span>
                   <LevelSelect value={groupLevel('_everyone')} onChange={(l) => setGroup('_everyone', l)} max={perm.guest_max} disabled={!isOwner} />
                 </div>
+                {namedGroups.map((g) => (
+                  <div key={g.group} className="flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      <Users className="size-4 text-muted-foreground" />
+                      {g.name || <span className="text-muted-foreground">deleted group</span>}
+                    </span>
+                    <LevelSelect value={g.level} onChange={(l) => setGroup(g.group, l)} disabled={!isOwner} />
+                  </div>
+                ))}
                 {perm.users.map((u) => (
                   <div key={u.user_id} className="flex items-center justify-between">
                     <span>
-                      {u.display_name || u.username} <span className="text-muted-foreground">@{u.username}</span>
+                      {u.display_name || u.username} <span className="text-muted-foreground">{handle(u.username)}</span>
                     </span>
                     <LevelSelect value={u.level} onChange={(l) => setUser(u.username, l)} disabled={!isOwner} />
                   </div>
@@ -138,19 +149,24 @@ export function ShareDialog({ alias, isOwner, open, onOpenChange }: { alias: str
                 {isOwner && (
                   <div className="flex flex-col gap-1.5 pt-1">
                     <Label htmlFor="share-user" className="text-xs text-muted-foreground">
-                      Add a person
+                      Add a person or group
                     </Label>
-                    <Input id="share-user" value={userQuery} onChange={(e) => setUserQuery(e.target.value)} placeholder="Name or username" className="h-8" />
+                    <Input id="share-user" value={userQuery} onChange={(e) => setUserQuery(e.target.value)} placeholder="Name or group" className="h-8" />
                     {userQuery && (
                       <div className="flex flex-col rounded-md border">
-                        {found.map((u) => (
+                        {found.users.filter((u) => u.id !== perm.owner?.id).map((u) => (
                           <button key={u.id} className="flex items-center gap-2 px-2 py-1.5 text-left hover:bg-muted" onClick={() => { setUser(u.username, 'write'); setUserQuery('') }}>
-                            <UserPlus className="size-3.5" /> {u.display_name || u.username} <span className="text-muted-foreground">@{u.username}</span>
+                            <UserPlus className="size-3.5" /> {u.display_name || u.username} <span className="text-muted-foreground">{handle(u.username)}</span>
                           </button>
                         ))}
-                        {found.length === 0 && (
-                          <p className="px-2 py-1.5 text-muted-foreground">No one found. People appear here after their first sign-in.</p>
-                        )}
+                        {found.groups
+                          .filter((g) => !namedGroups.some((x) => x.group === g.id))
+                          .map((g) => (
+                            <button key={g.id} className="flex items-center gap-2 px-2 py-1.5 text-left hover:bg-muted" onClick={() => { setGroup(g.id, 'write'); setUserQuery('') }}>
+                              <Users className="size-3.5" /> {g.name} <span className="text-muted-foreground">group</span>
+                            </button>
+                          ))}
+                        {found.users.length === 0 && found.groups.length === 0 && <div className="px-2 py-1.5 text-muted-foreground">Nobody matches. You can only add groups you belong to.</div>}
                       </div>
                     )}
                   </div>

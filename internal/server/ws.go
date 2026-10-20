@@ -98,7 +98,11 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				return permission.Deny, nil
 			}
-			return s.noteLevel(ctx, id, cur, token)
+			fresh, err := s.withFreshGroups(ctx, id)
+			if err != nil {
+				return permission.Deny, err
+			}
+			return s.noteLevel(ctx, fresh, cur, token)
 		},
 	}
 	if id != nil && id.Local {

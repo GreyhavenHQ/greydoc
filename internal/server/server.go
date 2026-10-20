@@ -264,6 +264,13 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("PUT /api/notes/{alias}/agent-policy", s.handleSetAgentPolicy)
 	s.mux.HandleFunc("POST /api/notes/{alias}/share-links", s.handleCreateShareLink)
 	s.mux.HandleFunc("DELETE /api/notes/{alias}/share-links/{id}", s.handleDeleteShareLink)
+	s.mux.HandleFunc("GET /api/admin/groups", s.handleListGroups)
+	s.mux.HandleFunc("POST /api/admin/groups", s.handleCreateGroup)
+	s.mux.HandleFunc("GET /api/admin/groups/{id}", s.handleGetGroup)
+	s.mux.HandleFunc("PATCH /api/admin/groups/{id}", s.handleUpdateGroup)
+	s.mux.HandleFunc("DELETE /api/admin/groups/{id}", s.handleDeleteGroup)
+	s.mux.HandleFunc("PUT /api/admin/groups/{id}/members/{username}", s.handleGroupMember)
+	s.mux.HandleFunc("DELETE /api/admin/groups/{id}/members/{username}", s.handleGroupMember)
 	s.mux.Handle("/", s.uiHandler())
 }
 

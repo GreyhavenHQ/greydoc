@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { BookOpen, CircleHelp, LogIn, LogOut, Moon, Plus, ScrollText, Settings, Sun, Trash2 } from 'lucide-react'
+import { BookOpen, CircleHelp, LogIn, LogOut, Moon, Plus, ScrollText, Settings, Sun, Trash2, Users } from 'lucide-react'
 import { SyntaxHelp } from '@/components/SyntaxHelp'
 import { NotificationBell } from '@/components/NotificationBell'
 import { Logo } from '@/components/Logo'
@@ -16,6 +16,7 @@ import {
 import { useTheme } from '@/lib/theme'
 import { loginHref, useMe } from '@/lib/me'
 import { localName, setLocalName } from '@/lib/presence'
+import { handle } from '@/lib/utils'
 
 export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme()
@@ -67,7 +68,7 @@ export function UserMenu() {
         <DropdownMenuLabel className="font-normal">
           <div className="text-sm font-medium">{name}</div>
           <div className="text-xs text-muted-foreground">
-            {me.local_mode ? 'Local mode, no sign-in' : '@' + me.username}
+            {me.local_mode ? 'Local mode, no sign-in' : handle(me.username ?? '')}
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
@@ -99,6 +100,17 @@ export function UserMenu() {
             <BookOpen className="size-4" /> Features
           </Link>
         </DropdownMenuItem>
+        {me.admin && !me.local_mode && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link to="/admin/groups">
+                <Users className="size-4" /> Groups
+              </Link>
+            </DropdownMenuItem>
+          </>
+        )}
+        <DropdownMenuSeparator />
         {me.local_mode ? (
           <DropdownMenuItem
             onSelect={() => {

@@ -10,6 +10,7 @@ const Editor = lazy(() => import('@/pages/Editor'))
 const Settings = lazy(() => import('@/pages/Settings'))
 const Trash = lazy(() => import('@/pages/Trash'))
 const Audit = lazy(() => import('@/pages/Audit'))
+const Groups = lazy(() => import('@/pages/Groups'))
 const Login = lazy(() => import('@/pages/Login'))
 const Slides = lazy(() => import('@/pages/Slides'))
 const Features = lazy(() => import('@/pages/Features'))
@@ -26,6 +27,7 @@ export default function App() {
         <Route path="/settings" element={<Settings />} />
         <Route path="/trash" element={<Trash />} />
         <Route path="/audit" element={<Audit />} />
+        <Route path="/admin/groups" element={<Groups />} />
         <Route path="/s/:alias" element={<View />} />
         <Route path="/v/:token" element={<ShortShare />} />
         <Route path="/features" element={<Features />} />

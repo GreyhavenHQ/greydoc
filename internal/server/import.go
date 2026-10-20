@@ -29,7 +29,7 @@ type PermissionSpec struct {
 	Everyone     string            `json:"everyone,omitempty"`
 	SignedIn     string            `json:"signed_in,omitempty"`
 	Users        map[string]string `json:"users,omitempty"`
-	// Groups is read only to reject it. Named groups are not supported.
+	// Groups maps greydoc group names to levels.
 	Groups map[string]string `json:"groups,omitempty"`
 }
 
@@ -120,8 +120,20 @@ func (s *Server) noteFromSpec(ctx context.Context, id *Identity, spec NoteSpec) 
 				return nn, err
 			}
 		}
-		if len(p.Groups) > 0 {
-			return nn, badSpec("groups are not supported: share with users, signed_in or everyone")
+		for name, lv := range p.Groups {
+			g, err := s.store.GroupByName(ctx, name)
+			if errors.Is(err, store.ErrNotFound) {
+				return nn, badSpec("unknown group %q", name)
+			}
+			if err != nil {
+				return nn, err
+			}
+			if !canUseGroup(id, g) {
+				return nn, badSpec("group %q: you can only share with groups you belong to", name)
+			}
+			if nn.Groups[g.ID], err = grantLevel(lv); err != nil {
+				return nn, err
+			}
 		}
 		if len(p.Users) > 0 {
 			nn.Users = map[string]permission.Level{}

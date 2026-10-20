@@ -7,7 +7,9 @@ on:
 
 # Every job runs the justfile recipes inside the dev image, as local development does.
 # The job runs in a container on a shared Docker daemon: the checkout is copied in, never mounted,
-# and every container, image and network carries a name unique to the run and the job.
+# and every container and network carries a name unique to the run and the job.
+# The dev image is tagged by the content of Dockerfile.dev and kept on the daemon, so a runner
+# builds it once per change of the file instead of once per job.
 env:
   CACHE_VOLUMES: -v greydoc-ci_gomod:/go/pkg/mod -v greydoc-ci_gocache:/root/.cache/go-build -v greydoc-ci_pnpmstore:/root/.pnpm-store
 
@@ -18,16 +20,17 @@ jobs:
       NAME: greydoc-ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -f Dockerfile.dev -t "$NAME" .
+      - run: |
+          IMAGE="greydoc-dev:$(sha256sum Dockerfile.dev | cut -c1-12)"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+          docker image inspect "$IMAGE" > /dev/null 2>&1 || docker build -f Dockerfile.dev -t "$IMAGE" .
       - run: |
           docker rm -f "$NAME" || true
-          docker create --name "$NAME" -w /src $CACHE_VOLUMES "$NAME" sh -c 'go vet ./... && just lint && just race && just build'
+          docker create --name "$NAME" -w /src $CACHE_VOLUMES "$IMAGE" sh -c 'go vet ./... && just lint && just race && just build'
           docker cp ./. "$NAME:/src"
           docker start -a "$NAME"
       - if: always()
-        run: |
-          docker rm -f "$NAME" || true
-          docker rmi "$NAME" || true
+        run: docker rm -f "$NAME" || true
 
   postgres:
     runs-on: ubuntu-latest
@@ -35,7 +38,10 @@ jobs:
       NAME: greydoc-ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -f Dockerfile.dev -t "$NAME" .
+      - run: |
+          IMAGE="greydoc-dev:$(sha256sum Dockerfile.dev | cut -c1-12)"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+          docker image inspect "$IMAGE" > /dev/null 2>&1 || docker build -f Dockerfile.dev -t "$IMAGE" .
       - run: |
           docker rm -f "$NAME" "$NAME-pg" || true
           docker network rm "$NAME" || true
@@ -46,14 +52,13 @@ jobs:
           for i in $(seq 1 30); do docker exec "$NAME-pg" pg_isready -q -h 127.0.0.1 -U greydoc && break; sleep 1; done
           docker exec "$NAME-pg" pg_isready -h 127.0.0.1 -U greydoc
       - run: |
-          docker create --name "$NAME" --network "$NAME" -w /src $CACHE_VOLUMES "$NAME" just test-pg
+          docker create --name "$NAME" --network "$NAME" -w /src $CACHE_VOLUMES "$IMAGE" just test-pg
           docker cp ./. "$NAME:/src"
           docker start -a "$NAME"
       - if: always()
         run: |
           docker rm -f "$NAME" "$NAME-pg" || true
           docker network rm "$NAME" || true
-          docker rmi "$NAME" || true
 
   ui:
     runs-on: ubuntu-latest
@@ -61,16 +66,17 @@ jobs:
       NAME: greydoc-ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -f Dockerfile.dev -t "$NAME" .
+      - run: |
+          IMAGE="greydoc-dev:$(sha256sum Dockerfile.dev | cut -c1-12)"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+          docker image inspect "$IMAGE" > /dev/null 2>&1 || docker build -f Dockerfile.dev -t "$IMAGE" .
       - run: |
           docker rm -f "$NAME" || true
-          docker create --name "$NAME" -w /src $CACHE_VOLUMES "$NAME" sh -c 'just ui-test && just ui'
+          docker create --name "$NAME" -w /src $CACHE_VOLUMES "$IMAGE" sh -c 'just ui-test && just ui'
           docker cp ./. "$NAME:/src"
           docker start -a "$NAME"
       - if: always()
-        run: |
-          docker rm -f "$NAME" || true
-          docker rmi "$NAME" || true
+        run: docker rm -f "$NAME" || true
 
   e2e:
     runs-on: ubuntu-latest
@@ -78,16 +84,17 @@ jobs:
       NAME: greydoc-ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -f Dockerfile.dev -t "$NAME" .
+      - run: |
+          IMAGE="greydoc-dev:$(sha256sum Dockerfile.dev | cut -c1-12)"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+          docker image inspect "$IMAGE" > /dev/null 2>&1 || docker build -f Dockerfile.dev -t "$IMAGE" .
       - run: |
           docker rm -f "$NAME" || true
-          docker create --name "$NAME" -w /src $CACHE_VOLUMES "$NAME" just e2e
+          docker create --name "$NAME" -w /src $CACHE_VOLUMES "$IMAGE" just e2e
           docker cp ./. "$NAME:/src"
           docker start -a "$NAME"
       - if: always()
-        run: |
-          docker rm -f "$NAME" || true
-          docker rmi "$NAME" || true
+        run: docker rm -f "$NAME" || true
 
   docker:
     runs-on: ubuntu-latest

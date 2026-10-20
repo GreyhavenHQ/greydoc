@@ -50,7 +50,7 @@ A mention is `[@Name](@username)`. The username identifies the person because it
 
 ## Access
 
-Levels are deny, read, comment, write and full (owner). A person gets the highest of their own grant, the signed-in grant, and the everyone grant. OIDC groups give no document access. Guests get the everyone grant, capped by `GREYDOC_GUEST_MAX` (default write). A view-only link gives read. Agents are also capped by the document's agent policy. In local mode every request has full access.
+Levels are deny, read, comment, write and full (owner). A person gets the highest of their own grant, their groups' grants, the signed-in grant, and the everyone grant. A group is a greydoc group: admins manage its members, or it follows one OIDC group as of each member's last sign-in. Grants store the group ID, so a rename keeps them. Guests get the everyone grant, capped by `GREYDOC_GUEST_MAX` (default write). A view-only link gives read. Agents are also capped by the document's agent policy. In local mode every request has full access.
 
 ## Trash and audit
 

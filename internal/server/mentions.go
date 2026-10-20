@@ -27,7 +27,11 @@ func (s *Server) mentionedUsers(ctx context.Context, text string) ([]store.User,
 }
 
 func (s *Server) canRead(ctx context.Context, u store.User, n *store.Note) bool {
-	l, err := s.noteLevel(ctx, &Identity{User: &u, Via: "session"}, n, "")
+	id, err := s.withFreshGroups(ctx, &Identity{User: &u, Via: "session"})
+	if err != nil {
+		return false
+	}
+	l, err := s.noteLevel(ctx, id, n, "")
 	return err == nil && l >= permission.Read
 }
 

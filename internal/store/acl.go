@@ -22,7 +22,10 @@ type UserGrant struct {
 }
 
 type GroupGrant struct {
-	Group string           `json:"group"`
+	// Group is an app_group id or a special group.
+	Group string `json:"group"`
+	// Name is the group's name, empty for the special groups.
+	Name  string           `json:"name,omitempty"`
 	Level permission.Level `json:"level"`
 }
 
@@ -57,7 +60,8 @@ func (s *Store) NoteACL(ctx context.Context, noteID string) (*ACL, error) {
 		acl.Users = append(acl.Users, g)
 	}
 	rows.Close()
-	rows, err = s.db.QueryContext(ctx, s.q(`SELECT group_name, level FROM note_group_grant WHERE note_id = ? ORDER BY group_name`), noteID)
+	rows, err = s.db.QueryContext(ctx, s.q(`SELECT gg.group_name, COALESCE(g.name, ''), gg.level
+		FROM note_group_grant gg LEFT JOIN app_group g ON g.id = gg.group_name WHERE gg.note_id = ? ORDER BY gg.group_name`), noteID)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +69,7 @@ func (s *Store) NoteACL(ctx context.Context, noteID string) (*ACL, error) {
 	for rows.Next() {
 		var g GroupGrant
 		var lvl string
-		if err := rows.Scan(&g.Group, &lvl); err != nil {
+		if err := rows.Scan(&g.Group, &g.Name, &lvl); err != nil {
 			return nil, err
 		}
 		g.Level, _ = permission.ParseLevel(lvl)

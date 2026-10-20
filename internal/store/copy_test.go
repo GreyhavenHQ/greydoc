@@ -14,7 +14,9 @@ func TestCopySQLiteToPostgres(t *testing.T) {
 	}
 	src := OpenTest(t)
 	u, _ := src.UpsertOIDCUser(ctx, "s", "alice", "Alice", "a@x", []string{"eng"})
-	n, _ := src.CreateNote(ctx, NewNote{OwnerID: u.ID, Alias: "plan", ExtraAliases: []string{"Old-ID"}, Groups: map[string]permission.Level{"eng": permission.Write}})
+	g, _ := src.CreateGroup(ctx, "Design", "", "", nil)
+	_ = src.AddGroupMember(ctx, g.ID, u.ID, nil)
+	n, _ := src.CreateNote(ctx, NewNote{OwnerID: u.ID, Alias: "plan", ExtraAliases: []string{"Old-ID"}, Groups: map[string]permission.Level{g.ID: permission.Write}})
 	_ = src.SaveSnapshot(ctx, n.ID, []byte{1, 2, 3}, NoteState{Content: "# Plan\nbody", Title: "Plan", Tags: []string{"q4"}})
 	_ = src.AppendUpdates(ctx, n.ID, []NoteUpdate{{UserID: u.ID, Source: SourceHuman, ClientID: 1 << 52, Data: []byte{9}}})
 	_ = src.AddEvent(ctx, &Event{NoteID: n.ID, ActorID: u.ID, ActorName: "Alice", Kind: "note.create"})
@@ -43,8 +45,11 @@ func TestCopySQLiteToPostgres(t *testing.T) {
 	if ids, _ := dst.SearchNoteIDs(ctx, "body", 5); len(ids) != 1 {
 		t.Fatalf("search after copy: %v", ids)
 	}
-	if acl, _ := dst.NoteACL(ctx, n.ID); len(acl.Groups) != 1 {
+	if acl, _ := dst.NoteACL(ctx, n.ID); len(acl.Groups) != 1 || acl.Groups[0].Name != "Design" {
 		t.Fatalf("grants %+v", acl)
+	}
+	if du, _ := dst.UserByID(ctx, u.ID); len(du.GroupIDs) != 1 {
+		t.Fatalf("membership %+v", du)
 	}
 	if err := dst.CopyFrom(ctx, src); err == nil {
 		t.Fatal("copied twice into a database with notes")

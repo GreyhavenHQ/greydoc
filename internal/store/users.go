@@ -20,6 +20,8 @@ type User struct {
 	Email       string `json:"email,omitempty"`
 	// Groups only set the admin flag. They are not shown to other people.
 	Groups []string `json:"-"`
+	// GroupIDs are the greydoc groups of the user. They give document access.
+	GroupIDs []string `json:"-"`
 }
 
 func (s *Store) EnsureLocalUser(ctx context.Context) (*User, error) {
@@ -101,7 +103,10 @@ func (s *Store) UserByID(ctx context.Context, id string) (*User, error) {
 	if err != nil {
 		return nil, err
 	}
-	u.Groups, err = s.userGroups(ctx, id)
+	if u.Groups, err = s.userGroups(ctx, id); err != nil {
+		return nil, err
+	}
+	u.GroupIDs, err = s.UserGroupIDs(ctx, id)
 	return &u, err
 }
 

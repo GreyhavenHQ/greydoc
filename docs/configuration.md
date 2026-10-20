@@ -35,7 +35,7 @@ When `GREYDOC_OIDC_ISSUER` is empty, greydoc runs in local mode: no login, full 
 | `GREYDOC_OIDC_CLIENT_SECRET` | empty | Client secret. The login also uses PKCE (S256). |
 | `GREYDOC_OIDC_REDIRECT_URL` | `<base>/auth/callback` | Register this URL at the provider. |
 | `GREYDOC_OIDC_SCOPES` | `openid profile email` | Requested scopes. Add the scope that returns groups if your provider needs one. |
-| `GREYDOC_OIDC_GROUPS_CLAIM` | `groups` | Userinfo claim with the user's groups. Groups only set `GREYDOC_ADMIN_GROUP` membership. They give no document access. |
+| `GREYDOC_OIDC_GROUPS_CLAIM` | `groups` | Userinfo claim with the user's groups. It decides who is an admin and who is in a greydoc group linked to an OIDC group. An OIDC group gives no document access by itself. |
 | `GREYDOC_SESSION_TTL` | `168h` | Browser session lifetime. A session in use is extended, so it ends after this long without use. |
 | `GREYDOC_REFRESH_REUSE_GRACE` | `24h` | How long an MCP client may still use a refresh token after it was rotated. Sessions of one client that share stored tokens need it. A reuse after this time revokes all of the client's tokens. `0` turns it off. |
 
@@ -55,7 +55,7 @@ View-only links work for guests whatever these values are.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `GREYDOC_ADMIN_GROUP` | empty | OIDC group whose members see the whole audit log and every document in the trash, and can restore or delete any trashed document. In local mode everyone has these rights. |
+| `GREYDOC_ADMIN_GROUP` | empty | OIDC group whose members see the whole audit log and every document in the trash, can restore or delete any trashed document, and manage groups. In local mode everyone has these rights. |
 | `GREYDOC_TRASH_RETENTION` | `720h` | How long a document stays in the trash before it is deleted for good. The deletion is recorded in the audit log. |
 
 ## Limits

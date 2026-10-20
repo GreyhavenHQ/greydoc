@@ -1,8 +1,11 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"net/http"
+	"slices"
+	"strings"
 
 	"github.com/greyhavenhq/greydoc/internal/permission"
 	"github.com/greyhavenhq/greydoc/internal/store"
@@ -46,6 +49,13 @@ func (s *Server) handleGetPermissions(w http.ResponseWriter, r *http.Request) {
 	if l < permission.Full {
 		// Only the owner sees who else has access. Others see the public grants and their own level.
 		v.ShareLinks, v.Users = nil, []store.UserGrant{}
+		public := []store.GroupGrant{}
+		for _, g := range v.Groups {
+			if g.Group == store.GroupEveryone || g.Group == store.GroupSignedIn {
+				public = append(public, g)
+			}
+		}
+		v.Groups = public
 	}
 	writeJSON(w, http.StatusOK, v)
 }
@@ -121,17 +131,34 @@ func (s *Server) handleGroupGrant(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	group := r.PathValue("group")
-	if group != store.GroupEveryone && group != store.GroupSignedIn {
-		writeError(w, http.StatusBadRequest, "bad_group", "share with people, signed-in users or anyone with the address")
-		return
-	}
-	if group == store.GroupEveryone && l > s.guestMax {
-		writeError(w, http.StatusBadRequest, "above_guest_max", "guests cannot get more than "+s.guestMax.String())
-		return
-	}
 	id := identityFrom(r.Context())
-	ev := id.event(n.ID, "permission.group", map[string]any{"group": group, "level": l.String()})
+	group := r.PathValue("group")
+	data := map[string]any{"group": group, "level": l.String()}
+	switch {
+	case group == store.GroupEveryone || group == store.GroupSignedIn:
+		if group == store.GroupEveryone && l > s.guestMax {
+			writeError(w, http.StatusBadRequest, "above_guest_max", "guests cannot get more than "+s.guestMax.String())
+			return
+		}
+	case l == permission.Deny:
+		// Removing a grant needs no membership, and works for a group that no longer exists.
+	default:
+		g, err := s.store.GroupByID(r.Context(), group)
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "unknown_group", "no such group")
+			return
+		}
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		if !canUseGroup(id, g) {
+			writeError(w, http.StatusForbidden, "not_member", "you can only share with groups you belong to")
+			return
+		}
+		data["name"] = g.Name
+	}
+	ev := id.event(n.ID, "permission.group", data)
 	if err := s.store.SetGroupGrant(r.Context(), n.ID, group, l, ev); err != nil {
 		internalError(w, err)
 		return
@@ -236,7 +263,12 @@ func (s *Server) handleSearchUsers(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"users": s.withReadAccess(r, users)})
+	groups, err := s.visibleGroups(r.Context(), identityFrom(r.Context()), r.URL.Query().Get("q"))
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"users": s.withReadAccess(r, users), "groups": groups})
 }
 
 type userOut struct {
@@ -262,6 +294,32 @@ func (s *Server) withReadAccess(r *http.Request, users []store.User) []userOut {
 		out[i].CanRead = &ok
 	}
 	return out
+}
+
+// canUseGroup reports whether the caller may share with the group: members and admins.
+func canUseGroup(id *Identity, g *store.Group) bool {
+	return id != nil && id.User != nil && (id.Admin || slices.Contains(id.User.GroupIDs, g.ID))
+}
+
+type groupRef struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// visibleGroups lists the groups the caller may share with whose name contains q.
+func (s *Server) visibleGroups(ctx context.Context, id *Identity, q string) ([]groupRef, error) {
+	gs, err := s.store.Groups(ctx)
+	if err != nil {
+		return nil, err
+	}
+	q = strings.ToLower(q)
+	out := []groupRef{}
+	for _, g := range gs {
+		if canUseGroup(id, &g) && strings.Contains(strings.ToLower(g.Name), q) {
+			out = append(out, groupRef{ID: g.ID, Name: g.Name})
+		}
+	}
+	return out, nil
 }
 
 // handleResolveShare turns a short view-only link, /v/<token>, into the note it opens.

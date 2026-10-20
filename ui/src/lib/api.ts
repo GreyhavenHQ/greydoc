@@ -81,6 +81,24 @@ export interface User {
   display_name: string
 }
 
+export interface Group {
+  id: string
+  name: string
+  description: string
+  // oidc_group is empty when admins manage the members in greydoc.
+  oidc_group: string
+  created_at: string
+  member_count: number
+  note_count: number
+  // members holds the first few members, in the group list only.
+  members?: User[]
+}
+
+export interface GroupRef {
+  id: string
+  name: string
+}
+
 export interface NoteSummary {
   id: string
   alias: string

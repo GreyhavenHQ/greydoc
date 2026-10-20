@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 
 	"github.com/greyhavenhq/greydoc/internal/permission"
 	"github.com/greyhavenhq/greydoc/internal/store"
@@ -65,6 +66,10 @@ func (s *Server) noteLevel(ctx context.Context, id *Identity, n *store.Note, sha
 				in.Everyone = g.Level
 			case store.GroupSignedIn:
 				in.LoggedIn = g.Level
+			default:
+				if in.IsRegistered && slices.Contains(id.User.GroupIDs, g.Group) {
+					in.Group = max(in.Group, g.Level)
+				}
 			}
 		}
 		if shareToken != "" {
@@ -83,6 +88,21 @@ func (s *Server) noteLevel(ctx context.Context, id *Identity, n *store.Note, sha
 		l = min(l, permission.Read)
 	}
 	return l, nil
+}
+
+// withFreshGroups reloads the caller's groups, for long-lived connections that outlive a membership change.
+func (s *Server) withFreshGroups(ctx context.Context, id *Identity) (*Identity, error) {
+	if id == nil || id.User == nil || id.Local {
+		return id, nil
+	}
+	ids, err := s.store.UserGroupIDs(ctx, id.User.ID)
+	if err != nil {
+		return nil, err
+	}
+	c, u := *id, *id.User
+	u.GroupIDs = ids
+	c.User = &u
+	return &c, nil
 }
 
 func shareToken(r *http.Request) string {
