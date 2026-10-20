@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { Copy, Link2, Trash2, UserPlus, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -15,7 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator'
 import { api, type AgentPolicy, type GroupRef, type Level, type User } from '@/lib/api'
 import { useMe } from '@/lib/me'
-import { handle } from '@/lib/utils'
+import { moveIndex, shareCandidates, type ShareCandidate } from '@/lib/sharePicker'
+import { cn, handle } from '@/lib/utils'
 
 interface Permissions {
   owner: User | null
@@ -64,6 +65,8 @@ export function ShareDialog({ alias, isOwner, open, onOpenChange }: { alias: str
   const [perm, setPerm] = useState<Permissions | null>(null)
   const [userQuery, setUserQuery] = useState('')
   const [found, setFound] = useState<{ users: User[]; groups: GroupRef[] }>({ users: [], groups: [] })
+  const [active, setActive] = useState({ sig: '', i: 0 })
+  const inputRef = useRef<HTMLInputElement>(null)
   const base = '/api/notes/' + alias
 
   useEffect(() => {
@@ -92,6 +95,29 @@ export function ShareDialog({ alias, isOwner, open, onOpenChange }: { alias: str
 
   const groupLevel = (g: string) => perm?.groups.find((x) => x.group === g)?.level ?? 'deny'
   const namedGroups = perm?.groups.filter((g) => !g.group.startsWith('_')) ?? []
+
+  const candidates = userQuery ? shareCandidates(found, { ownerId: perm?.owner?.id, groupIds: namedGroups.map((g) => g.group) }) : []
+  const sig = candidates.map((c) => c.kind + ':' + c.key).join('\n')
+  const activeIndex = active.sig === sig ? active.i : 0
+  const optionId = (i: number) => `share-option-${i}`
+
+  const add = (c: ShareCandidate) => {
+    if (c.kind === 'user') setUser(c.key, 'write')
+    else setGroup(c.key, 'write')
+    setUserQuery('')
+    inputRef.current?.focus()
+  }
+
+  const onPickerKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (candidates.length === 0) return
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      setActive({ sig, i: moveIndex(activeIndex, e.key === 'ArrowDown' ? 1 : -1, candidates.length) })
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      add(candidates[activeIndex])
+    }
+  }
 
   const createLink = async () => {
     const r = await api.post<{ url: string }>(base + '/share-links', { label: 'view-only' })
@@ -151,21 +177,44 @@ export function ShareDialog({ alias, isOwner, open, onOpenChange }: { alias: str
                     <Label htmlFor="share-user" className="text-xs text-muted-foreground">
                       Add a person or group
                     </Label>
-                    <Input id="share-user" value={userQuery} onChange={(e) => setUserQuery(e.target.value)} placeholder="Name or group" className="h-8" />
+                    <Input
+                      id="share-user"
+                      ref={inputRef}
+                      value={userQuery}
+                      onChange={(e) => setUserQuery(e.target.value)}
+                      onKeyDown={onPickerKey}
+                      placeholder="Name or group"
+                      className="h-8"
+                      role="combobox"
+                      aria-autocomplete="list"
+                      aria-expanded={candidates.length > 0}
+                      aria-controls="share-options"
+                      aria-activedescendant={candidates.length > 0 ? optionId(activeIndex) : undefined}
+                    />
                     {userQuery && (
-                      <div className="flex flex-col rounded-md border">
-                        {found.users.filter((u) => u.id !== perm.owner?.id).map((u) => (
-                          <button key={u.id} className="flex items-center gap-2 px-2 py-1.5 text-left hover:bg-muted" onClick={() => { setUser(u.username, 'write'); setUserQuery('') }}>
-                            <UserPlus className="size-3.5" /> {u.display_name || u.username} <span className="text-muted-foreground">{handle(u.username)}</span>
-                          </button>
+                      <div id="share-options" role="listbox" className="flex flex-col rounded-md border">
+                        {candidates.map((c, i) => (
+                          <div
+                            key={c.kind + ':' + c.key}
+                            id={optionId(i)}
+                            role="option"
+                            aria-selected={i === activeIndex}
+                            className={cn('flex cursor-pointer items-center gap-2 px-2 py-1.5', i === activeIndex && 'bg-muted')}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onMouseEnter={() => setActive({ sig, i })}
+                            onClick={() => add(c)}
+                          >
+                            {c.kind === 'user' ? (
+                              <>
+                                <UserPlus className="size-3.5" /> {c.user.display_name || c.user.username} <span className="text-muted-foreground">{handle(c.user.username)}</span>
+                              </>
+                            ) : (
+                              <>
+                                <Users className="size-3.5" /> {c.group.name} <span className="text-muted-foreground">group</span>
+                              </>
+                            )}
+                          </div>
                         ))}
-                        {found.groups
-                          .filter((g) => !namedGroups.some((x) => x.group === g.id))
-                          .map((g) => (
-                            <button key={g.id} className="flex items-center gap-2 px-2 py-1.5 text-left hover:bg-muted" onClick={() => { setGroup(g.id, 'write'); setUserQuery('') }}>
-                              <Users className="size-3.5" /> {g.name} <span className="text-muted-foreground">group</span>
-                            </button>
-                          ))}
                         {found.users.length === 0 && found.groups.length === 0 && <div className="px-2 py-1.5 text-muted-foreground">Nobody matches. You can only add groups you belong to.</div>}
                       </div>
                     )}
