@@ -210,6 +210,7 @@ type FolderSummary struct {
 	ParentID  string `json:"parent_id,omitempty"`
 	Name      string `json:"name"`
 	OwnerName string `json:"owner"`
+	OwnerID   string `json:"owner_id,omitempty"`
 	UpdatedAt string `json:"updated_at"`
 	// HasChildren tells the sidebar tree whether to show an expand arrow.
 	HasChildren bool `json:"has_children"`
@@ -245,7 +246,7 @@ func (s *Store) ListFolders(ctx context.Context, f FolderFilter) ([]FolderSummar
 	default:
 		where, args = "f.parent_id IS NULL AND f.owner_id = ?", []any{f.Viewer.UserID}
 	}
-	rows, err := s.db.QueryContext(ctx, s.q(`SELECT f.id, COALESCE(f.parent_id, ''), f.name, COALESCE(u.display_name, ''), f.updated_at,
+	rows, err := s.db.QueryContext(ctx, s.q(`SELECT f.id, COALESCE(f.parent_id, ''), f.name, COALESCE(u.display_name, ''), COALESCE(f.owner_id, ''), f.updated_at,
 		CASE WHEN EXISTS (SELECT 1 FROM folder c WHERE c.parent_id = f.id AND c.deleted_at IS NULL) THEN 1 ELSE 0 END
 		FROM folder f LEFT JOIN app_user u ON u.id = f.owner_id
 		WHERE f.deleted_at IS NULL AND `+where+` ORDER BY LOWER(f.name), f.id`), args...)
@@ -257,7 +258,7 @@ func (s *Store) ListFolders(ctx context.Context, f FolderFilter) ([]FolderSummar
 	for rows.Next() {
 		var fs FolderSummary
 		var children int
-		if err := rows.Scan(&fs.ID, &fs.ParentID, &fs.Name, &fs.OwnerName, &fs.UpdatedAt, &children); err != nil {
+		if err := rows.Scan(&fs.ID, &fs.ParentID, &fs.Name, &fs.OwnerName, &fs.OwnerID, &fs.UpdatedAt, &children); err != nil {
 			return nil, err
 		}
 		fs.HasChildren = children == 1
