@@ -184,3 +184,34 @@ test('the logo in a document leads back to its folder, and the item count shares
   })
   expect(Math.abs(baselines[0] - baselines[1])).toBeLessThan(0.5)
 })
+
+test('a click around a row checkbox selects the item and does not open it', async ({ page }) => {
+  await page.request.post('/api/folders', { data: { name: 'Safe zone folder' } })
+  await page.request.post('/api/notes', { data: { content: '# Safe zone doc', alias: 'safe-zone-doc' } })
+  await page.goto('/')
+  const url = page.url()
+  const rows = [
+    { row: page.getByTestId('folder-list').locator('li', { hasText: 'Safe zone folder' }), name: 'Safe zone folder' },
+    { row: page.getByTestId('note-list').locator('li', { hasText: 'Safe zone doc' }), name: 'Safe zone doc' },
+  ]
+  for (const { row, name } of rows) {
+    const box = row.getByRole('checkbox', { name: 'Select ' + name })
+    const r = (await row.boundingBox())!
+    const b = (await box.boundingBox())!
+    await row.click({ position: { x: 3, y: r.height / 2 } })
+    await expect(box).toHaveAttribute('data-state', 'checked')
+    await row.click({ position: { x: b.x - r.x + b.width / 2, y: b.y - r.y - 5 } })
+    await expect(box).toHaveAttribute('data-state', 'unchecked')
+    await row.click({ position: { x: b.x - r.x + b.width / 2, y: b.y - r.y + b.height + 5 } })
+    await expect(box).toHaveAttribute('data-state', 'checked')
+    await row.click({ position: { x: b.x - r.x + b.width + 4, y: r.height / 2 } })
+    await expect(box).toHaveAttribute('data-state', 'unchecked')
+    await box.click()
+    await expect(box).toHaveAttribute('data-state', 'checked')
+    await box.click()
+    await expect(box).toHaveAttribute('data-state', 'unchecked')
+    expect(page.url()).toBe(url)
+  }
+  await page.getByTestId('note-list').getByRole('link', { name: 'Safe zone doc' }).click()
+  await expect(page).toHaveURL('/n/safe-zone-doc')
+})
