@@ -36,6 +36,8 @@ type noteView struct {
 	Content *string          `json:"content,omitempty"`
 	Aliases []store.Alias    `json:"aliases,omitempty"`
 	Owner   *store.User      `json:"owner,omitempty"`
+	// Folder is the note's folder, when the caller can open it.
+	Folder *folderRef `json:"folder,omitempty"`
 }
 
 func (s *Server) handleCreateNote(w http.ResponseWriter, r *http.Request) {
@@ -160,6 +162,11 @@ func (s *Server) handleGetNote(w http.ResponseWriter, r *http.Request) {
 	}
 	if n.OwnerID != "" {
 		v.Owner, _ = s.store.UserByID(r.Context(), n.OwnerID)
+	}
+	if n.FolderID != "" {
+		if f, _, err := s.liveFolder(r.Context(), identityFrom(r.Context()), n.FolderID, permission.Read); err == nil {
+			v.Folder = &folderRef{f.ID, f.Name}
+		}
 	}
 	writeJSON(w, http.StatusOK, v)
 }

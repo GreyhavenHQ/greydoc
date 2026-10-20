@@ -226,3 +226,21 @@ func TestMCPFolders(t *testing.T) {
 		t.Fatalf("moved a note without the edit policy: %s", out)
 	}
 }
+
+func TestNoteNamesItsFolderOnlyToReaders(t *testing.T) {
+	e, idp := newOIDCEnv(t)
+	alice := e.login(idp, map[string]any{"sub": "a", "preferred_username": "alice"})
+	bob := e.login(idp, map[string]any{"sub": "b", "preferred_username": "bob"})
+	carol := e.login(idp, map[string]any{"sub": "c", "preferred_username": "carol"})
+	folder := e.createFolder(alice, "Private plans", "")
+	alias := e.createNote(alice, "# Plan")
+	e.move(alice, []string{alias}, nil, folder, false)
+	e.do(alice, "PUT", "/api/folders/"+folder+"/permissions/users/bob", map[string]string{"level": "read"})
+	e.do(alice, "PUT", "/api/notes/"+alias+"/permissions/users/carol", map[string]string{"level": "read"})
+	if _, body := e.do(bob, "GET", "/api/notes/"+alias, nil); !strings.Contains(body, `"folder":{"id":"`+folder+`","name":"Private plans"}`) {
+		t.Fatalf("reader of the folder: %s", body)
+	}
+	if _, body := e.do(carol, "GET", "/api/notes/"+alias, nil); strings.Contains(body, "Private plans") || strings.Contains(body, `"folder":`) {
+		t.Fatalf("carol learned the folder: %s", body)
+	}
+}
