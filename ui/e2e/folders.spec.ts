@@ -76,3 +76,18 @@ test('the home page opens on My documents, and Recent is a list by last opened',
   await expect(page.getByText('Last opened')).toBeVisible()
   await expect(page.getByTestId('note-list').locator('li').first()).toContainText('Opened once')
 })
+
+test('long lists load 50 documents at a time as you scroll', async ({ page }) => {
+  for (let i = 0; i < 120; i++) {
+    await page.request.post('/api/notes', { data: { content: `---\ntags: [bulkpage]\n---\n# Bulk ${String(i).padStart(3, '0')}` } })
+  }
+  await page.goto('/?scope=all&tag=bulkpage')
+  const rows = page.getByTestId('note-list').locator('li')
+  await expect(rows).toHaveCount(50)
+  await page.getByTestId('load-more').scrollIntoViewIfNeeded()
+  await expect(rows).toHaveCount(100)
+  await page.getByTestId('load-more').scrollIntoViewIfNeeded()
+  await expect(rows).toHaveCount(120)
+  await expect(page.getByTestId('list-end')).toHaveText('All 120 documents loaded.')
+  await expect(page.getByTestId('load-more')).toHaveCount(0)
+})

@@ -44,6 +44,9 @@ import { cn } from '@/lib/utils'
 
 type Scope = 'recent' | 'mine' | 'shared' | 'all'
 
+// pageSize is how many documents one request of the list loads.
+const pageSize = 50
+
 const scopeTitles: Record<Scope, string> = { recent: 'Recent', mine: 'My documents', shared: 'Shared with me', all: 'All documents' }
 
 export default function Home() {
@@ -78,42 +81,92 @@ export default function Home() {
 
   const q = params.get('q') ?? ''
   const flat = !!(q || tag)
-  const where = flat ? 'search' : folderId ? 'folder' : scope
+  // pageQuery is the /api/notes query of the current view. Pages add limit and offset to it.
+  const pageQuery = useMemo(() => {
+    const sp: Record<string, string> = {}
+    if (flat) {
+      sp.scope = 'all'
+      if (tag) sp.tag = tag
+      if (q) sp.q = q
+    } else if (folderId) {
+      Object.assign(sp, { scope: 'all', folder: folderId })
+    } else if (scope === 'mine') {
+      Object.assign(sp, { scope: local ? 'all' : 'mine', folder: 'root' })
+    } else {
+      sp.scope = scope
+    }
+    return new URLSearchParams(sp).toString()
+  }, [flat, tag, q, folderId, scope, local])
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+  // generation drops pages that arrive after the view changed.
+  const generation = useRef(0)
+  const page = (offset: number) =>
+    api.get<{ notes: NoteSummary[] }>(`/api/notes?${pageQuery}&limit=${pageSize}&offset=${offset}`).then((r) => r.notes)
+
   useEffect(() => {
     if (!me?.authenticated) return
+    const gen = ++generation.current
     setNotes(null)
+    setHasMore(false)
     setSelected(new Set())
-    const list = (sp: Record<string, string>) => api.get<{ notes: NoteSummary[] }>('/api/notes?' + new URLSearchParams(sp)).then((r) => r.notes)
     const fail = (e: unknown) => {
+      if (gen !== generation.current) return
       toast.error(e instanceof Error ? e.message : String(e))
       setNotes([])
     }
-    if (flat) {
-      const sp: Record<string, string> = { scope: 'all' }
-      if (tag) sp.tag = tag
-      if (q) sp.q = q
-      setFolders([])
-      list(sp).then(setNotes, fail)
-    } else if (folderId) {
-      Promise.all([api.get<FolderView>('/api/folders/' + folderId), list({ scope: 'all', folder: folderId })]).then(([v, ns]) => {
-        setView(v)
-        setFolders(v.children)
-        setNotes(ns)
-      }, (e) => {
-        setView(null)
-        fail(e)
+    const folderList: Promise<FolderSummary[]> = flat
+      ? Promise.resolve([])
+      : folderId
+        ? api.get<FolderView>('/api/folders/' + folderId).then((v) => {
+            if (gen === generation.current) setView(v)
+            return v.children
+          })
+        : scope === 'mine' || scope === 'shared'
+          ? api.get<{ folders: FolderSummary[] }>('/api/folders?scope=' + scope).then((r) => r.folders)
+          : Promise.resolve([])
+    Promise.all([folderList, page(0)]).then(([fs, ns]) => {
+      if (gen !== generation.current) return
+      setFolders(fs)
+      setNotes(ns)
+      setHasMore(ns.length === pageSize)
+    }, (e) => {
+      if (folderId) setView(null)
+      fail(e)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me, pageQuery, reload])
+
+  const loadMore = async () => {
+    if (loadingMore || !hasMore || !notes) return
+    const gen = generation.current
+    setLoadingMore(true)
+    try {
+      const more = await page(notes.length)
+      if (gen !== generation.current) return
+      setNotes((cur) => {
+        const seen = new Set((cur ?? []).map((n) => n.id))
+        return [...(cur ?? []), ...more.filter((n) => !seen.has(n.id))]
       })
-    } else if (scope === 'mine' || scope === 'shared') {
-      const sp: Record<string, string> = scope === 'mine' ? { scope: local ? 'all' : 'mine', folder: 'root' } : { scope: 'shared' }
-      Promise.all([api.get<{ folders: FolderSummary[] }>('/api/folders?scope=' + scope), list(sp)]).then(([f, ns]) => {
-        setFolders(f.folders)
-        setNotes(ns)
-      }, fail)
-    } else {
-      setFolders([])
-      list({ scope }).then(setNotes, fail)
+      setHasMore(more.length === pageSize)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoadingMore(false)
     }
-  }, [me, local, scope, tag, q, flat, folderId, reload])
+  }
+  const sentinel = useRef<HTMLDivElement>(null)
+  const loadMoreRef = useRef(loadMore)
+  loadMoreRef.current = loadMore
+  useEffect(() => {
+    const el = sentinel.current
+    if (!el || !hasMore) return
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) void loadMoreRef.current()
+    }, { rootMargin: '400px' })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [hasMore, notes])
 
   useEffect(() => {
     if (!me?.authenticated) return
@@ -394,6 +447,18 @@ export default function Home() {
             onPin={togglePin}
             onTag={(t) => update({ tag: t })}
           />
+        )}
+        {notes && hasMore && (
+          <div ref={sentinel} className="flex justify-center py-4" data-testid="load-more">
+            <Button variant="ghost" size="sm" disabled={loadingMore} onClick={() => void loadMore()}>
+              {loadingMore ? 'Loading…' : 'Load more'}
+            </Button>
+          </div>
+        )}
+        {notes && !hasMore && notes.length > pageSize && (
+          <p className="py-4 text-center text-xs text-muted-foreground" data-testid="list-end">
+            All {notes.length} documents loaded.
+          </p>
         )}
       </main>
 
