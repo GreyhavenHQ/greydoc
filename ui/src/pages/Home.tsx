@@ -51,9 +51,9 @@ const scopeTitles: Record<Scope, string> = { recent: 'Recent', mine: 'My documen
 
 export default function Home() {
   const { me } = useMe()
-  const { folderId } = useParams()
+  const { folderId: urlFolderId } = useParams()
   const [params, setParams] = useSearchParams()
-  const scope: Scope = (params.get('scope') as Scope) || 'mine'
+  const urlScope: Scope = (params.get('scope') as Scope) || 'mine'
   const tag = params.get('tag') ?? ''
   const [query, setQuery] = useState(params.get('q') ?? '')
   const [notes, setNotes] = useState<NoteSummary[] | null>(null)
@@ -80,23 +80,35 @@ export default function Home() {
   }
 
   const q = params.get('q') ?? ''
-  const flat = !!(q || tag)
+  const urlFlat = !!(q || tag)
   // pageQuery is the /api/notes query of the current view. Pages add limit and offset to it.
   const pageQuery = useMemo(() => {
     const sp: Record<string, string> = {}
-    if (flat) {
+    if (urlFlat) {
       sp.scope = 'all'
       if (tag) sp.tag = tag
       if (q) sp.q = q
-    } else if (folderId) {
-      Object.assign(sp, { scope: 'all', folder: folderId })
-    } else if (scope === 'mine') {
+    } else if (urlFolderId) {
+      Object.assign(sp, { scope: 'all', folder: urlFolderId })
+    } else if (urlScope === 'mine') {
       Object.assign(sp, { scope: local ? 'all' : 'mine', folder: 'root' })
     } else {
-      sp.scope = scope
+      sp.scope = urlScope
     }
     return new URLSearchParams(sp).toString()
-  }, [flat, tag, q, folderId, scope, local])
+  }, [urlFlat, tag, q, urlFolderId, urlScope, local])
+  // shown is the view on screen. It changes together with its data, so the old view stays until the new one is ready.
+  const [shown, setShown] = useState<{ folderId?: string; scope: Scope; flat: boolean }>({ folderId: urlFolderId, scope: urlScope, flat: urlFlat })
+  const [loading, setLoading] = useState(false)
+  const [slow, setSlow] = useState(false)
+  useEffect(() => {
+    if (!loading) {
+      setSlow(false)
+      return
+    }
+    const t = setTimeout(() => setSlow(true), 200)
+    return () => clearTimeout(t)
+  }, [loading])
   const [hasMore, setHasMore] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   // generation drops pages that arrive after the view changed.
@@ -107,35 +119,41 @@ export default function Home() {
   useEffect(() => {
     if (!me?.authenticated) return
     const gen = ++generation.current
-    setNotes(null)
-    setHasMore(false)
-    setSelected(new Set())
-    const fail = (e: unknown) => {
-      if (gen !== generation.current) return
-      toast.error(e instanceof Error ? e.message : String(e))
-      setNotes([])
-    }
-    const folderList: Promise<FolderSummary[]> = flat
-      ? Promise.resolve([])
-      : folderId
-        ? api.get<FolderView>('/api/folders/' + folderId).then((v) => {
-            if (gen === generation.current) setView(v)
-            return v.children
-          })
-        : scope === 'mine' || scope === 'shared'
-          ? api.get<{ folders: FolderSummary[] }>('/api/folders?scope=' + scope).then((r) => r.folders)
-          : Promise.resolve([])
-    Promise.all([folderList, page(0)]).then(([fs, ns]) => {
-      if (gen !== generation.current) return
-      setFolders(fs)
-      setNotes(ns)
-      setHasMore(ns.length === pageSize)
-    }, (e) => {
-      if (folderId) setView(null)
-      fail(e)
-    })
+    const next = { folderId: urlFolderId, scope: urlScope, flat: urlFlat }
+    setLoading(true)
+    const folderList: Promise<{ children: FolderSummary[]; view: FolderView | null }> = urlFlat
+      ? Promise.resolve({ children: [], view: null })
+      : urlFolderId
+        ? api.get<FolderView>('/api/folders/' + urlFolderId).then((v) => ({ children: v.children, view: v }))
+        : urlScope === 'mine' || urlScope === 'shared'
+          ? api.get<{ folders: FolderSummary[] }>('/api/folders?scope=' + urlScope).then((r) => ({ children: r.folders, view: null }))
+          : Promise.resolve({ children: [], view: null })
+    Promise.all([folderList, page(0)]).then(
+      ([fs, ns]) => {
+        if (gen !== generation.current) return
+        setShown(next)
+        setView(fs.view)
+        setFolders(fs.children)
+        setNotes(ns)
+        setHasMore(ns.length === pageSize)
+        setSelected(new Set())
+        setLoading(false)
+      },
+      (e: unknown) => {
+        if (gen !== generation.current) return
+        toast.error(e instanceof Error ? e.message : String(e))
+        setShown(next)
+        setView(null)
+        setFolders([])
+        setNotes([])
+        setHasMore(false)
+        setSelected(new Set())
+        setLoading(false)
+      },
+    )
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me, pageQuery, reload])
+  const { folderId, scope, flat } = shown
 
   const loadMore = async () => {
     if (loadingMore || !hasMore || !notes) return
@@ -262,7 +280,7 @@ export default function Home() {
   const sharedRoot = !!folder && !local && folder.root_owner_id !== me?.id
   const rootLabel = sharedRoot ? scopeTitles.shared : local ? 'Documents' : scopeTitles.mine
   const rootLink = sharedRoot ? '/?scope=shared' : '/'
-  const tab: Scope = folderId ? (sharedRoot ? 'shared' : 'mine') : scope
+  const tab: Scope = urlFolderId ? (folderId ? (sharedRoot ? 'shared' : 'mine') : scope) : urlScope
   const recent = !flat && !folderId && scope === 'recent'
   const emptyText = flat
     ? 'No documents match.'
@@ -303,6 +321,7 @@ export default function Home() {
           <Plus className="size-4" /> New document
         </Button>
       </AppHeader>
+      {slow && <div className="fixed inset-x-0 top-12 z-30 h-0.5 animate-pulse bg-primary/70" data-testid="loading-bar" />}
       <main className="mx-auto max-w-5xl px-4 py-8 pb-24">
         <div className="mb-6 flex flex-wrap items-center gap-3">
           {!flat ? (

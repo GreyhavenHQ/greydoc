@@ -91,3 +91,25 @@ test('long lists load 50 documents at a time as you scroll', async ({ page }) =>
   await expect(page.getByTestId('list-end')).toHaveText('All 120 documents loaded.')
   await expect(page.getByTestId('load-more')).toHaveCount(0)
 })
+
+test('opening a folder swaps the list in one step, with no empty or placeholder state', async ({ page }) => {
+  const r = await page.request.post('/api/folders', { data: { name: 'Steady' } })
+  const id = (await r.json()).folder.id
+  await page.request.post('/api/notes', { data: { content: '# Inside steady', folder: id } })
+  await page.goto('/')
+  await expect(page.getByTestId('folder-list')).toContainText('Steady')
+  await page.evaluate(() => {
+    const w = window as unknown as { gaps: string[] }
+    w.gaps = []
+    new MutationObserver(() => {
+      if (!document.querySelector('[data-testid="folder-list"], [data-testid="note-list"]')) w.gaps.push('list gone')
+      if (document.querySelector('[data-slot="skeleton"]')) w.gaps.push('skeleton')
+      if (document.querySelector('[data-testid="breadcrumb"]')?.textContent?.includes('…')) w.gaps.push('breadcrumb placeholder')
+    }).observe(document.body, { childList: true, subtree: true, characterData: true })
+  })
+  await page.getByTestId('folder-list').getByRole('link', { name: 'Steady' }).click()
+  await expect(page.getByTestId('note-list')).toContainText('Inside steady')
+  await page.getByTestId('breadcrumb').getByRole('link').first().click()
+  await expect(page.getByTestId('folder-list')).toContainText('Steady')
+  expect(await page.evaluate(() => (window as unknown as { gaps: string[] }).gaps)).toEqual([])
+})
