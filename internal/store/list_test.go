@@ -129,3 +129,22 @@ func TestMigrationDropsNamedGroupGrants(t *testing.T) {
 		}
 	})
 }
+
+func TestListNotesOwnerID(t *testing.T) {
+	eachDialect(t, func(t *testing.T, st *Store) {
+		alice, _ := st.UpsertOIDCUser(ctx, "a", "alice", "Alice", "", nil)
+		owned, _ := st.CreateNote(ctx, NewNote{OwnerID: alice.ID})
+		unowned, _ := st.CreateNote(ctx, NewNote{})
+		ns, err := st.ListNotes(ctx, ListFilter{Scope: ScopeAll, Viewer: Viewer{Local: true}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := map[string]string{}
+		for _, n := range ns {
+			got[n.ID] = n.OwnerID
+		}
+		if got[owned.ID] != alice.ID || got[unowned.ID] != "" {
+			t.Fatalf("owner ids %v", got)
+		}
+	})
+}
