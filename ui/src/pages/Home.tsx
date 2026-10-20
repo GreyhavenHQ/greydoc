@@ -512,7 +512,6 @@ export default function Home() {
             onPin={togglePin}
             onTag={(t) => update({ tag: t })}
             onMenu={(target, x, y) => setMenu({ target, x, y })}
-            isMe={owns}
           />
         )}
         {notes && hasMore && (
@@ -607,13 +606,11 @@ function SelectBox({ checked, anySelected, label, onChange }: { checked: boolean
 const rowLink = 'flex min-w-0 items-center gap-2 after:absolute after:inset-0 after:content-[""] focus-visible:outline-none'
 const cols = (loc: boolean) =>
   loc
-    ? 'grid-cols-[1.5rem_minmax(0,1fr)_5rem] sm:grid-cols-[1.5rem_minmax(0,1fr)_9rem_7.5rem_6.5rem_5rem]'
-    : 'grid-cols-[1.5rem_minmax(0,1fr)_5rem] sm:grid-cols-[1.5rem_minmax(0,1fr)_7.5rem_6.5rem_5rem]'
+    ? 'grid-cols-[1.5rem_minmax(0,1fr)_5rem] sm:grid-cols-[1.5rem_minmax(0,1fr)_9rem_9rem_6.5rem_5rem]'
+    : 'grid-cols-[1.5rem_minmax(0,1fr)_5rem] sm:grid-cols-[1.5rem_minmax(0,1fr)_9rem_6.5rem_5rem]'
 
-// Owner shows "me" for the viewer's own items, as Drive does, so other people's names stand out.
-function Owner({ name, ownerId, me }: { name: string; ownerId?: string; me: boolean }) {
+function Owner({ name, ownerId }: { name: string; ownerId?: string }) {
   if (!name) return <span className="hidden sm:block" />
-  if (me) return <span className="hidden text-muted-foreground sm:block">me</span>
   return (
     <span className="hidden min-w-0 items-center gap-1.5 text-muted-foreground sm:flex" title={'Owner: ' + name}>
       <PersonAvatar id={ownerId} name={name} size={20} />
@@ -635,7 +632,6 @@ interface ItemListProps {
   // recent shows when the viewer last opened each document instead of when it changed.
   recent?: boolean
   onMenu: (target: MenuTarget, x: number, y: number) => void
-  isMe: (ownerId?: string) => boolean
 }
 
 function MenuButton({ label, onOpen }: { label: string; onOpen: (x: number, y: number) => void }) {
@@ -654,7 +650,7 @@ function MenuButton({ label, onOpen }: { label: string; onOpen: (x: number, y: n
 }
 
 // ItemList shows folders, then documents, as rows: name, location, owner and last change.
-function ItemList({ folders, notes, showLocation, selected, allSelected, onSelectAll, onSelect, onPin, onTag, recent, onMenu, isMe }: ItemListProps) {
+function ItemList({ folders, notes, showLocation, selected, allSelected, onSelectAll, onSelect, onPin, onTag, recent, onMenu }: ItemListProps) {
   const navigate = useNavigate()
   const any = selected.size > 0
   const row = (sel: boolean) =>
@@ -693,7 +689,7 @@ function ItemList({ folders, notes, showLocation, selected, allSelected, onSelec
                   </span>
                 </div>
                 {showLocation && <span className="hidden sm:block" />}
-                <Owner name={f.owner} ownerId={f.owner_id} me={isMe(f.owner_id)} />
+                <Owner name={f.owner} ownerId={f.owner_id} />
                 <span className="hidden text-muted-foreground sm:block">{relativeTime(f.updated_at)}</span>
                 <span className="flex items-center justify-end">
                   <MenuButton label={f.name} onOpen={(x, y) => onMenu({ kind: 'folder', folder: f }, x, y)} />
@@ -755,7 +751,7 @@ function ItemList({ folders, notes, showLocation, selected, allSelected, onSelec
                     )}
                   </span>
                 )}
-                <Owner name={n.owner} ownerId={n.owner_id} me={isMe(n.owner_id)} />
+                <Owner name={n.owner} ownerId={n.owner_id} />
                 <span className="hidden text-muted-foreground sm:block" title={`${n.view_count} views`}>
                   {relativeTime(recent && n.visited_at ? n.visited_at : n.updated_at)}
                 </span>
