@@ -153,3 +153,26 @@ func TestTrashFolderUnit(t *testing.T) {
 		}
 	})
 }
+
+func TestGroupFilterThroughFolders(t *testing.T) {
+	eachDialect(t, func(t *testing.T, st *Store) {
+		alice, _ := st.UpsertOIDCUser(ctx, "a", "alice", "Alice", "", nil)
+		top, _ := st.CreateFolder(ctx, NewFolder{Name: "Shared", OwnerID: alice.ID})
+		sub, _ := st.CreateFolder(ctx, NewFolder{Name: "Sub", OwnerID: alice.ID, ParentID: top.ID})
+		_ = st.SetFolderGroupGrant(ctx, top.ID, "g1", permission.Read, nil)
+		_, _ = st.CreateNote(ctx, NewNote{OwnerID: alice.ID, Alias: "in-sub", FolderID: sub.ID})
+		_, _ = st.CreateNote(ctx, NewNote{OwnerID: alice.ID, Alias: "direct", Groups: map[string]permission.Level{"g1": permission.Read}})
+		_, _ = st.CreateNote(ctx, NewNote{OwnerID: alice.ID, Alias: "other"})
+		ns, err := st.ListNotes(ctx, ListFilter{Viewer: Viewer{UserID: alice.ID}, Scope: ScopeAll, Group: "g1"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got []string
+		for _, n := range ns {
+			got = append(got, n.PrimaryAlias)
+		}
+		if len(got) != 2 || !contains(got, "in-sub") || !contains(got, "direct") {
+			t.Fatalf("group filter: %v", got)
+		}
+	})
+}

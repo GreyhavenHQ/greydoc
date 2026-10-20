@@ -31,7 +31,7 @@ type ListFilter struct {
 	Viewer Viewer
 	Scope  Scope
 	Tag    string
-	// Group keeps the notes that grant this app_group id a level.
+	// Group keeps the notes that grant this app_group id a level, directly or through a folder above them.
 	Group string
 	// Folder lists one folder by id, or the top level with FolderRoot.
 	Folder string
@@ -137,8 +137,10 @@ func (s *Store) ListNotes(ctx context.Context, f ListFilter) ([]NoteSummary, err
 		args = append(args, f.Tag)
 	}
 	if f.Group != "" {
-		where += " AND EXISTS (SELECT 1 FROM note_group_grant fg WHERE fg.note_id = n.id AND fg.group_name = ?)"
-		args = append(args, f.Group)
+		where += ` AND (EXISTS (SELECT 1 FROM note_group_grant fg WHERE fg.note_id = n.id AND fg.group_name = ?)
+			OR n.folder_id IN (WITH RECURSIVE gf(id) AS (SELECT folder_id FROM folder_group_grant WHERE group_name = ?
+				UNION SELECT c.id FROM folder c JOIN gf ON c.parent_id = gf.id WHERE c.deleted_at IS NULL) SELECT id FROM gf))`
+		args = append(args, f.Group, f.Group)
 	}
 	switch f.Folder {
 	case "":
