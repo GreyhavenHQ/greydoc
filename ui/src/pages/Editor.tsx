@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import type { EditorView } from '@codemirror/view'
 import {
   Columns2,
+  Copy,
   Download,
   Eye,
   FileArchive,
@@ -63,7 +64,7 @@ import { Preview } from '@/render/Preview'
 import { atBottom, editorTopLine, lineForY, measure, scrollEditorToLine, yForLine, type Point } from '@/render/scrollSync'
 import { selectionToSource, type SourceSelection } from '@/render/sourceMap'
 import { applyThreadMarks, type PreviewThread } from '@/render/previewThreads'
-import { api, ApiError, atLeast, shareParam, withShare, type Level, type Note } from '@/lib/api'
+import { api, ApiError, atLeast, duplicateNote, shareParam, withShare, type Level, type Note } from '@/lib/api'
 import { loginHref, useMe } from '@/lib/me'
 import { localName } from '@/lib/presence'
 import { extractTitle, isSlides } from '@/lib/meta'
@@ -719,6 +720,16 @@ export default function Editor() {
     [onEditorScroll],
   )
 
+  const duplicateThis = async () => {
+    try {
+      const copy = await duplicateNote(note?.alias ?? alias)
+      toast.success('Duplicated')
+      navigate('/n/' + copy.alias)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e))
+    }
+  }
+
   const trashNote = async () => {
     const target = note?.alias ?? alias
     try {
@@ -898,6 +909,11 @@ export default function Editor() {
                   <Eye className="size-4" /> View mode
                 </a>
               </DropdownMenuItem>
+              {me?.authenticated && (
+                <DropdownMenuItem onSelect={duplicateThis}>
+                  <Copy className="size-4" /> Duplicate this document
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 <a href={withShare(`/api/notes/${note.alias}/download.md`)}>

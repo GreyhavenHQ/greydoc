@@ -129,7 +129,7 @@ test('right-click or the row button opens the actions of a document or a folder'
   const menu = page.getByTestId('item-menu')
 
   await page.getByTestId('note-list').locator('li', { hasText: 'Menu doc one' }).click({ button: 'right' })
-  await expect(menu.getByRole('menuitem')).toHaveText(['Open', 'Open in a new tab', 'Unpin', 'Move…', 'Move to trash'].map((t) => (t === 'Unpin' ? /Pin|Unpin/ : t)))
+  await expect(menu.getByRole('menuitem')).toHaveText(['Open', 'Open in a new tab', 'Duplicate', 'Unpin', 'Move…', 'Move to trash'].map((t) => (t === 'Unpin' ? /Pin|Unpin/ : t)))
   await menu.getByRole('menuitem', { name: 'Move…' }).click()
   await page.getByTestId('move-targets').getByRole('button', { name: 'Menu target' }).click()
   await page.getByRole('button', { name: 'Move to Menu target' }).click()
