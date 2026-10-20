@@ -106,6 +106,7 @@ export interface NoteSummary {
   description: string
   tags: string[]
   owner: string
+  owner_id: string
   updated_at: string
   visited_at?: string
   pinned: boolean

@@ -40,8 +40,14 @@ test('two browsers editing one note converge and see each other', async ({ brows
 
   await expect(a.getByTestId('preview')).toHaveText('from A. from B.')
   await expect(b.getByTestId('preview')).toHaveText('from A. from B.')
-  await expect(a.getByTestId('presence').locator('span')).toHaveCount(2)
+  await expect(a.getByTestId('presence').getByTestId('person-avatar')).toHaveCount(2)
   await expect(a.locator('.cm-ySelectionCaret')).toHaveCount(1)
+
+  const colorOfB = await b
+    .getByRole('button', { name: 'Account' })
+    .getByTestId('person-avatar')
+    .evaluate((el) => getComputedStyle(el).backgroundColor)
+  await expect(a.locator('.cm-ySelectionCaret')).toHaveCSS('background-color', colorOfB)
 })
 
 test('home lists notes and filters by tag', async ({ page }) => {

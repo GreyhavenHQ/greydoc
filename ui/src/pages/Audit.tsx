@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { api } from '@/lib/api'
 import { callArgs, describe, type AuditEvent } from '@/lib/events'
-import { authorColor } from '@/lib/authors'
+import { PersonAvatar } from '@/components/PersonAvatar'
 import { loginHref, useMe } from '@/lib/me'
 import { relativeTime, shortDateTime } from '@/lib/time'
 
@@ -235,12 +235,7 @@ export default function Audit() {
         <ol className="flex flex-col divide-y rounded-lg border bg-card" data-testid="audit-list">
           {events.map((ev) => (
             <li key={ev.id} className="flex gap-3 px-4 py-3 text-sm" data-testid="audit-event">
-              <span
-                className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
-                style={{ backgroundColor: authorColor(ev.actor_id || ev.actor_name) }}
-              >
-                {(ev.actor_name || '?').slice(0, 1).toUpperCase()}
-              </span>
+              <PersonAvatar id={ev.actor_id} name={ev.actor_name} className="mt-0.5" />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="font-medium">{ev.actor_name || 'someone'}</span>

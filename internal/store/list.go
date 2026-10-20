@@ -44,6 +44,7 @@ type NoteSummary struct {
 	Description  string   `json:"description"`
 	Tags         []string `json:"tags"`
 	OwnerName    string   `json:"owner"`
+	OwnerID      string   `json:"owner_id"`
 	UpdatedAt    string   `json:"updated_at"`
 	VisitedAt    string   `json:"visited_at,omitempty"`
 	Pinned       bool     `json:"pinned"`
@@ -122,7 +123,7 @@ func (s *Store) ListNotes(ctx context.Context, f ListFilter) ([]NoteSummary, err
 		order = "CASE n.id" + rank.String() + " END"
 	}
 	args = append(args, f.Limit, max(f.Offset, 0))
-	rows, err := s.db.QueryContext(ctx, s.q(`SELECT n.id, a.name, n.title, n.description, COALESCE(u.display_name, ''), n.updated_at,
+	rows, err := s.db.QueryContext(ctx, s.q(`SELECT n.id, a.name, n.title, n.description, COALESCE(u.display_name, ''), COALESCE(n.owner_id, ''), n.updated_at,
 		COALESCE(v.visited_at, ''), COALESCE(v.pinned, 0), n.view_count, n.slides
 		FROM note n JOIN note_alias a ON a.note_id = n.id AND a.is_primary = 1
 		LEFT JOIN app_user u ON u.id = n.owner_id `+join+`
@@ -134,7 +135,7 @@ func (s *Store) ListNotes(ctx context.Context, f ListFilter) ([]NoteSummary, err
 	for rows.Next() {
 		var n NoteSummary
 		var pinned, slides int
-		if err := rows.Scan(&n.ID, &n.PrimaryAlias, &n.Title, &n.Description, &n.OwnerName, &n.UpdatedAt, &n.VisitedAt, &pinned, &n.ViewCount, &slides); err != nil {
+		if err := rows.Scan(&n.ID, &n.PrimaryAlias, &n.Title, &n.Description, &n.OwnerName, &n.OwnerID, &n.UpdatedAt, &n.VisitedAt, &pinned, &n.ViewCount, &slides); err != nil {
 			rows.Close()
 			return nil, err
 		}

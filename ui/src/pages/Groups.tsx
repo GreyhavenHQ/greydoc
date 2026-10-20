@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { ChevronDown, FileText, Plus, Trash2, UserMinus, UserPlus, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { AppHeader } from '@/components/AppHeader'
+import { PersonAvatar } from '@/components/PersonAvatar'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -18,15 +19,6 @@ const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : 
 
 type Detail = { group: Group; members: User[] }
 
-function Initial({ user, className }: { user: User; className?: string }) {
-  const name = user.display_name || user.username
-  return (
-    <span title={name} className={cn('flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold', className)}>
-      {name.slice(0, 1).toUpperCase()}
-    </span>
-  )
-}
-
 function AvatarStack({ group }: { group: Group }) {
   const shown = group.members ?? []
   const more = group.member_count - shown.length
@@ -34,7 +26,7 @@ function AvatarStack({ group }: { group: Group }) {
   return (
     <div className="hidden items-center -space-x-2 sm:flex" aria-hidden>
       {shown.map((u) => (
-        <Initial key={u.id} user={u} className="border ring-2 ring-card" />
+        <PersonAvatar key={u.id} id={u.id} name={u.display_name || u.username} size={28} className="ring-2 ring-card" />
       ))}
       {more > 0 && <span className="flex h-7 min-w-7 items-center justify-center rounded-full border bg-muted px-1.5 text-xs text-muted-foreground ring-2 ring-card">+{more}</span>}
     </div>
@@ -105,7 +97,7 @@ function CreateGroup({ open, onOpenChange, onCreated }: { open: boolean; onOpenC
 function MemberRow({ user, onRemove }: { user: User; onRemove?: () => void }) {
   return (
     <li className="flex h-11 items-center gap-3">
-      <Initial user={user} />
+      <PersonAvatar id={user.id} name={user.display_name || user.username} size={28} />
       <span className="min-w-0 flex-1 truncate text-sm">
         {user.display_name || user.username} <span className="text-muted-foreground">{handle(user.username)}</span>
       </span>

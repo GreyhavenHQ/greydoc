@@ -5,7 +5,8 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { api, ApiError, withShare } from '@/lib/api'
-import { authorColor, sourceLabel, type Source } from '@/lib/authors'
+import { sourceLabel, type Source } from '@/lib/authors'
+import { PersonAvatar } from '@/components/PersonAvatar'
 import { relativeTime, shortDateTime } from '@/lib/time'
 import { describe, type AuditEvent as Event } from '@/lib/events'
 import { cn } from '@/lib/utils'
@@ -47,18 +48,6 @@ export function SourceBadge({ source }: { source: Source }) {
     <Badge variant="outline" className="gap-1 px-1.5 py-0 text-[10px] font-medium">
       <Icon className="size-3" /> {sourceLabel[source]}
     </Badge>
-  )
-}
-
-function Avatar({ name, id }: { name: string; id: string }) {
-  return (
-    <span
-      className="flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
-      style={{ backgroundColor: authorColor(id || name) }}
-      title={name}
-    >
-      {(name || '?').slice(0, 1).toUpperCase()}
-    </span>
   )
 }
 
@@ -253,7 +242,7 @@ function EventRow({ alias, ev, at, canDecide, onShow, onChanged }: { alias: stri
   )
   return (
     <li className="flex gap-3 pb-5 text-sm" data-testid="timeline-event">
-      <Avatar name={ev.actor_name} id={ev.actor_name} />
+      <PersonAvatar name={ev.actor_name} id={ev.actor_id} />
       <div className="min-w-0 flex-1">
         {expandable ? (
           <button className="flex w-full items-start gap-1 text-left" onClick={() => setOpen(!open)} aria-expanded={open}>
@@ -288,7 +277,7 @@ function RevisionRow({ alias, rev, canRestore, onRestored }: { alias: string; re
     <li className="relative flex gap-3 pb-5" data-testid="timeline-revision">
       <div className="flex -space-x-2">
         {rev.authors.slice(0, 3).map((a) => (
-          <Avatar key={a.user_id + a.source} name={a.name} id={a.user_id} />
+          <PersonAvatar key={a.user_id + a.source} name={a.name} id={a.user_id} />
         ))}
       </div>
       <div className="min-w-0 flex-1">
