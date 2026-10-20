@@ -131,6 +131,7 @@ export interface FolderSummary {
   parent_id?: string
   name: string
   owner: string
+  owner_id?: string
   updated_at: string
   has_children: boolean
 }

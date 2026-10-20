@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import {
   ChevronDown,
   ChevronRight,
+  ExternalLink,
   FileText,
   FileUp,
   Folder,
@@ -44,6 +45,19 @@ import { cn } from '@/lib/utils'
 
 type Scope = 'recent' | 'mine' | 'shared' | 'all'
 
+type MenuTarget = { kind: 'note'; note: NoteSummary } | { kind: 'folder'; folder: FolderSummary }
+
+interface MenuEntry {
+  label: string
+  icon: React.ReactNode
+  onSelect: () => void
+  destructive?: boolean
+  // separated draws a line above the entry.
+  separated?: boolean
+}
+
+const noItems: string[] = []
+
 // pageSize is how many documents one request of the list loads.
 const pageSize = 50
 
@@ -62,8 +76,9 @@ export default function Home() {
   const [tags, setTags] = useState<TagCount[]>([])
   const [reload, setReload] = useState(0)
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [moveOpen, setMoveOpen] = useState(false)
-  const [shareOpen, setShareOpen] = useState(false)
+  const [moveItems, setMoveItems] = useState<{ notes: string[]; folders: string[] } | null>(null)
+  const [share, setShare] = useState<{ alias?: string; folderId?: string; isOwner: boolean } | null>(null)
+  const [menu, setMenu] = useState<{ x: number; y: number; target: MenuTarget } | null>(null)
   const [nameDialog, setNameDialog] = useState<null | { title: string; value: string; submit: (name: string) => Promise<void> }>(null)
   const navigate = useNavigate()
   const refresh = () => setReload((n) => n + 1)
@@ -244,13 +259,12 @@ export default function Home() {
         refresh()
       },
     })
-  const renameFolder = () =>
-    folder &&
+  const renameFolder = (id: string, current: string) =>
     setNameDialog({
       title: 'Rename folder',
-      value: folder.folder.name,
+      value: current,
       submit: async (name) => {
-        await api.patch('/api/folders/' + folder.folder.id, { name })
+        await api.patch('/api/folders/' + id, { name })
         refresh()
       },
     })
@@ -264,15 +278,52 @@ export default function Home() {
       toast.error(e instanceof Error ? e.message : String(e))
     }
   }
-  const trashSelected = async () => {
-    const n = selected.size
-    if (!confirm(`Move ${n === 1 ? 'this item' : n + ' items'} to the trash? Folders take the documents you own inside them.`)) return
+  const trashItems = async (items: { notes: string[]; folders: string[] }, label: string) => {
+    const n = items.notes.length + items.folders.length
+    const what = n === 1 ? `“${label}”` : n + ' items'
+    const extra = items.folders.length ? ' Folders take the documents you own inside them.' : ''
+    if (!confirm(`Move ${what} to the trash?${extra}`)) return
     let failed = 0
-    for (const alias of selection.notes) await api.del('/api/notes/' + alias).catch(() => failed++)
-    for (const id of selection.folders) await api.del('/api/folders/' + id).catch(() => failed++)
+    for (const alias of items.notes) await api.del('/api/notes/' + alias).catch(() => failed++)
+    for (const id of items.folders) await api.del('/api/folders/' + id).catch(() => failed++)
     if (failed) toast.error(`${failed} item(s) could not move to the trash. Only their owner can do that.`)
     else toast.success('Moved to the trash')
     refresh()
+  }
+  const owns = (ownerId?: string) => local || (!!ownerId && ownerId === me?.id)
+  const menuEntries = (t: MenuTarget): MenuEntry[] => {
+    const key = t.kind === 'note' ? noteKey(t.note.alias) : folderKey(t.folder.id)
+    if (selected.has(key) && selected.size > 1) {
+      return [
+        { label: `Move ${selected.size} items…`, icon: <FolderInput />, onSelect: () => setMoveItems(selection) },
+        { label: `Move ${selected.size} items to trash`, icon: <Trash2 />, onSelect: () => void trashItems(selection, ''), destructive: true, separated: true },
+      ]
+    }
+    if (t.kind === 'note') {
+      const n = t.note
+      const mine = owns(n.owner_id)
+      const out: MenuEntry[] = [
+        { label: 'Open', icon: <FileText />, onSelect: () => navigate('/n/' + n.alias) },
+        { label: 'Open in a new tab', icon: <ExternalLink />, onSelect: () => window.open('/n/' + n.alias, '_blank') },
+      ]
+      if (!local) out.push({ label: 'Share…', icon: <Share2 />, onSelect: () => setShare({ alias: n.alias, isOwner: mine }), separated: true })
+      out.push({ label: n.pinned ? 'Unpin' : 'Pin', icon: n.pinned ? <PinOff /> : <Pin />, onSelect: () => void togglePin(n), separated: local })
+      if (mine) {
+        out.push({ label: 'Move…', icon: <FolderInput />, onSelect: () => setMoveItems({ notes: [n.alias], folders: [] }) })
+        out.push({ label: 'Move to trash', icon: <Trash2 />, onSelect: () => void trashItems({ notes: [n.alias], folders: [] }, noteTitle(n)), destructive: true, separated: true })
+      }
+      return out
+    }
+    const f = t.folder
+    const mine = owns(f.owner_id)
+    const out: MenuEntry[] = [{ label: 'Open', icon: <Folder />, onSelect: () => navigate('/f/' + f.id) }]
+    if (!local) out.push({ label: 'Share…', icon: <Share2 />, onSelect: () => setShare({ folderId: f.id, isOwner: mine }), separated: true })
+    if (mine || canWrite) out.push({ label: 'Rename…', icon: <Pencil />, onSelect: () => renameFolder(f.id, f.name), separated: local })
+    if (mine) {
+      out.push({ label: 'Move…', icon: <FolderInput />, onSelect: () => setMoveItems({ notes: [], folders: [f.id] }) })
+      out.push({ label: 'Move to trash', icon: <Trash2 />, onSelect: () => void trashItems({ notes: [], folders: [f.id] }, f.name), destructive: true, separated: true })
+    }
+    return out
   }
 
   if (me && !me.authenticated) return <SignInCard next="/" />
@@ -396,7 +447,7 @@ export default function Home() {
                   </Button>
                 )}
                 {!local && (
-                  <Button size="sm" variant="outline" onClick={() => setShareOpen(true)}>
+                  <Button size="sm" variant="outline" onClick={() => setShare({ folderId: folder.folder.id, isOwner: isFolderOwner })}>
                     <Share2 className="size-4" /> Share
                   </Button>
                 )}
@@ -408,17 +459,12 @@ export default function Home() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onSelect={renameFolder}>
+                      <DropdownMenuItem onSelect={() => renameFolder(folder.folder.id, folder.folder.name)}>
                         <Pencil className="size-4" /> Rename
                       </DropdownMenuItem>
                       {isFolderOwner && (
                         <>
-                          <DropdownMenuItem
-                            onSelect={() => {
-                              setSelected(new Set([folderKey(folder.folder.id)]))
-                              setMoveOpen(true)
-                            }}
-                          >
+                          <DropdownMenuItem onSelect={() => setMoveItems({ notes: [], folders: [folder.folder.id] })}>
                             <FolderInput className="size-4" /> Move
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
@@ -465,6 +511,7 @@ export default function Home() {
             onSelect={toggleSelected}
             onPin={togglePin}
             onTag={(t) => update({ tag: t })}
+            onMenu={(target, x, y) => setMenu({ target, x, y })}
           />
         )}
         {notes && hasMore && (
@@ -481,14 +528,14 @@ export default function Home() {
         )}
       </main>
 
-      {selected.size > 0 && !moveOpen && (
+      {selected.size > 0 && !moveItems && (
         <div className="fixed inset-x-0 bottom-4 z-30 flex justify-center px-4" data-testid="selection-bar">
           <div className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 shadow-lg">
             <span className="px-1 text-sm font-medium">{selected.size} selected</span>
-            <Button size="sm" variant="outline" onClick={() => setMoveOpen(true)}>
+            <Button size="sm" variant="outline" onClick={() => setMoveItems(selection)}>
               <FolderInput className="size-4" /> Move
             </Button>
-            <Button size="sm" variant="outline" onClick={trashSelected}>
+            <Button size="sm" variant="outline" onClick={() => void trashItems(selection, '')}>
               <Trash2 className="size-4" /> Move to trash
             </Button>
             <Button size="icon" variant="ghost" aria-label="Clear selection" onClick={() => setSelected(new Set())}>
@@ -498,16 +545,44 @@ export default function Home() {
         </div>
       )}
       <MoveDialog
-        open={moveOpen}
-        onOpenChange={(o) => {
-          setMoveOpen(o)
-          if (!o && folderId && selection.folders.includes(folderId) && selection.notes.length === 0 && selected.size === 1) setSelected(new Set())
-        }}
-        notes={selection.notes}
-        folders={selection.folders}
+        open={!!moveItems}
+        onOpenChange={(o) => !o && setMoveItems(null)}
+        notes={moveItems?.notes ?? noItems}
+        folders={moveItems?.folders ?? noItems}
         onMoved={refresh}
       />
-      {folder && <ShareDialog folderId={folder.folder.id} isOwner={isFolderOwner} open={shareOpen} onOpenChange={(o) => { setShareOpen(o); if (!o) refresh() }} />}
+      {share && (
+        <ShareDialog
+          alias={share.alias}
+          folderId={share.folderId}
+          isOwner={share.isOwner}
+          open
+          onOpenChange={(o) => {
+            if (o) return
+            setShare(null)
+            refresh()
+          }}
+        />
+      )}
+      {menu && (
+        // Right-click and the row's ⋯ button open the same menu, anchored at a point.
+        <DropdownMenu key={`${menu.x},${menu.y}`} open modal={false} onOpenChange={(o) => !o && setMenu(null)}>
+          <DropdownMenuTrigger asChild>
+            <span aria-hidden className="pointer-events-none fixed size-px" style={{ left: menu.x, top: menu.y }} />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-52" data-testid="item-menu">
+            {menuEntries(menu.target).map((e) => (
+              <Fragment key={e.label}>
+                {e.separated && <DropdownMenuSeparator />}
+                <DropdownMenuItem onSelect={e.onSelect} className={cn(e.destructive && 'text-destructive')}>
+                  {e.icon}
+                  {e.label}
+                </DropdownMenuItem>
+              </Fragment>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
       <NameDialog state={nameDialog} onClose={() => setNameDialog(null)} />
     </div>
   )
@@ -531,8 +606,8 @@ function SelectBox({ checked, anySelected, label, onChange }: { checked: boolean
 const rowLink = 'flex min-w-0 items-center gap-2 after:absolute after:inset-0 after:content-[""] focus-visible:outline-none'
 const cols = (loc: boolean) =>
   loc
-    ? 'grid-cols-[1.5rem_minmax(0,1fr)_3.5rem] sm:grid-cols-[1.5rem_minmax(0,1fr)_10rem_9rem_7rem_3.5rem]'
-    : 'grid-cols-[1.5rem_minmax(0,1fr)_3.5rem] sm:grid-cols-[1.5rem_minmax(0,1fr)_9rem_7rem_3.5rem]'
+    ? 'grid-cols-[1.5rem_minmax(0,1fr)_5rem] sm:grid-cols-[1.5rem_minmax(0,1fr)_10rem_9rem_7rem_5rem]'
+    : 'grid-cols-[1.5rem_minmax(0,1fr)_5rem] sm:grid-cols-[1.5rem_minmax(0,1fr)_9rem_7rem_5rem]'
 
 function Owner({ name, ownerId }: { name: string; ownerId?: string }) {
   if (!name) return <span className="hidden sm:block" />
@@ -556,10 +631,26 @@ interface ItemListProps {
   onTag: (tag: string) => void
   // recent shows when the viewer last opened each document instead of when it changed.
   recent?: boolean
+  onMenu: (target: MenuTarget, x: number, y: number) => void
+}
+
+function MenuButton({ label, onOpen }: { label: string; onOpen: (x: number, y: number) => void }) {
+  return (
+    <button
+      aria-label={'Actions for ' + label}
+      className="relative z-10 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted hover:text-foreground focus-visible:opacity-100"
+      onClick={(e) => {
+        const r = e.currentTarget.getBoundingClientRect()
+        onOpen(r.right - 208, r.bottom + 4)
+      }}
+    >
+      <MoreHorizontal className="size-4" />
+    </button>
+  )
 }
 
 // ItemList shows folders, then documents, as rows: name, location, owner and last change.
-function ItemList({ folders, notes, showLocation, selected, allSelected, onSelectAll, onSelect, onPin, onTag, recent }: ItemListProps) {
+function ItemList({ folders, notes, showLocation, selected, allSelected, onSelectAll, onSelect, onPin, onTag, recent, onMenu }: ItemListProps) {
   const navigate = useNavigate()
   const any = selected.size > 0
   const row = (sel: boolean) =>
@@ -579,7 +670,14 @@ function ItemList({ folders, notes, showLocation, selected, allSelected, onSelec
           {folders.map((f) => {
             const key = folderKey(f.id)
             return (
-              <li key={f.id} className={row(selected.has(key))}>
+              <li
+                key={f.id}
+                className={row(selected.has(key))}
+                onContextMenu={(e) => {
+                  e.preventDefault()
+                  onMenu({ kind: 'folder', folder: f }, e.clientX, e.clientY)
+                }}
+              >
                 <SelectBox checked={selected.has(key)} anySelected={any} label={'Select ' + f.name} onChange={() => onSelect(key)} />
                 <Link to={'/f/' + f.id} className={rowLink}>
                   <Folder className="size-4 shrink-0 fill-muted-foreground/20 text-muted-foreground" />
@@ -588,7 +686,9 @@ function ItemList({ folders, notes, showLocation, selected, allSelected, onSelec
                 {showLocation && <span className="hidden sm:block" />}
                 <Owner name={f.owner} />
                 <span className="hidden text-muted-foreground sm:block">{relativeTime(f.updated_at)}</span>
-                <span />
+                <span className="flex items-center justify-end">
+                  <MenuButton label={f.name} onOpen={(x, y) => onMenu({ kind: 'folder', folder: f }, x, y)} />
+                </span>
               </li>
             )
           })}
@@ -599,7 +699,14 @@ function ItemList({ folders, notes, showLocation, selected, allSelected, onSelec
           {notes.map((n) => {
             const key = noteKey(n.alias)
             return (
-              <li key={n.id} className={row(selected.has(key))}>
+              <li
+                key={n.id}
+                className={row(selected.has(key))}
+                onContextMenu={(e) => {
+                  e.preventDefault()
+                  onMenu({ kind: 'note', note: n }, e.clientX, e.clientY)
+                }}
+              >
                 <SelectBox checked={selected.has(key)} anySelected={any} label={'Select ' + noteTitle(n)} onChange={() => onSelect(key)} />
                 <div className="flex min-w-0 flex-col">
                   <div className="flex min-w-0 items-center gap-2">
@@ -656,6 +763,7 @@ function ItemList({ folders, notes, showLocation, selected, allSelected, onSelec
                       <Presentation className="size-4" />
                     </a>
                   )}
+                  <MenuButton label={noteTitle(n)} onOpen={(x, y) => onMenu({ kind: 'note', note: n }, x, y)} />
                 </span>
               </li>
             )
