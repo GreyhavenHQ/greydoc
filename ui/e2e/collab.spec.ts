@@ -40,8 +40,19 @@ test('two browsers editing one note converge and see each other', async ({ brows
 
   await expect(a.getByTestId('preview')).toHaveText('from A. from B.')
   await expect(b.getByTestId('preview')).toHaveText('from A. from B.')
-  await expect(a.getByTestId('presence').locator('span')).toHaveCount(2)
+  await expect(a.getByTestId('presence').getByTestId('person-avatar')).toHaveCount(2)
   await expect(a.locator('.cm-ySelectionCaret')).toHaveCount(1)
+
+  const marbleOfB = await b
+    .getByRole('button', { name: 'Account' })
+    .locator('svg g > rect')
+    .first()
+    .evaluate((r) => {
+      const hex = r.getAttribute('fill')!.slice(1)
+      const [x, y, z] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16))
+      return `rgb(${x}, ${y}, ${z})`
+    })
+  await expect(a.locator('.cm-ySelectionCaret')).toHaveCSS('background-color', marbleOfB)
 })
 
 test('home lists notes and filters by tag', async ({ page }) => {

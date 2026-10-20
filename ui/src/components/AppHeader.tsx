@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { BookOpen, CircleHelp, LogIn, LogOut, Moon, Plus, ScrollText, Settings, Sun, Trash2, Users } from 'lucide-react'
 import { SyntaxHelp } from '@/components/SyntaxHelp'
 import { NotificationBell } from '@/components/NotificationBell'
+import { PersonAvatar } from '@/components/PersonAvatar'
 import { Logo } from '@/components/Logo'
 import { Button } from '@/components/ui/button'
 import {
@@ -51,17 +52,11 @@ export function UserMenu() {
     )
   }
   const name = me.local_mode ? localName() : me.display_name || me.username
-  const initials = (name ?? '?')
-    .split(/\s+/)
-    .map((p) => p[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase()
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="rounded-full bg-muted text-xs font-semibold" aria-label="Account">
-          {initials}
+        <Button variant="ghost" size="icon" className="rounded-full" aria-label="Account">
+          <PersonAvatar id={me.id} name={name ?? ''} size={32} />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">

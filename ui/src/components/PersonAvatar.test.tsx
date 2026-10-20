@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { PersonAvatar } from './PersonAvatar'
 
-const html = (seed: string, name: string) => renderToStaticMarkup(<PersonAvatar seed={seed} name={name} />)
+const html = (seed: string, name: string) => renderToStaticMarkup(<PersonAvatar id={seed} name={name} />)
 
 describe('PersonAvatar', () => {
   it('renders the marble, the initials and the name as title', () => {

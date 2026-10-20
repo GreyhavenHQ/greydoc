@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button'
 import { MentionText, MentionTextarea } from '@/components/Mentions'
 import { Badge } from '@/components/ui/badge'
 import { api, withShare } from '@/lib/api'
-import { authorColor, sourceLabel, type Source } from '@/lib/authors'
+import { sourceLabel, type Source } from '@/lib/authors'
+import { PersonAvatar } from '@/components/PersonAvatar'
 import { relativeTime } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import type { Person } from '@/lib/mentions'
@@ -69,12 +70,7 @@ function SuggestionCard({
   return (
     <div className={cn('rounded-lg border bg-card p-3', active && 'border-primary/60 shadow-sm')} data-testid="suggestion" onClick={onSelect}>
       <div className="mb-2 flex flex-wrap items-center gap-1.5 text-xs">
-        <span
-          className="flex size-5 items-center justify-center rounded-full text-[9px] font-semibold text-white"
-          style={{ backgroundColor: authorColor(s.author_id || s.author_name) }}
-        >
-          {(s.author_name || '?').slice(0, 1).toUpperCase()}
-        </span>
+        <PersonAvatar id={s.author_id} name={s.author_name} size={20} />
         <span className="font-medium">{s.author_name}</span>
         <span className="text-muted-foreground">suggested</span>
         {s.source !== 'human' && (
@@ -182,12 +178,7 @@ function ThreadCard({
       <div className="flex flex-col gap-3">
         {thread.comments.map((c) => (
           <div key={c.id} className="flex gap-2">
-            <span
-              className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full text-[9px] font-semibold text-white"
-              style={{ backgroundColor: authorColor(c.author_id || c.author_name) }}
-            >
-              {(c.author_name || '?').slice(0, 1).toUpperCase()}
-            </span>
+            <PersonAvatar id={c.author_id} name={c.author_name} size={20} className="mt-0.5" />
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-1.5 text-xs">
                 <span className="font-medium">{c.author_name}</span>

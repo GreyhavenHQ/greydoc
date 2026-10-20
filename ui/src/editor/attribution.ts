@@ -1,7 +1,7 @@
 import { RangeSetBuilder, StateEffect, StateField, type Extension } from '@codemirror/state'
 import { Decoration, EditorView, ViewPlugin, hoverTooltip, type DecorationSet, type ViewUpdate } from '@codemirror/view'
 import * as Y from 'yjs'
-import { authorColor, sourceLabel, type NoteClient } from '@/lib/authors'
+import { personColor, personSeed, sourceLabel, type NoteClient } from '@/lib/authors'
 
 export interface AuthorRun {
   from: number
@@ -37,34 +37,30 @@ const clientsField = StateField.define<Map<number, NoteClient>>({
   },
 })
 
-function authorKey(c: NoteClient | undefined, client: number) {
-  return c ? c.user_id || c.display_name : 'unknown-' + client
-}
-
-function build(view: EditorView, ytext: Y.Text): DecorationSet {
+function build(view: EditorView, ytext: Y.Text, local: boolean): DecorationSet {
   const clients = view.state.field(clientsField)
   const b = new RangeSetBuilder<Decoration>()
   const max = view.state.doc.length
   for (const r of textRuns(ytext)) {
     if (r.from >= max) break
     const c = clients.get(r.client)
-    const color = authorColor(authorKey(c, r.client))
+    const color = personColor(c ? personSeed(c.user_id, c.display_name, local) : 'unknown-' + r.client)
     const cls = 'cm-author' + (c?.source === 'ai_assisted' ? ' cm-author-ai' : c?.source === 'agent' ? ' cm-author-agent' : '')
     b.add(r.from, Math.min(r.to, max), Decoration.mark({ class: cls, attributes: { style: `--author:${color}` } }))
   }
   return b.finish()
 }
 
-export function attribution(ytext: Y.Text, onUnknown: () => void): Extension {
+export function attribution(ytext: Y.Text, onUnknown: () => void, local = false): Extension {
   const plugin = ViewPlugin.fromClass(
     class {
       decorations: DecorationSet
       constructor(view: EditorView) {
-        this.decorations = build(view, ytext)
+        this.decorations = build(view, ytext, local)
       }
       update(u: ViewUpdate) {
         if (u.docChanged || u.transactions.some((t) => t.effects.some((e) => e.is(setClients)))) {
-          this.decorations = build(u.view, ytext)
+          this.decorations = build(u.view, ytext, local)
           const clients = u.state.field(clientsField)
           if (textRuns(ytext).some((r) => !clients.has(r.client))) onUnknown()
         }

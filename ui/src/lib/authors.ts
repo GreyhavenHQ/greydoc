@@ -25,8 +25,6 @@ export function personColor(seed: string): string {
   return palette[hash(seed) % palette.length]
 }
 
-export const authorColor = personColor
-
 export function initials(name: string): string {
   const words = name.trim().split(/\s+/).filter(Boolean)
   if (!words.length) return '?'

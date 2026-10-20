@@ -14,7 +14,7 @@ import { api, noteTitle, type GroupRef, type NoteSummary, type TagCount } from '
 import { useMe } from '@/lib/me'
 import { importFiles, isImportable } from '@/lib/importNotes'
 import { relativeTime } from '@/lib/time'
-import { authorColor } from '@/lib/authors'
+import { PersonAvatar } from '@/components/PersonAvatar'
 import { cn } from '@/lib/utils'
 
 type Scope = 'recent' | 'mine' | 'shared' | 'all'
@@ -222,12 +222,7 @@ export default function Home() {
                   <div className="flex items-center gap-1.5 border-t pt-2 text-xs text-muted-foreground" data-testid="note-meta">
                     {n.owner && (
                       <span className="flex min-w-0 items-center gap-1" title={'Owner: ' + n.owner}>
-                        <span
-                          className="flex size-4 shrink-0 items-center justify-center rounded-full text-[8px] font-semibold text-white"
-                          style={{ backgroundColor: authorColor(n.owner) }}
-                        >
-                          {n.owner.slice(0, 1).toUpperCase()}
-                        </span>
+                        <PersonAvatar id={n.owner_id} name={n.owner} size={16} />
                         <span className="truncate">{n.owner}</span>
                       </span>
                     )}

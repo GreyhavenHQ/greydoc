@@ -56,7 +56,7 @@ export class NoteSession {
     return () => this.listeners.delete(fn)
   }
 
-  setUser(user: { name: string; color: string }) {
+  setUser(user: { id?: string; name: string; color: string }) {
     this.provider.awareness.setLocalStateField('user', { ...user, colorLight: user.color + '33' })
   }
 

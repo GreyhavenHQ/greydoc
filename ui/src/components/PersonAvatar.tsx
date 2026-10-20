@@ -1,6 +1,7 @@
 import { memo } from 'react'
 import Avatar from 'boring-avatars'
-import { initials, palette } from '@/lib/authors'
+import { initials, palette, personSeed } from '@/lib/authors'
+import { useMe } from '@/lib/me'
 import { cn } from '@/lib/utils'
 
 const sizes = {
@@ -11,20 +12,24 @@ const sizes = {
 }
 
 export const PersonAvatar = memo(function PersonAvatar({
-  seed,
+  id,
   name,
   size = 24,
+  title,
   className,
 }: {
-  seed: string
+  id?: string
   name: string
   size?: keyof typeof sizes
+  title?: string
   className?: string
 }) {
+  const { me } = useMe()
+  const seed = personSeed(id, name, !!me?.local_mode)
   return (
     <span
       data-testid="person-avatar"
-      title={name}
+      title={title ?? name}
       className={cn('relative inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-white', sizes[size], className)}
     >
       <Avatar variant="marble" name={seed} colors={palette} className="absolute inset-0 size-full" aria-hidden />

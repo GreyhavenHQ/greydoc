@@ -55,7 +55,8 @@ import { setThreadRanges, threadDecorations } from '@/editor/threads'
 import { selectionListener, type SelectionInfo } from '@/editor/selection'
 import { EditorView as CMView } from '@codemirror/view'
 import { attribution, setClients } from '@/editor/attribution'
-import { authorColor, sourceLabel, type NoteClient } from '@/lib/authors'
+import { personColor, personSeed, sourceLabel, type NoteClient } from '@/lib/authors'
+import { PersonAvatar } from '@/components/PersonAvatar'
 import { CodeEditor } from '@/editor/CodeEditor'
 import { NoteSession, type AppEvent } from '@/editor/session'
 import { Preview } from '@/render/Preview'
@@ -64,7 +65,7 @@ import { selectionToSource, type SourceSelection } from '@/render/sourceMap'
 import { applyThreadMarks, type PreviewThread } from '@/render/previewThreads'
 import { api, ApiError, atLeast, shareParam, withShare, type Level, type Note } from '@/lib/api'
 import { loginHref, useMe } from '@/lib/me'
-import { localName, presenceColor } from '@/lib/presence'
+import { localName } from '@/lib/presence'
 import { extractTitle, isSlides } from '@/lib/meta'
 import { cn } from '@/lib/utils'
 import { shortDateTime } from '@/lib/time'
@@ -93,8 +94,8 @@ function savedMode(fresh: boolean): Mode {
 
 interface PresenceUser {
   clientId: number
+  id?: string
   name: string
-  color: string
 }
 
 function useYText(session: NoteSession | null): string {
@@ -128,8 +129,8 @@ function usePresence(session: NoteSession | null): PresenceUser[] {
     const update = () => {
       const out: PresenceUser[] = []
       aw.getStates().forEach((st, id) => {
-        const u = (st as { user?: { name?: string; color?: string } }).user
-        if (u?.name) out.push({ clientId: id, name: u.name, color: u.color ?? '#888' })
+        const u = (st as { user?: { id?: string; name?: string } }).user
+        if (u?.name) out.push({ clientId: id, id: u.id, name: u.name })
       })
       setUsers(out)
     }
@@ -235,7 +236,8 @@ export default function Editor() {
   useEffect(() => {
     if (!note || !me) return
     const s = new NoteSession(note.alias, { name: me.local_mode ? localName() : undefined, share: shareParam() })
-    s.setUser({ name: me.local_mode ? localName() : me.display_name || me.username || 'guest', color: presenceColor() })
+    const name = me.local_mode ? localName() : me.display_name || me.username || 'guest'
+    s.setUser({ id: me.id, name, color: personColor(personSeed(me.id, name, me.local_mode)) })
     // Timings from page load, reported when a note is slow to arrive.
     const created = performance.now()
     let connectedAt = 0
@@ -678,8 +680,8 @@ export default function Editor() {
   }, [loadClients])
 
   const authorsOverlay = useMemo(
-    () => (showAuthors && session ? attribution(session.text, refreshClients) : []),
-    [showAuthors, session, refreshClients],
+    () => (showAuthors && session ? attribution(session.text, refreshClients, !!me?.local_mode) : []),
+    [showAuthors, session, refreshClients, me?.local_mode],
   )
 
   useEffect(() => {
@@ -689,13 +691,13 @@ export default function Editor() {
   const legend = useMemo(() => {
     const seen = new Map<string, { name: string; color: string; sources: Set<string> }>()
     for (const c of clients) {
-      const key = c.user_id || c.display_name
-      const e = seen.get(key) ?? { name: c.display_name || 'Unknown', color: authorColor(key), sources: new Set<string>() }
+      const key = personSeed(c.user_id, c.display_name, !!me?.local_mode)
+      const e = seen.get(key) ?? { name: c.display_name || 'Unknown', color: personColor(key), sources: new Set<string>() }
       if (c.source !== 'human') e.sources.add(sourceLabel[c.source])
       seen.set(key, e)
     }
     return [...seen.values()]
-  }, [clients])
+  }, [clients, me?.local_mode])
 
   const onView = useCallback(
     (v: EditorView | null) => {
@@ -800,11 +802,8 @@ export default function Editor() {
             {presence.slice(0, 6).map((u) => (
               <Tooltip key={u.clientId}>
                 <TooltipTrigger asChild>
-                  <span
-                    className="flex size-6 items-center justify-center rounded-full border-2 border-background text-[10px] font-semibold text-white"
-                    style={{ backgroundColor: u.color }}
-                  >
-                    {u.name.slice(0, 1).toUpperCase()}
+                  <span className="flex rounded-full border-2 border-background">
+                    <PersonAvatar id={u.id} name={u.name} title="" />
                   </span>
                 </TooltipTrigger>
                 <TooltipContent>{u.name}</TooltipContent>
