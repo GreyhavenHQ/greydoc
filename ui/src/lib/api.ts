@@ -111,7 +111,6 @@ export interface NoteSummary {
   visited_at?: string
   pinned: boolean
   snippet?: string
-  excerpt?: string
   view_count: number
   slides: boolean
   folder_id?: string

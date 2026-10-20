@@ -622,8 +622,8 @@ function SelectBox({ checked, anySelected, label, onChange }: { checked: boolean
 const rowLink = 'flex min-w-0 items-center gap-2 after:absolute after:inset-0 after:content-[""] focus-visible:outline-none'
 const cols = (loc: boolean) =>
   loc
-    ? 'grid-cols-[1.5rem_minmax(0,1fr)_5rem] sm:grid-cols-[1.5rem_minmax(0,1fr)_9rem_9rem_6.5rem_5rem]'
-    : 'grid-cols-[1.5rem_minmax(0,1fr)_5rem] sm:grid-cols-[1.5rem_minmax(0,1fr)_9rem_6.5rem_5rem]'
+    ? 'grid-cols-[1.5rem_minmax(0,1fr)_1.75rem] sm:grid-cols-[1.5rem_minmax(0,1fr)_10rem_10rem_8rem_1.75rem]'
+    : 'grid-cols-[1.5rem_minmax(0,1fr)_1.75rem] sm:grid-cols-[1.5rem_minmax(0,1fr)_10rem_8rem_1.75rem]'
 
 function Owner({ name, ownerId }: { name: string; ownerId?: string }) {
   if (!name) return <span className="hidden sm:block" />
@@ -654,7 +654,7 @@ function MenuButton({ label, onOpen }: { label: string; onOpen: (x: number, y: n
   return (
     <button
       aria-label={'Actions for ' + label}
-      className="relative z-10 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted hover:text-foreground focus-visible:opacity-100"
+      className="relative z-10 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
       onClick={(e) => {
         const r = e.currentTarget.getBoundingClientRect()
         onOpen(r.right - 208, r.bottom + 4)
@@ -731,7 +731,7 @@ function ItemList({ folders, notes, showLocation, selected, allSelected, onSelec
                 <SelectBox checked={selected.has(key)} anySelected={any} label={'Select ' + noteTitle(n)} onChange={() => onSelect(key)} />
                 <div className="flex min-w-0 flex-col">
                   <div className="flex min-w-0 items-center gap-2">
-                    <Link to={'/n/' + n.alias} className={cn(rowLink, 'max-w-[65%] shrink-0')}>
+                    <Link to={'/n/' + n.alias} className={rowLink}>
                       {n.slides ? <Presentation className="size-4 shrink-0 text-muted-foreground" /> : <FileText className="size-4 shrink-0 text-muted-foreground" />}
                       <span className="truncate">{noteTitle(n)}</span>
                     </Link>
@@ -745,8 +745,20 @@ function ItemList({ folders, notes, showLocation, selected, allSelected, onSelec
                         {t}
                       </button>
                     ))}
-                    {!n.snippet && (n.description || n.excerpt) && (
-                      <span className="hidden min-w-0 flex-1 truncate text-muted-foreground sm:block">{n.description || n.excerpt}</span>
+                    <button
+                      className={cn(
+                        'relative z-10 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-primary focus-visible:opacity-100',
+                        n.pinned && 'text-primary opacity-100',
+                      )}
+                      aria-label={n.pinned ? 'Unpin' : 'Pin'}
+                      onClick={() => onPin(n)}
+                    >
+                      {n.pinned ? <Pin className="size-3.5" /> : <PinOff className="size-3.5" />}
+                    </button>
+                    {n.slides && (
+                      <a href={'/p/' + n.alias} target="_blank" rel="noreferrer" className="relative z-10 shrink-0 text-muted-foreground hover:text-primary" aria-label="Present" title="Present the slides">
+                        <Presentation className="size-3.5" />
+                      </a>
                     )}
                   </div>
                   {n.snippet && <p className="truncate pl-6 text-xs text-muted-foreground">{n.snippet}</p>}
@@ -771,22 +783,7 @@ function ItemList({ folders, notes, showLocation, selected, allSelected, onSelec
                 <span className="hidden text-muted-foreground sm:block" title={`${n.view_count} views`}>
                   {relativeTime(recent && n.visited_at ? n.visited_at : n.updated_at)}
                 </span>
-                <span className="flex items-center justify-end gap-2">
-                  <button
-                    className={cn(
-                      'relative z-10 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-primary focus-visible:opacity-100',
-                      n.pinned && 'text-primary opacity-100',
-                    )}
-                    aria-label={n.pinned ? 'Unpin' : 'Pin'}
-                    onClick={() => onPin(n)}
-                  >
-                    {n.pinned ? <Pin className="size-4" /> : <PinOff className="size-4" />}
-                  </button>
-                  {n.slides && (
-                    <a href={'/p/' + n.alias} target="_blank" rel="noreferrer" className="relative z-10 text-muted-foreground hover:text-primary" aria-label="Present" title="Present the slides">
-                      <Presentation className="size-4" />
-                    </a>
-                  )}
+                <span className="flex items-center justify-end">
                   <MenuButton label={noteTitle(n)} onOpen={(x, y) => onMenu({ kind: 'note', note: n }, x, y)} />
                 </span>
               </li>
