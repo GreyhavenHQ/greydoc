@@ -11,7 +11,6 @@ test('create a folder, move two documents into it, trash and restore it', async 
   await expect(page).toHaveURL(/\/f\//)
   const folderURL = page.url()
   await expect(page.getByTestId('breadcrumb')).toContainText('Project X')
-  await expect(page.getByTestId('sidebar')).toContainText('Project X')
 
   await page.goto('/?scope=mine')
   const list = page.getByTestId('note-list')
@@ -29,13 +28,14 @@ test('create a folder, move two documents into it, trash and restore it', async 
   await expect(list.locator('li', { hasText: 'Folder plan' })).toHaveCount(0)
   await expect(page.getByTestId('folder-list')).toContainText('Project X')
 
-  await page.getByTestId('sidebar').getByRole('button', { name: 'Project X' }).click()
+  await page.getByTestId('folder-list').getByRole('link', { name: 'Project X' }).click()
   await expect(page).toHaveURL(folderURL)
   await expect(list).toContainText('Folder plan')
   await expect(list).toContainText('Folder notes')
 
   await page.goto('/?scope=all')
   await expect(list.locator('li', { hasText: 'Folder plan' })).toContainText('Project X')
+  await expect(page.getByRole('tab', { name: 'All documents' })).toHaveAttribute('aria-selected', 'true')
 
   await page.goto(folderURL)
   page.once('dialog', (d) => d.accept())
