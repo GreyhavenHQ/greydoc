@@ -21,6 +21,7 @@ export default function App() {
       <Suspense fallback={null}>
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/f/:folderId" element={<Home />} />
         <Route path="/new" element={<NewNote />} />
         <Route path="/login" element={<Login />} />
         <Route path="/n/:alias" element={<Editor />} />

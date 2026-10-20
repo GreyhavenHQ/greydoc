@@ -22,10 +22,21 @@ interface Permissions {
   owner: User | null
   users: { user_id: string; username: string; display_name: string; level: Level }[]
   groups: { group: string; name?: string; level: Level }[]
-  share_links: { id: string; token: string; label: string; created_at: string }[] | null
-  agent_policy: AgentPolicy
+  share_links?: { id: string; token: string; label: string; created_at: string }[] | null
+  agent_policy?: AgentPolicy
   guest_max: Level
+  inherited?: Inherited[]
 }
+
+interface Inherited {
+  folder_id: string
+  folder_name: string
+  owner: User | null
+  users: { user_id: string; username: string; display_name: string; level: Level }[]
+  groups: { group: string; name?: string; level: Level }[]
+}
+
+const groupName = (g: string, name?: string) => (g === '_everyone' ? 'Anyone with the address' : g === '_signed_in' ? 'Signed-in users' : `Group ${name || g}`)
 
 const levelLabels: Record<string, string> = {
   deny: 'No access',
@@ -60,14 +71,15 @@ function LevelSelect({ value, onChange, max, disabled }: { value: Level; onChang
   )
 }
 
-export function ShareDialog({ alias, isOwner, open, onOpenChange }: { alias: string; isOwner: boolean; open: boolean; onOpenChange: (o: boolean) => void }) {
+// ShareDialog edits the grants of a document, or of a folder when folderId is set.
+export function ShareDialog({ alias, folderId, isOwner, open, onOpenChange }: { alias?: string; folderId?: string; isOwner: boolean; open: boolean; onOpenChange: (o: boolean) => void }) {
   const { me } = useMe()
   const [perm, setPerm] = useState<Permissions | null>(null)
   const [userQuery, setUserQuery] = useState('')
   const [found, setFound] = useState<{ users: User[]; groups: GroupRef[] }>({ users: [], groups: [] })
   const [active, setActive] = useState({ sig: '', i: 0 })
   const inputRef = useRef<HTMLInputElement>(null)
-  const base = '/api/notes/' + alias
+  const base = folderId ? '/api/folders/' + folderId : '/api/notes/' + alias
 
   useEffect(() => {
     if (open) api.get<Permissions>(base + '/permissions').then(setPerm)
@@ -132,9 +144,13 @@ export function ShareDialog({ alias, isOwner, open, onOpenChange }: { alias: str
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Share and protect</DialogTitle>
+          <DialogTitle>{folderId ? 'Share folder' : 'Share and protect'}</DialogTitle>
           <DialogDescription>
-            {me?.local_mode ? 'Local mode: everyone who can reach this server can edit.' : 'Choose who can view, comment on and edit this document.'}
+            {me?.local_mode
+              ? 'Local mode: everyone who can reach this server can edit.'
+              : folderId
+                ? 'People you add here get the same access to every document and folder inside.'
+                : 'Choose who can view, comment on and edit this document.'}
           </DialogDescription>
         </DialogHeader>
         {!perm ? null : (
@@ -223,7 +239,44 @@ export function ShareDialog({ alias, isOwner, open, onOpenChange }: { alias: str
               </section>
             )}
 
-            {isOwner && (
+            {!me?.local_mode && perm.inherited && perm.inherited.length > 0 && (
+              <>
+                <Separator />
+                <section className="flex flex-col gap-2" data-testid="inherited-access">
+                  <div>
+                    <div>From folders above</div>
+                    <div className="text-xs text-muted-foreground">Change these on the folder. Grants here can only add access.</div>
+                  </div>
+                  {perm.inherited.map((f) => (
+                    <div key={f.folder_id} className="flex flex-col gap-1 rounded-md border px-2 py-1.5">
+                      <div className="text-xs font-medium">{f.folder_name}</div>
+                      {f.owner && (
+                        <div className="flex justify-between text-xs">
+                          <span>{f.owner.display_name || f.owner.username} (folder owner)</span>
+                          <span className="text-muted-foreground">{levelLabels.write}</span>
+                        </div>
+                      )}
+                      {f.groups.map((g) => (
+                        <div key={g.group} className="flex justify-between text-xs">
+                          <span>{groupName(g.group, g.name)}</span>
+                          <span className="text-muted-foreground">{levelLabels[g.level]}</span>
+                        </div>
+                      ))}
+                      {f.users.map((u) => (
+                        <div key={u.user_id} className="flex justify-between text-xs">
+                          <span>
+                            {u.display_name || u.username} <span className="text-muted-foreground">@{u.username}</span>
+                          </span>
+                          <span className="text-muted-foreground">{levelLabels[u.level]}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </section>
+              </>
+            )}
+
+            {isOwner && !folderId && perm.agent_policy && (
               <>
                 <Separator />
                 <section className="flex flex-col gap-2">
