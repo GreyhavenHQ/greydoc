@@ -52,6 +52,26 @@ export function describe(e: AuditEvent): string {
     }
     case 'permission.group_removed':
       return `removed ${levelWords[String(d.level)] ?? d.level} for group ${d.group}: documents are shared with people only`
+    case 'note.move':
+      return d.to ? `moved the document to “${d.to}”` : d.from ? `moved the document out of “${d.from}”` : 'moved the document to the top level'
+    case 'folder.create':
+      return `created the folder “${d.name}”`
+    case 'folder.rename':
+      return `renamed the folder “${d.from}” to “${d.to}”`
+    case 'folder.move':
+      return d.to ? `moved the folder “${d.folder}” to “${d.to}”` : `moved the folder “${d.folder}” to the top level`
+    case 'folder.trash':
+      return `moved the folder “${d.name}” to the trash`
+    case 'folder.restore':
+      return `restored the folder “${d.name}” from the trash`
+    case 'folder.delete':
+      return `deleted the folder “${d.name}” for good`
+    case 'folder.permission.user':
+      return d.level === 'deny' ? `removed @${d.username} from the folder “${d.folder}”` : `gave @${d.username} ${levelWords[String(d.level)] ?? d.level} to the folder “${d.folder}”`
+    case 'folder.permission.group': {
+      const g = d.group === '_everyone' ? 'anyone with the address' : d.group === '_signed_in' ? 'signed-in users' : `group ${d.name ?? d.group}`
+      return d.level === 'deny' ? `removed access for ${g} to the folder “${d.folder}”` : `gave ${g} ${levelWords[String(d.level)] ?? d.level} to the folder “${d.folder}”`
+    }
     case 'permission.owner':
       return `made @${d.username} the owner`
     case 'agent_policy':

@@ -55,21 +55,10 @@ func (s *Server) noteLevel(ctx context.Context, id *Identity, n *store.Note, sha
 		if err != nil {
 			return permission.Deny, err
 		}
-		for _, g := range acl.Users {
-			if in.IsRegistered && g.UserID == id.User.ID {
-				in.User = g.Level
-			}
-		}
-		for _, g := range acl.Groups {
-			switch g.Group {
-			case store.GroupEveryone:
-				in.Everyone = g.Level
-			case store.GroupSignedIn:
-				in.LoggedIn = g.Level
-			default:
-				if in.IsRegistered && slices.Contains(id.User.GroupIDs, g.Group) {
-					in.Group = max(in.Group, g.Level)
-				}
+		applyACL(&in, id, acl)
+		if n.FolderID != "" {
+			if err := s.applyFolderChain(ctx, &in, id, n.FolderID); err != nil {
+				return permission.Deny, err
 			}
 		}
 		if shareToken != "" {
@@ -103,6 +92,143 @@ func (s *Server) withFreshGroups(ctx context.Context, id *Identity) (*Identity, 
 	u.GroupIDs = ids
 	c.User = &u
 	return &c, nil
+}
+
+// applyACL raises the input to the grants in acl that match the caller.
+func applyACL(in *permission.Input, id *Identity, acl *store.ACL) {
+	for _, g := range acl.Users {
+		if in.IsRegistered && g.UserID == id.User.ID {
+			in.User = max(in.User, g.Level)
+		}
+	}
+	for _, g := range acl.Groups {
+		switch g.Group {
+		case store.GroupEveryone:
+			in.Everyone = max(in.Everyone, g.Level)
+		case store.GroupSignedIn:
+			in.LoggedIn = max(in.LoggedIn, g.Level)
+		default:
+			if in.IsRegistered && slices.Contains(id.User.GroupIDs, g.Group) {
+				in.Group = max(in.Group, g.Level)
+			}
+		}
+	}
+}
+
+// applyFolderChain adds the grants of folderID and every folder above it.
+func (s *Server) applyFolderChain(ctx context.Context, in *permission.Input, id *Identity, folderID string) error {
+	chain, err := s.store.FolderChain(ctx, folderID)
+	if err != nil {
+		return err
+	}
+	for _, f := range chain {
+		if in.IsRegistered && f.OwnerID != "" && f.OwnerID == id.User.ID {
+			in.FolderOwner = true
+		}
+		acl, err := s.store.FolderACL(ctx, f.ID)
+		if err != nil {
+			return err
+		}
+		applyACL(in, id, acl)
+	}
+	return nil
+}
+
+// folderLevel computes the caller's level on a folder from its grants and those of the folders above it.
+func (s *Server) folderLevel(ctx context.Context, id *Identity, f *store.Folder) (permission.Level, error) {
+	in := permission.Input{Local: id != nil && id.Local, MaxGuest: s.guestMax}
+	if id != nil && id.User != nil {
+		in.IsRegistered = true
+		in.IsOwner = f.OwnerID != "" && f.OwnerID == id.User.ID
+	}
+	if !in.Local && !in.IsOwner {
+		acl, err := s.store.FolderACL(ctx, f.ID)
+		if err != nil {
+			return permission.Deny, err
+		}
+		applyACL(&in, id, acl)
+		if f.ParentID != "" {
+			if err := s.applyFolderChain(ctx, &in, id, f.ParentID); err != nil {
+				return permission.Deny, err
+			}
+		}
+	}
+	l := permission.Determine(in)
+	if !id.canWriteScope() {
+		l = min(l, permission.Read)
+	}
+	return l, nil
+}
+
+// folderFor loads the {id} folder and checks the caller has at least need. It writes the error response itself.
+func (s *Server) folderFor(w http.ResponseWriter, r *http.Request, need permission.Level) (*store.Folder, permission.Level, bool) {
+	f, l, err := s.liveFolder(r.Context(), identityFrom(r.Context()), r.PathValue("id"), need)
+	if err != nil {
+		s.writeFolderError(w, r, err)
+		return nil, l, false
+	}
+	return f, l, true
+}
+
+var (
+	errFolderMissing = errors.New("no such folder")
+	errFolderTrashed = errors.New("this folder is in the trash")
+)
+
+type levelError struct {
+	have, need permission.Level
+}
+
+func (e *levelError) Error() string {
+	if e.have == permission.Deny {
+		return "you do not have access to this folder"
+	}
+	return "this action needs " + e.need.String() + " access to the folder"
+}
+
+func (s *Server) liveFolder(ctx context.Context, id *Identity, folderID string, need permission.Level) (*store.Folder, permission.Level, error) {
+	f, err := s.store.FolderByID(ctx, folderID)
+	if errors.Is(err, store.ErrNotFound) {
+		return nil, 0, errFolderMissing
+	}
+	if err != nil {
+		return nil, 0, err
+	}
+	l, err := s.folderLevel(ctx, id, f)
+	if err != nil {
+		return nil, 0, err
+	}
+	if l == permission.Deny {
+		// A folder the caller cannot see does not exist for them.
+		return nil, l, errFolderMissing
+	}
+	if f.DeletedAt != "" {
+		return nil, l, errFolderTrashed
+	}
+	if l < need {
+		return nil, l, &levelError{l, need}
+	}
+	return f, l, nil
+}
+
+func (s *Server) writeFolderError(w http.ResponseWriter, r *http.Request, err error) {
+	var le *levelError
+	switch {
+	case errors.Is(err, errFolderMissing):
+		if identityFrom(r.Context()) == nil {
+			writeError(w, http.StatusUnauthorized, "login_required", "sign in first")
+			return
+		}
+		writeError(w, http.StatusNotFound, "not_found", err.Error())
+	case errors.Is(err, errFolderTrashed):
+		writeError(w, http.StatusGone, "in_trash", err.Error())
+	case errors.As(err, &le):
+		writeError(w, http.StatusForbidden, "forbidden", err.Error())
+	case errors.Is(err, store.ErrFolderCycle), errors.Is(err, store.ErrFolderDepth):
+		writeError(w, http.StatusBadRequest, "bad_move", err.Error())
+	default:
+		internalError(w, err)
+	}
 }
 
 func shareToken(r *http.Request) string {

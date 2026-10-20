@@ -29,13 +29,18 @@ type ListFilter struct {
 	Viewer Viewer
 	Scope  Scope
 	Tag    string
-	// Group keeps the notes that grant this app_group id a level.
+	// Group keeps the notes that grant this app_group id a level, directly or through a folder above them.
 	Group string
+	// Folder lists one folder by id, or the top level with FolderRoot.
+	Folder string
 	// IDs restricts the list, for search results, and keeps their order.
 	IDs    []string
 	Limit  int
 	Offset int
 }
+
+// FolderRoot is the Folder filter for notes outside any folder.
+const FolderRoot = "root"
 
 type NoteSummary struct {
 	ID           string   `json:"id"`
@@ -51,24 +56,48 @@ type NoteSummary struct {
 	Snippet      string   `json:"snippet,omitempty"`
 	ViewCount    int64    `json:"view_count"`
 	Slides       bool     `json:"slides"`
+	FolderID     string   `json:"folder_id,omitempty"`
+	// FolderName is empty when the viewer cannot see the folder.
+	FolderName string `json:"folder_name,omitempty"`
 }
 
-// visibleWhere matches notes the viewer can read through ownership or a grant.
-func (s *Store) visibleWhere(v Viewer) (string, []any) {
-	if v.Local {
-		return "1 = 1", nil
-	}
+func viewerGroups(v Viewer) []string {
 	groups := append([]string{GroupEveryone}, v.Groups...)
 	if v.UserID != "" {
 		groups = append(groups, GroupSignedIn)
 	}
-	where := `(n.owner_id = ? OR EXISTS (SELECT 1 FROM note_user_grant ug WHERE ug.note_id = n.id AND ug.user_id = ?)
-		OR EXISTS (SELECT 1 FROM note_group_grant gg WHERE gg.note_id = n.id AND gg.group_name IN (` + placeholders(len(groups)) + `)))`
+	return groups
+}
+
+// visibleFolders selects the ids of folders the viewer can read: owned or granted, and everything below them.
+func (s *Store) visibleFolders(v Viewer) (string, []any) {
+	groups := viewerGroups(v)
+	q := `WITH RECURSIVE vf(id) AS (SELECT f.id FROM folder f WHERE f.deleted_at IS NULL AND (f.owner_id = ?
+			OR EXISTS (SELECT 1 FROM folder_user_grant ug WHERE ug.folder_id = f.id AND ug.user_id = ?)
+			OR EXISTS (SELECT 1 FROM folder_group_grant gg WHERE gg.folder_id = f.id AND gg.group_name IN (` + placeholders(len(groups)) + `)))
+		UNION SELECT c.id FROM folder c JOIN vf ON c.parent_id = vf.id WHERE c.deleted_at IS NULL) SELECT id FROM vf`
 	args := []any{v.UserID, v.UserID}
 	for _, g := range groups {
 		args = append(args, g)
 	}
-	return where, args
+	return q, args
+}
+
+// visibleWhere matches notes the viewer can read through ownership, a grant, or a folder above them.
+func (s *Store) visibleWhere(v Viewer) (string, []any) {
+	if v.Local {
+		return "1 = 1", nil
+	}
+	groups := viewerGroups(v)
+	vf, fargs := s.visibleFolders(v)
+	where := `(n.owner_id = ? OR EXISTS (SELECT 1 FROM note_user_grant ug WHERE ug.note_id = n.id AND ug.user_id = ?)
+		OR EXISTS (SELECT 1 FROM note_group_grant gg WHERE gg.note_id = n.id AND gg.group_name IN (` + placeholders(len(groups)) + `))
+		OR n.folder_id IN (` + vf + `))`
+	args := []any{v.UserID, v.UserID}
+	for _, g := range groups {
+		args = append(args, g)
+	}
+	return where, append(args, fargs...)
 }
 
 func (s *Store) ListNotes(ctx context.Context, f ListFilter) ([]NoteSummary, error) {
@@ -104,8 +133,18 @@ func (s *Store) ListNotes(ctx context.Context, f ListFilter) ([]NoteSummary, err
 		args = append(args, f.Tag)
 	}
 	if f.Group != "" {
-		where += " AND EXISTS (SELECT 1 FROM note_group_grant fg WHERE fg.note_id = n.id AND fg.group_name = ?)"
-		args = append(args, f.Group)
+		where += ` AND (EXISTS (SELECT 1 FROM note_group_grant fg WHERE fg.note_id = n.id AND fg.group_name = ?)
+			OR n.folder_id IN (WITH RECURSIVE gf(id) AS (SELECT folder_id FROM folder_group_grant WHERE group_name = ?
+				UNION SELECT c.id FROM folder c JOIN gf ON c.parent_id = gf.id WHERE c.deleted_at IS NULL) SELECT id FROM gf))`
+		args = append(args, f.Group, f.Group)
+	}
+	switch f.Folder {
+	case "":
+	case FolderRoot:
+		where += " AND n.folder_id IS NULL"
+	default:
+		where += " AND n.folder_id = ?"
+		args = append(args, f.Folder)
 	}
 	if f.IDs != nil {
 		if len(f.IDs) == 0 {
@@ -123,10 +162,16 @@ func (s *Store) ListNotes(ctx context.Context, f ListFilter) ([]NoteSummary, err
 		order = "CASE n.id" + rank.String() + " END"
 	}
 	args = append(args, f.Limit, max(f.Offset, 0))
+	folderName := "COALESCE(fo.name, '')"
+	if !f.Viewer.Local {
+		vf, fargs := s.visibleFolders(f.Viewer)
+		folderName = "CASE WHEN fo.id IN (" + vf + ") THEN fo.name ELSE '' END"
+		args = append(fargs, args...)
+	}
 	rows, err := s.db.QueryContext(ctx, s.q(`SELECT n.id, a.name, n.title, n.description, COALESCE(u.display_name, ''), COALESCE(n.owner_id, ''), n.updated_at,
-		COALESCE(v.visited_at, ''), COALESCE(v.pinned, 0), n.view_count, n.slides
+		COALESCE(v.visited_at, ''), COALESCE(v.pinned, 0), n.view_count, n.slides, COALESCE(n.folder_id, ''), `+folderName+`
 		FROM note n JOIN note_alias a ON a.note_id = n.id AND a.is_primary = 1
-		LEFT JOIN app_user u ON u.id = n.owner_id `+join+`
+		LEFT JOIN app_user u ON u.id = n.owner_id LEFT JOIN folder fo ON fo.id = n.folder_id `+join+`
 		WHERE `+where+` ORDER BY `+order+` LIMIT ? OFFSET ?`), args...)
 	if err != nil {
 		return nil, err
@@ -135,7 +180,7 @@ func (s *Store) ListNotes(ctx context.Context, f ListFilter) ([]NoteSummary, err
 	for rows.Next() {
 		var n NoteSummary
 		var pinned, slides int
-		if err := rows.Scan(&n.ID, &n.PrimaryAlias, &n.Title, &n.Description, &n.OwnerName, &n.OwnerID, &n.UpdatedAt, &n.VisitedAt, &pinned, &n.ViewCount, &slides); err != nil {
+		if err := rows.Scan(&n.ID, &n.PrimaryAlias, &n.Title, &n.Description, &n.OwnerName, &n.OwnerID, &n.UpdatedAt, &n.VisitedAt, &pinned, &n.ViewCount, &slides, &n.FolderID, &n.FolderName); err != nil {
 			rows.Close()
 			return nil, err
 		}

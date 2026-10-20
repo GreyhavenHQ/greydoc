@@ -46,6 +46,33 @@ CREATE TABLE IF NOT EXISTS session (
     expires_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_session_user ON session(user_id);
+-- A folder holds notes and folders. Its grants apply to everything below it.
+-- trashed_with is the folder whose trash took this row with it.
+CREATE TABLE IF NOT EXISTS folder (
+    id TEXT PRIMARY KEY,
+    parent_id TEXT REFERENCES folder(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    owner_id TEXT REFERENCES app_user(id) ON DELETE SET NULL,
+    name TEXT NOT NULL,
+    deleted_at TEXT,
+    deleted_by TEXT NOT NULL DEFAULT '',
+    trashed_with TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_folder_parent ON folder(parent_id);
+CREATE INDEX IF NOT EXISTS idx_folder_owner ON folder(owner_id);
+CREATE TABLE IF NOT EXISTS folder_user_grant (
+    folder_id TEXT NOT NULL REFERENCES folder(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+    level TEXT NOT NULL,
+    PRIMARY KEY (folder_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS folder_group_grant (
+    folder_id TEXT NOT NULL REFERENCES folder(id) ON DELETE CASCADE,
+    group_name TEXT NOT NULL,
+    level TEXT NOT NULL,
+    PRIMARY KEY (folder_id, group_name)
+);
 CREATE TABLE IF NOT EXISTS note (
     id TEXT PRIMARY KEY,
     owner_id TEXT REFERENCES app_user(id) ON DELETE SET NULL,
@@ -66,6 +93,8 @@ CREATE TABLE IF NOT EXISTS note (
     view_count BIGINT NOT NULL DEFAULT 0,
     -- slides is 1 when the front matter says type: slide.
     slides INTEGER NOT NULL DEFAULT 0,
+    folder_id TEXT REFERENCES folder(id) ON DELETE SET NULL,
+    trashed_with TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );

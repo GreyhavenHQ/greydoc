@@ -777,7 +777,12 @@ export default function Editor() {
     <TooltipProvider delayDuration={300}>
       <div className="flex h-screen flex-col">
         <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
-          <Link to="/" className="flex items-center" aria-label="All documents">
+          <Link
+            to={note?.folder ? '/f/' + note.folder.id : '/'}
+            className="flex items-center"
+            aria-label={note?.folder ? 'Back to ' + note.folder.name : 'All documents'}
+            title={note?.folder ? 'Back to ' + note.folder.name : undefined}
+          >
             <Logo className="h-5 text-foreground" />
           </Link>
           <h1 className="min-w-0 truncate px-1 text-sm font-medium" data-testid="note-title">

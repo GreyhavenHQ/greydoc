@@ -36,6 +36,8 @@ type noteView struct {
 	Content *string          `json:"content,omitempty"`
 	Aliases []store.Alias    `json:"aliases,omitempty"`
 	Owner   *store.User      `json:"owner,omitempty"`
+	// Folder is the note's folder, when the caller can open it.
+	Folder *folderRef `json:"folder,omitempty"`
 }
 
 func (s *Server) handleCreateNote(w http.ResponseWriter, r *http.Request) {
@@ -70,6 +72,11 @@ var errMaxLength = errors.New("document exceeds the maximum length")
 func (s *Server) createNote(ctx context.Context, id *Identity, spec NoteSpec) (*store.Note, error) {
 	if utf8.RuneCountInString(spec.Content) > s.cfg.MaxNoteLength {
 		return nil, errMaxLength
+	}
+	if spec.Folder != "" {
+		if _, _, err := s.liveFolder(ctx, id, spec.Folder, permission.Write); err != nil {
+			return nil, err
+		}
 	}
 	nn, err := s.noteFromSpec(ctx, id, spec)
 	if err != nil {
@@ -114,8 +121,12 @@ func (s *Server) writeNoteError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusBadRequest, "alias_forbidden", err.Error())
 	case errors.Is(err, store.ErrPrimaryAliasDeletion):
 		writeError(w, http.StatusBadRequest, "primary_alias", err.Error())
-	case errors.Is(err, store.ErrNotFound):
+	case errors.Is(err, store.ErrNotFound), errors.Is(err, errFolderMissing):
 		writeError(w, http.StatusNotFound, "not_found", err.Error())
+	case errors.Is(err, errFolderTrashed):
+		writeError(w, http.StatusGone, "in_trash", err.Error())
+	case errors.As(err, new(*levelError)):
+		writeError(w, http.StatusForbidden, "forbidden", err.Error())
 	default:
 		internalError(w, err)
 	}
@@ -151,6 +162,11 @@ func (s *Server) handleGetNote(w http.ResponseWriter, r *http.Request) {
 	}
 	if n.OwnerID != "" {
 		v.Owner, _ = s.store.UserByID(r.Context(), n.OwnerID)
+	}
+	if n.FolderID != "" {
+		if f, _, err := s.liveFolder(r.Context(), identityFrom(r.Context()), n.FolderID, permission.Read); err == nil {
+			v.Folder = &folderRef{f.ID, f.Name}
+		}
 	}
 	writeJSON(w, http.StatusOK, v)
 }

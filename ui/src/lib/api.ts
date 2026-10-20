@@ -113,6 +113,43 @@ export interface NoteSummary {
   snippet?: string
   view_count: number
   slides: boolean
+  folder_id?: string
+  folder_name?: string
+}
+
+export interface Folder {
+  id: string
+  parent_id?: string
+  owner_id?: string
+  name: string
+  created_at: string
+  updated_at: string
+}
+
+export interface FolderSummary {
+  id: string
+  parent_id?: string
+  name: string
+  owner: string
+  owner_id?: string
+  updated_at: string
+  has_children: boolean
+  items: number
+}
+
+export interface FolderRef {
+  id: string
+  name: string
+}
+
+export interface FolderView {
+  folder: Folder
+  level: Level
+  path: FolderRef[]
+  children: FolderSummary[]
+  owner?: User
+  // root_owner_id owns the top folder of the path. The breadcrumb starts at My documents when it is the viewer.
+  root_owner_id?: string
 }
 
 export interface Note {
@@ -130,6 +167,9 @@ export interface Note {
   content?: string
   aliases?: { name: string; primary: boolean }[]
   owner?: User
+  folder_id?: string
+  // folder is set when the viewer can open the document's folder.
+  folder?: FolderRef
 }
 
 export type AgentPolicy = 'none' | 'read' | 'suggest' | 'edit'

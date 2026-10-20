@@ -168,6 +168,7 @@ func textResult(s string) (*mcp.CallToolResult, any, error) {
 type listNotesIn struct {
 	Scope  string `json:"scope,omitempty" jsonschema:"recent, mine, shared or all (default all)"`
 	Tag    string `json:"tag,omitempty" jsonschema:"only documents with this tag"`
+	Folder string `json:"folder,omitempty" jsonschema:"only documents directly in this folder id (from list_folders), or root for documents outside any folder"`
 	Limit  int    `json:"limit,omitempty" jsonschema:"documents per page, 1 to 200 (default 50)"`
 	Offset int    `json:"offset,omitempty" jsonschema:"documents to skip: the next_offset of the previous page"`
 }
@@ -200,6 +201,17 @@ type createNoteIn struct {
 	UpdatedAt    string         `json:"updated_at,omitempty" jsonschema:"original last update, RFC 3339"`
 	Permissions  *permissionsIn `json:"permissions,omitempty" jsonschema:"initial access. Unset fields keep the server defaults."`
 	AgentPolicy  string         `json:"agent_policy,omitempty" jsonschema:"none, read, suggest or edit"`
+	Folder       string         `json:"folder,omitempty" jsonschema:"folder id to create the document in (from list_folders). It then gets its access from the folder."`
+}
+
+type listFoldersIn struct {
+	Parent string `json:"parent,omitempty" jsonschema:"list the subfolders of this folder id. Empty lists top-level folders."`
+	Scope  string `json:"scope,omitempty" jsonschema:"for top-level folders: mine (default) or shared"`
+}
+
+type moveNoteIn struct {
+	Note   string `json:"note" jsonschema:"document alias or URL"`
+	Folder string `json:"folder,omitempty" jsonschema:"destination folder id. Empty moves the document out of any folder."`
 }
 
 type commentsIn struct {
@@ -249,7 +261,12 @@ func (s *Server) registerTools(srv *mcp.Server) {
 			if err != nil {
 				return nil, nil, err
 			}
-			return s.mcpList(ctx, id, store.ListFilter{Viewer: s.viewer(id), Scope: mcpScope(in.Scope), Tag: in.Tag,
+			if in.Folder != "" && in.Folder != store.FolderRoot {
+				if _, _, err := s.liveFolder(ctx, id, in.Folder, permission.Read); err != nil {
+					return nil, nil, err
+				}
+			}
+			return s.mcpList(ctx, id, store.ListFilter{Viewer: s.viewer(id), Scope: mcpScope(in.Scope), Tag: in.Tag, Folder: in.Folder,
 				Limit: defaultLimit(in.Limit, 50), Offset: in.Offset}, "")
 		})
 	mcp.AddTool(srv, &mcp.Tool{Name: "search_notes", Description: "Search documents by words in title, tags and text, best match first, with an excerpt around the match. A full page returns next_offset: pass it as offset to get the next page.", Annotations: ro},
@@ -289,7 +306,7 @@ func (s *Server) registerTools(srv *mcp.Server) {
 			sgs, _ := s.store.Suggestions(ctx, n.ID, false)
 			return jsonResult(map[string]any{
 				"alias": n.PrimaryAlias, "title": n.Title, "tags": n.Tags, "updated_at": n.UpdatedAt,
-				"your_level": l, "agent_policy": n.AgentPolicy, "open_comments": open, "pending_suggestions": len(sgs),
+				"your_level": l, "agent_policy": n.AgentPolicy, "open_comments": open, "pending_suggestions": len(sgs), "folder_id": n.FolderID,
 				"url": s.publicURL() + "/n/" + n.PrimaryAlias, "content": text,
 			})
 		})
@@ -304,7 +321,7 @@ func (s *Server) registerTools(srv *mcp.Server) {
 				return nil, nil, errors.New("this token can only read")
 			}
 			spec := NoteSpec{Content: in.Content, Alias: in.Alias, ExtraAliases: in.ExtraAliases, CreatedAt: in.CreatedAt,
-				UpdatedAt: in.UpdatedAt, AgentPolicy: in.AgentPolicy}
+				UpdatedAt: in.UpdatedAt, AgentPolicy: in.AgentPolicy, Folder: in.Folder}
 			if in.Permissions != nil {
 				p := in.Permissions
 				spec.Permissions = &PermissionSpec{HedgeDocMode: p.HedgeDocMode, Everyone: p.Everyone, SignedIn: p.SignedIn, Users: p.Users, Groups: p.Groups}
@@ -315,6 +332,56 @@ func (s *Server) registerTools(srv *mcp.Server) {
 			}
 			return jsonResult(map[string]any{"alias": n.PrimaryAlias, "title": n.Title, "url": s.publicURL() + "/n/" + n.PrimaryAlias,
 				"created_at": n.CreatedAt, "updated_at": n.UpdatedAt})
+		})
+	mcp.AddTool(srv, &mcp.Tool{Name: "list_folders", Description: "List folders. A folder's access applies to every document and folder inside it.", Annotations: ro},
+		func(ctx context.Context, req *mcp.CallToolRequest, in listFoldersIn) (*mcp.CallToolResult, any, error) {
+			id, err := s.mcpIdentity(req)
+			if err != nil {
+				return nil, nil, err
+			}
+			f := store.FolderFilter{Viewer: s.viewer(id), Parent: in.Parent, Scope: store.ScopeMine}
+			if in.Scope == string(store.ScopeShared) {
+				f.Scope = store.ScopeShared
+			}
+			if in.Parent != "" {
+				if _, _, err := s.liveFolder(ctx, id, in.Parent, permission.Read); err != nil {
+					return nil, nil, err
+				}
+			}
+			folders, err := s.store.ListFolders(ctx, f)
+			if err != nil {
+				return nil, nil, err
+			}
+			return jsonResult(map[string]any{"folders": folders})
+		})
+	mcp.AddTool(srv, &mcp.Tool{Name: "move_note", Description: "Move a document into a folder, or out of any folder. " +
+		"Its own grants stay; the grants of the old folder no longer apply and those of the new one do. " +
+		"Only for documents the user owns, with agent policy edit, into a folder the user can edit."},
+		func(ctx context.Context, req *mcp.CallToolRequest, in moveNoteIn) (*mcp.CallToolResult, any, error) {
+			id, err := s.mcpIdentity(req)
+			if err != nil {
+				return nil, nil, err
+			}
+			alias, _ := noteRef(in.Note)
+			to := ""
+			if in.Folder != "" {
+				dest, _, err := s.liveFolder(ctx, id, in.Folder, permission.Write)
+				if err != nil {
+					return nil, nil, err
+				}
+				to = dest.Name
+			}
+			items, msg, err := s.moveItems(ctx, id, moveRequest{Notes: []string{alias}})
+			if err != nil {
+				return nil, nil, err
+			}
+			if msg != "" {
+				return nil, nil, errors.New(msg)
+			}
+			if err := s.moveItem(ctx, id, items[0], in.Folder, to); err != nil {
+				return nil, nil, err
+			}
+			return jsonResult(map[string]any{"alias": items[0].note.PrimaryAlias, "folder": in.Folder})
 		})
 	mcp.AddTool(srv, &mcp.Tool{Name: "list_comments", Description: "List comment threads with the text they point at. detached means the text was deleted.", Annotations: ro},
 		func(ctx context.Context, req *mcp.CallToolRequest, in commentsIn) (*mcp.CallToolResult, any, error) {

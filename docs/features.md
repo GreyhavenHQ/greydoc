@@ -170,6 +170,17 @@ An open group lists its members. **Show documents** opens the document list filt
 | protected | Only the owner edits, signed-in users can read |
 | private | Only the owner |
 
+### Folders
+
+A folder holds documents and other folders. The sidebar on the home page shows your folders under **My documents** and the folders that other people share with you under **Shared with me**.
+
+- Access that you give on a folder applies to every document and folder inside it. A grant on a document can add access, but it cannot remove access that comes from a folder.
+- The owner of a folder can edit every document inside it. Only the owner of a document can share it, move it or move it to the trash.
+- If you can edit a folder, you can create documents in it and move your own documents into it.
+- When a document moves, it keeps its own grants. It loses the access of its old folder and gets the access of the new one. The **Move** dialog lists who gains and who loses access before you confirm.
+- Select several documents or folders on the home page to move them or to move them to the trash together.
+- When you move a folder to the trash, your documents and subfolders inside it go with it, and **Restore** brings them all back. Documents of other people go back to the top level of their owner.
+
 A **view-only link** gives a client the rendered document, with no editor and no comments. The link is short, such as `https://notes.example.com/v/k3J9xQ2mT7aB1cD4`. You can revoke it at any time.
 
 ## Documents

@@ -121,7 +121,12 @@ func (s *Server) handleTrash(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"notes": notes, "retention_days": int(s.cfg.TrashRetention.Hours() / 24)})
+	folders, err := s.store.TrashFolders(r.Context(), s.viewer(id))
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"notes": notes, "folders": folders, "retention_days": int(s.cfg.TrashRetention.Hours() / 24)})
 }
 
 // PurgeTrash deletes notes that stayed in the trash longer than the retention period.
@@ -139,6 +144,21 @@ func (s *Server) PurgeTrash(ctx context.Context) error {
 		data["reason"] = "trash retention"
 		ev := &store.Event{NoteID: n.ID, ActorName: "greydoc", Source: store.SourceSystem, Kind: "note.delete", Data: data}
 		if err := s.purgeNote(ctx, ev, n); err != nil {
+			return err
+		}
+	}
+	fids, err := s.store.TrashedFoldersBefore(ctx, time.Now().Add(-s.cfg.TrashRetention))
+	if err != nil {
+		return err
+	}
+	for _, fid := range fids {
+		f, err := s.store.FolderByID(ctx, fid)
+		if err != nil {
+			continue
+		}
+		ev := &store.Event{NoteID: f.ID, ActorName: "greydoc", Source: store.SourceSystem, Kind: "folder.delete",
+			Data: map[string]any{"name": f.Name, "reason": "trash retention"}}
+		if err := s.purgeFolder(ctx, ev, f); err != nil {
 			return err
 		}
 	}
