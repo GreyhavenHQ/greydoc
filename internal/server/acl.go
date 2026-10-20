@@ -18,6 +18,8 @@ type permissionsView struct {
 	ShareLinks  []store.ShareLink  `json:"share_links"`
 	AgentPolicy store.AgentPolicy  `json:"agent_policy"`
 	GuestMax    permission.Level   `json:"guest_max"`
+	// Inherited holds the grants of the folders above the note, nearest first. Only the owner sees them.
+	Inherited []inheritedGrants `json:"inherited"`
 }
 
 func (s *Server) permissionsView(r *http.Request, n *store.Note) (*permissionsView, error) {
@@ -30,6 +32,9 @@ func (s *Server) permissionsView(r *http.Request, n *store.Note) (*permissionsVi
 		return nil, err
 	}
 	v := &permissionsView{Users: acl.Users, Groups: acl.Groups, ShareLinks: links, AgentPolicy: n.AgentPolicy, GuestMax: s.guestMax}
+	if v.Inherited, err = s.inherited(r.Context(), n.FolderID); err != nil {
+		return nil, err
+	}
 	if acl.OwnerID != "" {
 		v.Owner, _ = s.store.UserByID(r.Context(), acl.OwnerID)
 	}
@@ -48,14 +53,8 @@ func (s *Server) handleGetPermissions(w http.ResponseWriter, r *http.Request) {
 	}
 	if l < permission.Full {
 		// Only the owner sees who else has access. Others see the public grants and their own level.
-		v.ShareLinks, v.Users = nil, []store.UserGrant{}
-		public := []store.GroupGrant{}
-		for _, g := range v.Groups {
-			if g.Group == store.GroupEveryone || g.Group == store.GroupSignedIn {
-				public = append(public, g)
-			}
-		}
-		v.Groups = public
+		v.ShareLinks, v.Users, v.Inherited = nil, []store.UserGrant{}, []inheritedGrants{}
+		v.Groups = publicGroups(v.Groups)
 	}
 	writeJSON(w, http.StatusOK, v)
 }
@@ -133,30 +132,9 @@ func (s *Server) handleGroupGrant(w http.ResponseWriter, r *http.Request) {
 	}
 	id := identityFrom(r.Context())
 	group := r.PathValue("group")
-	data := map[string]any{"group": group, "level": l.String()}
-	switch {
-	case group == store.GroupEveryone || group == store.GroupSignedIn:
-		if group == store.GroupEveryone && l > s.guestMax {
-			writeError(w, http.StatusBadRequest, "above_guest_max", "guests cannot get more than "+s.guestMax.String())
-			return
-		}
-	case l == permission.Deny:
-		// Removing a grant needs no membership, and works for a group that no longer exists.
-	default:
-		g, err := s.store.GroupByID(r.Context(), group)
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "unknown_group", "no such group")
-			return
-		}
-		if err != nil {
-			internalError(w, err)
-			return
-		}
-		if !canUseGroup(id, g) {
-			writeError(w, http.StatusForbidden, "not_member", "you can only share with groups you belong to")
-			return
-		}
-		data["name"] = g.Name
+	data, ok := s.checkGroup(w, r, id, group, l)
+	if !ok {
+		return
 	}
 	ev := id.event(n.ID, "permission.group", data)
 	if err := s.store.SetGroupGrant(r.Context(), n.ID, group, l, ev); err != nil {
@@ -164,6 +142,36 @@ func (s *Server) handleGroupGrant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.respondPermissions(w, r, n)
+}
+
+// checkGroup validates a group grant and returns the data of its audit event. It writes the error response itself.
+func (s *Server) checkGroup(w http.ResponseWriter, r *http.Request, id *Identity, group string, l permission.Level) (map[string]any, bool) {
+	data := map[string]any{"group": group, "level": l.String()}
+	switch {
+	case group == store.GroupEveryone || group == store.GroupSignedIn:
+		if group == store.GroupEveryone && l > s.guestMax {
+			writeError(w, http.StatusBadRequest, "above_guest_max", "guests cannot get more than "+s.guestMax.String())
+			return nil, false
+		}
+	case l == permission.Deny:
+		// Removing a grant needs no membership, and works for a group that no longer exists.
+	default:
+		g, err := s.store.GroupByID(r.Context(), group)
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "unknown_group", "no such group")
+			return nil, false
+		}
+		if err != nil {
+			internalError(w, err)
+			return nil, false
+		}
+		if !canUseGroup(id, g) {
+			writeError(w, http.StatusForbidden, "not_member", "you can only share with groups you belong to")
+			return nil, false
+		}
+		data["name"] = g.Name
+	}
+	return data, true
 }
 
 func (s *Server) handleSetOwner(w http.ResponseWriter, r *http.Request) {

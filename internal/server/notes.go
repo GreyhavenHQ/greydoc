@@ -71,6 +71,11 @@ func (s *Server) createNote(ctx context.Context, id *Identity, spec NoteSpec) (*
 	if utf8.RuneCountInString(spec.Content) > s.cfg.MaxNoteLength {
 		return nil, errMaxLength
 	}
+	if spec.Folder != "" {
+		if _, _, err := s.liveFolder(ctx, id, spec.Folder, permission.Write); err != nil {
+			return nil, err
+		}
+	}
 	nn, err := s.noteFromSpec(ctx, id, spec)
 	if err != nil {
 		return nil, err
@@ -114,8 +119,12 @@ func (s *Server) writeNoteError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusBadRequest, "alias_forbidden", err.Error())
 	case errors.Is(err, store.ErrPrimaryAliasDeletion):
 		writeError(w, http.StatusBadRequest, "primary_alias", err.Error())
-	case errors.Is(err, store.ErrNotFound):
+	case errors.Is(err, store.ErrNotFound), errors.Is(err, errFolderMissing):
 		writeError(w, http.StatusNotFound, "not_found", err.Error())
+	case errors.Is(err, errFolderTrashed):
+		writeError(w, http.StatusGone, "in_trash", err.Error())
+	case errors.As(err, new(*levelError)):
+		writeError(w, http.StatusForbidden, "forbidden", err.Error())
 	default:
 		internalError(w, err)
 	}

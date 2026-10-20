@@ -21,6 +21,8 @@ type NoteSpec struct {
 	UpdatedAt    string          `json:"updated_at,omitempty"`
 	Permissions  *PermissionSpec `json:"permissions,omitempty"`
 	AgentPolicy  string          `json:"agent_policy,omitempty"`
+	// Folder is the id of the folder to create the note in. The note then starts with no grants of its own.
+	Folder string `json:"folder,omitempty"`
 }
 
 // PermissionSpec sets a new note's grants: a HedgeDoc 1 mode, explicit grants, or both (explicit wins).
@@ -79,9 +81,12 @@ func specTime(s string) (string, error) {
 }
 
 func (s *Server) noteFromSpec(ctx context.Context, id *Identity, spec NoteSpec) (store.NewNote, error) {
-	nn := store.NewNote{OwnerID: id.UserID(), Alias: spec.Alias, ExtraAliases: spec.ExtraAliases, Groups: map[string]permission.Level{}}
-	for g, l := range s.defaultGroups {
-		nn.Groups[g] = l
+	nn := store.NewNote{OwnerID: id.UserID(), Alias: spec.Alias, ExtraAliases: spec.ExtraAliases, Groups: map[string]permission.Level{},
+		FolderID: spec.Folder}
+	if spec.Folder == "" {
+		for g, l := range s.defaultGroups {
+			nn.Groups[g] = l
+		}
 	}
 	var err error
 	if spec.CreatedAt != "" {

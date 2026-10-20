@@ -51,6 +51,15 @@ func (s *Server) handleListNotes(w http.ResponseWriter, r *http.Request) {
 		}
 		group, f.Group = g, g.ID
 	}
+	if folder := q.Get("folder"); folder != "" {
+		if folder != store.FolderRoot {
+			if _, _, err := s.liveFolder(r.Context(), id, folder, permission.Read); err != nil {
+				s.writeFolderError(w, r, err)
+				return
+			}
+		}
+		f.Folder = folder
+	}
 	f.Limit, _ = strconv.Atoi(q.Get("limit"))
 	f.Offset, _ = strconv.Atoi(q.Get("offset"))
 	if text := q.Get("q"); text != "" {
