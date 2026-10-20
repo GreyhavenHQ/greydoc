@@ -86,16 +86,18 @@ The policy only lowers access. An agent never gets more than the person it acts 
 
 | Tool | What it does |
 |---|---|
-| `list_notes` | Documents you can read, last updated first. Filter by scope (`recent`, `mine`, `shared`, `all`) or tag. Pages with `limit` and `offset`. |
+| `list_notes` | Documents you can read, last updated first. Filter by scope (`recent`, `mine`, `shared`, `all`), tag, or `folder` (a folder id, or `root` for documents outside any folder). Pages with `limit` and `offset`. |
+| `list_folders` | Your top-level folders, the folders shared with you, or the subfolders of one folder. |
 | `search_notes` | Full-text search on title, tags and text, best match first, with an excerpt. Same filters and pages as `list_notes`. |
 | `read_note` | The Markdown text, title, tags, your access level, the agent policy, and counts of open comments and suggestions. |
-| `create_note` | Create a document owned by you. |
+| `create_note` | Create a document owned by you. Pass `folder` to create it in a folder. It then gets its access from the folder. |
 | `list_comments` | Comment threads with the quoted text. `detached` means the quoted text was deleted. |
 | `add_comment` | Comment on a quoted part of the document. |
 | `reply_comment` | Reply in a thread. |
 | `resolve_comment` | Resolve or reopen a thread. |
 | `suggest_edit` | Propose replacing `old_text` with `new_text`. |
 | `edit_note` | Replace `old_text` with `new_text`, or the whole document with `content`. Under `suggest` it creates a suggestion. |
+| `move_note` | Move a document into a folder or out of any folder. Only for a document the user owns, with agent policy `edit`, into a folder the user can edit. |
 | `trash_note` | Move a document to the trash. Only for a document the user owns, with agent policy `edit`. |
 | `restore_note` | Bring a document back from the trash. Same rules as `trash_note`. |
 | `get_history` | Edit sessions with authors and sources, and comment, suggestion and permission events. Pass `revision_id` for the full text and diff. |
