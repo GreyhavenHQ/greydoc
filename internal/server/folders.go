@@ -126,7 +126,12 @@ func (s *Server) handleGetFolder(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	v := map[string]any{"folder": f, "level": l, "path": path, "children": children}
+	v := map[string]any{"folder": f, "level": l, "path": path, "children": children, "root_owner_id": f.OwnerID}
+	if len(path) > 0 {
+		if top, err := s.store.FolderByID(r.Context(), path[0].ID); err == nil {
+			v["root_owner_id"] = top.OwnerID
+		}
+	}
 	if f.OwnerID != "" {
 		v["owner"], _ = s.store.UserByID(r.Context(), f.OwnerID)
 	}
