@@ -43,6 +43,7 @@ type Note struct {
 	Slides       bool        `json:"slides"`
 	DeletedAt    string      `json:"deleted_at,omitempty"`
 	DeletedBy    string      `json:"deleted_by,omitempty"`
+	FolderID     string      `json:"folder_id,omitempty"`
 }
 
 type NewNote struct {
@@ -58,6 +59,7 @@ type NewNote struct {
 	CreatedAt   string
 	UpdatedAt   string
 	AgentPolicy AgentPolicy
+	FolderID    string
 	Event       *Event
 }
 
@@ -118,15 +120,15 @@ func (s *Store) CreateNote(ctx context.Context, nn NewNote) (*Note, error) {
 		updated = nn.UpdatedAt
 	}
 	n := &Note{
-		ID: secrets.NewID(), PrimaryAlias: alias, OwnerID: nn.OwnerID, Content: nn.Content,
+		ID: secrets.NewID(), PrimaryAlias: alias, OwnerID: nn.OwnerID, Content: nn.Content, FolderID: nn.FolderID,
 		AgentPolicy: AgentSuggest, CreatedAt: created, UpdatedAt: updated, Tags: []string{},
 	}
 	if nn.AgentPolicy != "" {
 		n.AgentPolicy = nn.AgentPolicy
 	}
 	err = s.tx(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, s.q(`INSERT INTO note (id, owner_id, content, agent_policy, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?)`), n.ID, nullStr(n.OwnerID), n.Content, string(n.AgentPolicy), created, updated); err != nil {
+		if _, err := tx.ExecContext(ctx, s.q(`INSERT INTO note (id, owner_id, folder_id, content, agent_policy, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?)`), n.ID, nullStr(n.OwnerID), nullStr(n.FolderID), n.Content, string(n.AgentPolicy), created, updated); err != nil {
 			return err
 		}
 		if err := s.insertAlias(ctx, tx, n.ID, alias, true); err != nil {
@@ -176,14 +178,14 @@ func (s *Store) insertAlias(ctx context.Context, tx execer, noteID, alias string
 }
 
 const noteColumns = `n.id, a.name, COALESCE(n.owner_id, ''), n.title, n.description, n.content, n.ystate, n.agent_policy, n.created_at, n.updated_at,
-	COALESCE(n.deleted_at, ''), n.deleted_by, n.view_count, n.slides`
+	COALESCE(n.deleted_at, ''), n.deleted_by, n.view_count, n.slides, COALESCE(n.folder_id, '')`
 
 func (s *Store) scanNote(ctx context.Context, row *sql.Row) (*Note, error) {
 	var n Note
 	var policy string
 	var slides int
 	if err := row.Scan(&n.ID, &n.PrimaryAlias, &n.OwnerID, &n.Title, &n.Description, &n.Content, &n.YState,
-		&policy, &n.CreatedAt, &n.UpdatedAt, &n.DeletedAt, &n.DeletedBy, &n.ViewCount, &slides); err != nil {
+		&policy, &n.CreatedAt, &n.UpdatedAt, &n.DeletedAt, &n.DeletedBy, &n.ViewCount, &slides, &n.FolderID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}

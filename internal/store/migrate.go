@@ -42,6 +42,12 @@ var migrations = []migration{
 	addColumn("005_token_rotated_at", "api_token", "rotated_at", "TEXT NOT NULL DEFAULT ''"),
 	{version: "006_note_slides", apply: addSlides},
 	{version: "007_drop_named_group_grants", apply: dropNamedGroupGrants},
+	addColumn("008_note_folder_id", "note", "folder_id", "TEXT REFERENCES folder(id) ON DELETE SET NULL"),
+	addColumn("009_note_trashed_with", "note", "trashed_with", "TEXT NOT NULL DEFAULT ''"),
+	{version: "010_note_folder_index", apply: func(ctx context.Context, tx *sql.Tx, s *Store) error {
+		_, err := tx.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_note_folder ON note(folder_id)`)
+		return err
+	}},
 }
 
 // dropNamedGroupGrants deletes grants to OIDC groups and records each one in the note history.
