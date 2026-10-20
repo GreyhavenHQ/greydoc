@@ -168,6 +168,8 @@ export interface Note {
   aliases?: { name: string; primary: boolean }[]
   owner?: User
   folder_id?: string
+  // folder is set when the viewer can open the document's folder.
+  folder?: FolderRef
 }
 
 export type AgentPolicy = 'none' | 'read' | 'suggest' | 'edit'

@@ -695,15 +695,16 @@ function ItemList({ folders, notes, showLocation, selected, allSelected, onSelec
                 }}
               >
                 <SelectBox checked={selected.has(key)} anySelected={any} label={'Select ' + f.name} onChange={() => onSelect(key)} />
-                <div className="flex min-w-0 items-center gap-3">
-                  <Link to={'/f/' + f.id} className={rowLink}>
-                    <Folder className="size-4 shrink-0 fill-muted-foreground/20 text-muted-foreground" />
+                <Link to={'/f/' + f.id} className={rowLink}>
+                  <Folder className="size-4 shrink-0 fill-muted-foreground/20 text-muted-foreground" />
+                  {/* Baseline alignment: the smaller count sits on the same text line as the name. */}
+                  <span className="flex min-w-0 items-baseline gap-3">
                     <span className="truncate font-medium">{f.name}</span>
-                  </Link>
-                  <span className="hidden shrink-0 text-xs text-muted-foreground sm:block">
-                    {f.items === 0 ? 'empty' : f.items === 1 ? '1 item' : f.items + ' items'}
+                    <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline" data-testid="folder-count">
+                      {f.items === 0 ? 'empty' : f.items === 1 ? '1 item' : f.items + ' items'}
+                    </span>
                   </span>
-                </div>
+                </Link>
                 {showLocation && <span className="hidden sm:block" />}
                 <Owner name={f.owner} ownerId={f.owner_id} />
                 <span className="hidden text-muted-foreground sm:block">{relativeTime(f.updated_at)}</span>

@@ -156,3 +156,31 @@ test('right-click or the row button opens the actions of a document or a folder'
   await expect(menu).toHaveCount(0)
   await page.request.post('/api/move', { data: { notes: ['menu-doc-two'], folders: [], to: id } })
 })
+
+test('the logo in a document leads back to its folder, and the item count shares the name baseline', async ({ page }) => {
+  const r = await page.request.post('/api/folders', { data: { name: 'Way back' } })
+  const id = (await r.json()).folder.id
+  await page.request.post('/api/notes', { data: { content: '# Inside way back', alias: 'way-back-doc', folder: id } })
+  await page.goto('/n/way-back-doc')
+  await page.getByRole('link', { name: 'Back to Way back' }).click()
+  await expect(page).toHaveURL('/f/' + id)
+  await expect(page.getByTestId('breadcrumb')).toContainText('Way back')
+
+  await page.goto('/')
+  const row = page.getByTestId('folder-list').locator('li', { hasText: 'Way back' })
+  // Text baseline = top of the box + the font ascent. Both spans report it with a zero-height inline-block probe.
+  const baselines = await row.evaluate((li) => {
+    const probe = (el: Element) => {
+      const p = document.createElement('span')
+      p.style.display = 'inline-block'
+      el.appendChild(p)
+      const y = p.getBoundingClientRect().bottom
+      p.remove()
+      return y
+    }
+    const name = li.querySelector('a span span.font-medium')!
+    const count = li.querySelector('[data-testid="folder-count"]')!
+    return [probe(name), probe(count)]
+  })
+  expect(Math.abs(baselines[0] - baselines[1])).toBeLessThan(0.5)
+})
