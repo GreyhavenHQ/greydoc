@@ -40,6 +40,7 @@ import { api, atLeast, noteTitle, type FolderSummary, type FolderView, type Grou
 import { folderKey, noteKey, splitSelection } from '@/lib/folders'
 import { useMe } from '@/lib/me'
 import { importFiles, isImportable } from '@/lib/importNotes'
+import { placeAfterPin } from '@/lib/notesOrder'
 import { relativeTime } from '@/lib/time'
 import { PersonAvatar } from '@/components/PersonAvatar'
 import { cn } from '@/lib/utils'
@@ -222,7 +223,8 @@ export default function Home() {
   const togglePin = async (n: NoteSummary) => {
     if (n.pinned) await api.del('/api/notes/' + n.alias + '/pin')
     else await api.put('/api/notes/' + n.alias + '/pin')
-    setNotes((ns) => ns?.map((x) => (x.id === n.id ? { ...x, pinned: !x.pinned } : x)) ?? null)
+    const mode = q ? 'search' : recent ? 'recent' : 'index'
+    setNotes((ns) => ns && placeAfterPin(ns, n.id, !n.pinned, mode, hasMore))
   }
 
   const toggleSelected = (key: string) =>
