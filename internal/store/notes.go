@@ -65,7 +65,7 @@ type NewNote struct {
 
 // reservedAliases collide with UI routes and API prefixes.
 var reservedAliases = []string{
-	"new", "n", "s", "p", "api", "auth", "ws", "mcp", "oauth", "assets", "fonts", "uploads",
+	"new", "n", "s", "p", "f", "api", "auth", "ws", "mcp", "oauth", "assets", "fonts", "uploads",
 	"healthz", "login", "logout", "favicon.svg", ".well-known", "index.html", "settings",
 	"trash", "audit", "features", "v",
 }
