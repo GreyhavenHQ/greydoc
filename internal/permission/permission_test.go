@@ -105,3 +105,15 @@ func TestGroupGrant(t *testing.T) {
 		t.Fatalf("guest: %s", got)
 	}
 }
+
+func TestDetermineFolderOwner(t *testing.T) {
+	if got := Determine(Input{IsRegistered: true, FolderOwner: true, User: Read}); got != Write {
+		t.Fatalf("folder owner: %v", got)
+	}
+	if got := Determine(Input{IsRegistered: true, FolderOwner: true, IsOwner: true}); got != Full {
+		t.Fatalf("folder and item owner: %v", got)
+	}
+	if got := Determine(Input{FolderOwner: true, MaxGuest: Write}); got != Deny {
+		t.Fatalf("guest folder owner: %v", got)
+	}
+}

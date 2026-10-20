@@ -61,6 +61,8 @@ type Input struct {
 	// Group is the highest grant among the caller's greydoc groups.
 	Group     Level
 	ShareLink bool
+	// FolderOwner is set when the caller owns a folder above the item.
+	FolderOwner bool
 }
 
 func Determine(in Input) Level {
@@ -74,6 +76,9 @@ func Determine(in Input) Level {
 		l = min(in.Everyone, in.MaxGuest)
 	}
 	l = min(l, Write)
+	if in.FolderOwner && in.IsRegistered {
+		l = Write
+	}
 	if in.ShareLink {
 		l = max(l, Read)
 	}
