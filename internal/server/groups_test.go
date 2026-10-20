@@ -168,6 +168,7 @@ func TestShareWithGroups(t *testing.T) {
 	e, idp := adminEnv(t)
 	admin := e.login(idp, map[string]any{"sub": "x", "preferred_username": "root", "groups": []string{"admins"}})
 	alice := e.login(idp, map[string]any{"sub": "a", "preferred_username": "alice", "groups": []string{"eng"}})
+	e.login(idp, map[string]any{"sub": "c", "preferred_username": "carol", "groups": []string{"eng"}})
 	_, body := e.do(admin, "POST", "/api/admin/groups", map[string]string{"name": "Design"})
 	var design groupView
 	_ = json.Unmarshal([]byte(body), &design)
@@ -199,6 +200,10 @@ func TestShareWithGroups(t *testing.T) {
 	}
 	if code := grant(eng.ID, "write"); code != 200 {
 		t.Fatalf("own group: %d", code)
+	}
+	// Carol reads through the group, and the share search says so.
+	if _, b := e.do(alice, "GET", "/api/users?q=carol&note="+alias, nil); !strings.Contains(b, `"username":"carol","display_name":"carol","can_read":true`) {
+		t.Fatalf("can_read through a group: %s", b)
 	}
 	// Members filter the document list by group. Others may not.
 	e.createNote(alice, "# Unshared")

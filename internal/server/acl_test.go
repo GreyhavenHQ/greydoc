@@ -70,7 +70,8 @@ func TestUserSearchListsPeopleOnly(t *testing.T) {
 	owner := e.login(idp, map[string]any{"sub": "o", "preferred_username": "owner", "groups": []string{"eng"}})
 	e.login(idp, map[string]any{"sub": "b", "preferred_username": "bob", "groups": []string{"sales"}})
 	code, body := e.do(owner, "GET", "/api/users?q=b", nil)
-	if code != 200 || !strings.Contains(body, `"username":"bob"`) || strings.Contains(body, "groups") || strings.Contains(body, "eng") || strings.Contains(body, "sales") {
+	// OIDC groups stay private. The caller belongs to no greydoc group, so none is offered.
+	if code != 200 || !strings.Contains(body, `"username":"bob"`) || !strings.Contains(body, `"groups":[]`) || strings.Contains(body, "eng") || strings.Contains(body, "sales") {
 		t.Fatalf("%d %s", code, body)
 	}
 }

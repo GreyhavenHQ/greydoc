@@ -54,10 +54,12 @@ type Input struct {
 	IsOwner      bool
 	IsRegistered bool
 	// MaxGuest caps what a signed-out visitor can get.
-	MaxGuest  Level
-	User      Level
-	Everyone  Level
-	LoggedIn  Level
+	MaxGuest Level
+	User     Level
+	Everyone Level
+	LoggedIn Level
+	// Group is the highest grant among the caller's greydoc groups.
+	Group     Level
 	ShareLink bool
 }
 
@@ -67,7 +69,7 @@ func Determine(in Input) Level {
 	}
 	var l Level
 	if in.IsRegistered {
-		l = max(in.User, in.Everyone, in.LoggedIn)
+		l = max(in.User, in.Everyone, in.LoggedIn, in.Group)
 	} else {
 		l = min(in.Everyone, in.MaxGuest)
 	}

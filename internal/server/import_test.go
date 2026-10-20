@@ -73,7 +73,7 @@ func TestImportThroughMCP(t *testing.T) {
 	}
 	res, err := s.CallTool(context.Background(), &mcp.CallToolParams{Name: "create_note", Arguments: map[string]any{
 		"content": "x", "alias": "mcp-groups", "permissions": map[string]any{"groups": map[string]string{"eng": "read"}}}})
-	if err != nil || !res.IsError || !strings.Contains(res.Content[0].(*mcp.TextContent).Text, `"groups"`) {
+	if err != nil || !res.IsError || !strings.Contains(res.Content[0].(*mcp.TextContent).Text, `unknown group "eng"`) {
 		t.Fatalf("create_note with groups: %v %+v", err, res)
 	}
 	if code, _ := e.do(owner, "GET", "/api/notes/mcp-groups", nil); code != 404 {
@@ -110,7 +110,8 @@ func TestImportValidation(t *testing.T) {
 		}
 	}
 	code, body := e.do(nil, "POST", "/api/notes", map[string]any{"content": "x", "alias": "with-groups", "permissions": map[string]any{"groups": map[string]string{"eng": "read"}}})
-	if code != 400 || !strings.Contains(body, "groups are not supported") {
+	// An OIDC group name is not a greydoc group.
+	if code != 400 || !strings.Contains(body, `unknown group \"eng\"`) {
 		t.Fatalf("groups: %d %s", code, body)
 	}
 	if code, _ := e.do(nil, "GET", "/api/notes/with-groups", nil); code != 404 {

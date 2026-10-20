@@ -96,3 +96,12 @@ func TestParseLevel(t *testing.T) {
 		t.Fatal("unknown level parsed")
 	}
 }
+
+func TestGroupGrant(t *testing.T) {
+	if got := Determine(Input{IsRegistered: true, Group: Comment, LoggedIn: Read}); got != Comment {
+		t.Fatalf("member: %s", got)
+	}
+	if got := Determine(Input{Group: Write, Everyone: Read, MaxGuest: Write}); got != Read {
+		t.Fatalf("guest: %s", got)
+	}
+}

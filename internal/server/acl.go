@@ -49,6 +49,13 @@ func (s *Server) handleGetPermissions(w http.ResponseWriter, r *http.Request) {
 	if l < permission.Full {
 		// Only the owner sees who else has access. Others see the public grants and their own level.
 		v.ShareLinks, v.Users = nil, []store.UserGrant{}
+		public := []store.GroupGrant{}
+		for _, g := range v.Groups {
+			if g.Group == store.GroupEveryone || g.Group == store.GroupSignedIn {
+				public = append(public, g)
+			}
+		}
+		v.Groups = public
 	}
 	writeJSON(w, http.StatusOK, v)
 }
