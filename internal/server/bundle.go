@@ -179,8 +179,12 @@ func (s *Server) handleImportBundle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The fields come from the multipart form, or from the query for a raw zip body.
+	folder, requireMeta := r.FormValue("folder"), r.FormValue("require_meta") == "1"
+
 	var doc *zip.File
 	var meta bundleMeta
+	hasMeta := false
 	var files []*zip.File
 	for _, f := range zr.File {
 		name := strings.TrimPrefix(f.Name, "./")
@@ -199,9 +203,14 @@ func (s *Server) handleImportBundle(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusBadRequest, "bad_bundle", "note.json is not valid")
 				return
 			}
+			hasMeta = true
 		case dir == "uploads/":
 			files = append(files, f)
 		}
+	}
+	if requireMeta && !hasMeta {
+		writeError(w, http.StatusBadRequest, "not_greydoc", "the zip is not a greydoc export: it holds no note.json")
+		return
 	}
 	// note.json may come after the uploads in the zip, so uploads are read once it is known.
 	uploads := map[string]*bundleFile{}
@@ -244,7 +253,11 @@ func (s *Server) handleImportBundle(w http.ResponseWriter, r *http.Request) {
 	})
 
 	spec := NoteSpec{Content: content, Alias: meta.Alias, ExtraAliases: meta.ExtraAliases, CreatedAt: meta.CreatedAt,
-		UpdatedAt: meta.UpdatedAt, AgentPolicy: meta.AgentPolicy, Permissions: s.knownGranteesOnly(r.Context(), identityFrom(r.Context()), meta.Permissions)}
+		UpdatedAt: meta.UpdatedAt, AgentPolicy: meta.AgentPolicy, Folder: folder}
+	// A note in a folder gets its access from the folder.
+	if folder == "" {
+		spec.Permissions = s.knownGranteesOnly(r.Context(), identityFrom(r.Context()), meta.Permissions)
+	}
 	n, err := s.createNote(r.Context(), id, spec)
 	renamed := false
 	if errors.Is(err, store.ErrAliasTaken) || errors.Is(err, store.ErrAliasForbidden) {

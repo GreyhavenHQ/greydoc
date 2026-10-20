@@ -26,12 +26,20 @@ func noteID(t *testing.T, e *testEnv, alias string) string {
 
 func importBundle(t *testing.T, e *testEnv, name string, data []byte) (int, string) {
 	t.Helper()
+	return importBundleAs(t, e, http.DefaultClient, name, data, nil)
+}
+
+func importBundleAs(t *testing.T, e *testEnv, c *http.Client, name string, data []byte, fields map[string]string) (int, string) {
+	t.Helper()
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
+	for k, v := range fields {
+		_ = mw.WriteField(k, v)
+	}
 	fw, _ := mw.CreateFormFile("file", name)
 	_, _ = fw.Write(data)
 	_ = mw.Close()
-	resp, err := http.Post(e.ts.URL+"/api/notes/import", mw.FormDataContentType(), &buf)
+	resp, err := c.Post(e.ts.URL+"/api/notes/import", mw.FormDataContentType(), &buf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,6 +208,40 @@ func TestNoteBundleIgnoresGroups(t *testing.T) {
 				t.Fatalf("note.json: %s", b)
 			}
 		}
+	}
+}
+
+func TestNoteBundleImportIntoFolder(t *testing.T) {
+	e, idp := newOIDCEnv(t)
+	alice := e.login(idp, map[string]any{"sub": "a", "preferred_username": "alice"})
+	bob := e.login(idp, map[string]any{"sub": "b", "preferred_username": "bob"})
+	project := e.createFolder(alice, "Project", "")
+	meta := []byte(`{"greydoc": 1, "alias": "in-folder", "permissions": {"everyone": "read", "signed_in": "write", "users": {"bob": "write"}}}`)
+	bundle := zipOf(t, map[string][]byte{"note.json": meta, "a.md": []byte("# In folder\n\n![a](uploads/a.png)\n"), "uploads/a.png": pngBytes})
+
+	code, body := importBundleAs(t, e, alice, "a.zip", bundle, map[string]string{"folder": project, "require_meta": "1"})
+	if code != 201 || !strings.Contains(body, `"uploads":1`) {
+		t.Fatalf("import: %d %s", code, body)
+	}
+	if _, body := e.do(alice, "GET", "/api/notes/in-folder", nil); !strings.Contains(body, `"folder":{"id":"`+project) {
+		t.Fatalf("note not in folder: %s", body)
+	}
+	_, perms := e.do(alice, "GET", "/api/notes/in-folder/permissions", nil)
+	if strings.Contains(perms, "bob") || strings.Contains(perms, "_signed_in") || strings.Contains(perms, "_everyone") {
+		t.Fatalf("grants from note.json kept: %s", perms)
+	}
+
+	e.do(alice, "PUT", "/api/folders/"+project+"/permissions/users/bob", map[string]string{"level": "read"})
+	if code, body := importBundleAs(t, e, bob, "a.zip", bundle, map[string]string{"folder": project}); code != 403 {
+		t.Fatalf("reader imports into folder: %d %s", code, body)
+	}
+	if code, body := importBundleAs(t, e, alice, "a.zip", bundle, map[string]string{"folder": "nope"}); code != 404 {
+		t.Fatalf("unknown folder: %d %s", code, body)
+	}
+
+	plain := zipOf(t, map[string][]byte{"notes.md": []byte("# Plain\n")})
+	if code, body := importBundleAs(t, e, alice, "plain.zip", plain, map[string]string{"require_meta": "1"}); code != 400 || !strings.Contains(body, "not_greydoc") {
+		t.Fatalf("plain zip with require_meta: %d %s", code, body)
 	}
 }
 
