@@ -372,7 +372,7 @@ export default function Home() {
         </div>
 
         {folderId && (
-          <div className="mb-4 flex flex-wrap items-center gap-3">
+          <div className="mb-4 flex min-h-9 flex-wrap items-center gap-3">
             <nav aria-label="Folder path" className="flex min-w-0 flex-1 flex-wrap items-center gap-1 text-lg" data-testid="breadcrumb">
               <Link to={rootLink} className="text-muted-foreground hover:text-foreground">
                 {rootLabel}
@@ -722,7 +722,7 @@ function TagFilter({ tags, selected, onSelect }: { tags: TagCount[]; selected: s
   }
 
   return (
-    <div className="mb-6 flex items-center gap-2">
+    <div className="mb-4 flex h-9 items-center gap-2">
       <Tag className="size-3.5 shrink-0 text-muted-foreground" />
       {/* One row only: tags that do not fit wrap to a hidden second row. */}
       <div className="flex h-6 min-w-0 flex-1 flex-wrap gap-1.5 overflow-hidden" data-testid="tag-filter">

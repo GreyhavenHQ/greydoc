@@ -96,8 +96,12 @@ test('opening a folder swaps the list in one step, with no empty or placeholder 
   const r = await page.request.post('/api/folders', { data: { name: 'Steady' } })
   const id = (await r.json()).folder.id
   await page.request.post('/api/notes', { data: { content: '# Inside steady', folder: id } })
+  await page.request.post('/api/notes', { data: { content: '---\ntags: [steady]\n---\n# Tagged at the top' } })
   await page.goto('/')
   await expect(page.getByTestId('folder-list')).toContainText('Steady')
+  await expect(page.getByTestId('tag-filter')).toBeVisible()
+  const listTop = async () => (await page.getByTestId('folder-list').or(page.getByTestId('note-list')).first().boundingBox())!.y
+  const before = await listTop()
   await page.evaluate(() => {
     const w = window as unknown as { gaps: string[] }
     w.gaps = []
@@ -109,6 +113,8 @@ test('opening a folder swaps the list in one step, with no empty or placeholder 
   })
   await page.getByTestId('folder-list').getByRole('link', { name: 'Steady' }).click()
   await expect(page.getByTestId('note-list')).toContainText('Inside steady')
+  // The breadcrumb row and the tag row have the same height, so the list starts at the same place.
+  expect(await listTop()).toBe(before)
   await page.getByTestId('breadcrumb').getByRole('link').first().click()
   await expect(page.getByTestId('folder-list')).toContainText('Steady')
   expect(await page.evaluate(() => (window as unknown as { gaps: string[] }).gaps)).toEqual([])
