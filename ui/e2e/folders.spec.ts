@@ -41,7 +41,7 @@ test('create a folder, move two documents into it, trash and restore it', async 
   page.once('dialog', (d) => d.accept())
   await page.getByRole('button', { name: 'Folder actions' }).click()
   await page.getByRole('menuitem', { name: 'Move to trash' }).click()
-  await expect(page).toHaveURL(/scope=mine/)
+  await expect(page).toHaveURL(/\/$/)
   await page.goto('/n/folder-plan')
   await expect(page.getByText('This document is in the trash.')).toBeVisible()
 
@@ -63,4 +63,16 @@ test('a new document from a folder page is created in that folder', async ({ pag
   const alias = page.url().split('/n/')[1]
   const list = await (await page.request.get('/api/notes?folder=' + id)).json()
   expect(list.notes.map((n: { alias: string }) => n.alias)).toContain(alias)
+})
+
+test('the home page opens on My documents, and Recent is a list by last opened', async ({ page }) => {
+  await page.request.post('/api/notes', { data: { content: '# Opened once', alias: 'opened-once' } })
+  await page.goto('/n/opened-once')
+  await expect(page.getByTestId('preview').locator('h1')).toHaveText('Opened once')
+  await page.goto('/')
+  await expect(page.getByRole('tab', { name: 'Documents', exact: true })).toHaveAttribute('aria-selected', 'true')
+  await page.getByRole('tab', { name: 'Recent' }).click()
+  await expect(page).toHaveURL(/scope=recent/)
+  await expect(page.getByText('Last opened')).toBeVisible()
+  await expect(page.getByTestId('note-list').locator('li').first()).toContainText('Opened once')
 })

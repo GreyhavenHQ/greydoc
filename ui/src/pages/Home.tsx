@@ -4,7 +4,6 @@ import { toast } from 'sonner'
 import {
   ChevronDown,
   ChevronRight,
-  Eye,
   FileText,
   FileUp,
   Folder,
@@ -51,7 +50,7 @@ export default function Home() {
   const { me } = useMe()
   const { folderId } = useParams()
   const [params, setParams] = useSearchParams()
-  const scope: Scope = (params.get('scope') as Scope) || 'recent'
+  const scope: Scope = (params.get('scope') as Scope) || 'mine'
   const tag = params.get('tag') ?? ''
   const [query, setQuery] = useState(params.get('q') ?? '')
   const [notes, setNotes] = useState<NoteSummary[] | null>(null)
@@ -151,14 +150,14 @@ export default function Home() {
     () =>
       local
         ? [
-            { id: 'recent', label: 'Recent' },
             { id: 'mine', label: 'Documents' },
+            { id: 'recent', label: 'Recent' },
             { id: 'all', label: 'All documents' },
           ]
         : [
-            { id: 'recent', label: 'Recent' },
             { id: 'mine', label: 'My documents' },
             { id: 'shared', label: 'Shared with me' },
+            { id: 'recent', label: 'Recent' },
             { id: 'all', label: 'All' },
           ],
     [local],
@@ -189,7 +188,7 @@ export default function Home() {
     try {
       const r = await api.del<{ trashed: number; moved_out: number }>('/api/folders/' + folder.folder.id)
       toast.success(r.moved_out ? `Moved to the trash. ${r.moved_out} document(s) of other people went back to their owners.` : 'Moved to the trash')
-      navigate(folder.path.length ? '/f/' + folder.path[folder.path.length - 1].id : '/?scope=mine')
+      navigate(folder.path.length ? '/f/' + folder.path[folder.path.length - 1].id : sharedRoot ? '/?scope=shared' : '/')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e))
     }
@@ -209,9 +208,9 @@ export default function Home() {
 
   const sharedRoot = !!folder && !local && folder.root_owner_id !== me?.id
   const rootLabel = sharedRoot ? scopeTitles.shared : local ? 'Documents' : scopeTitles.mine
-  const rootLink = sharedRoot ? '/?scope=shared' : '/?scope=mine'
+  const rootLink = sharedRoot ? '/?scope=shared' : '/'
   const tab: Scope = folderId ? (sharedRoot ? 'shared' : 'mine') : scope
-  const asCards = !flat && !folderId && scope === 'recent'
+  const recent = !flat && !folderId && scope === 'recent'
   const emptyText = flat
     ? 'No documents match.'
     : folderId
@@ -255,7 +254,7 @@ export default function Home() {
         <div className="mb-6 flex flex-wrap items-center gap-3">
           {!flat ? (
             <>
-              <Tabs value={tab} onValueChange={(v) => navigate(v === 'recent' ? '/' : '/?scope=' + v)}>
+              <Tabs value={tab} onValueChange={(v) => navigate(v === 'mine' ? '/' : '/?scope=' + v)}>
                 <TabsList>
                   {scopes.map((sc) => (
                     <TabsTrigger key={sc.id} value={sc.id}>
@@ -367,19 +366,11 @@ export default function Home() {
         {tags.length > 0 && !folderId && <TagFilter tags={tags} selected={tag} onSelect={(t) => update({ tag: t })} />}
 
         {notes === null ? (
-          asCards ? (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <Skeleton key={i} className="h-28" />
-              ))}
-            </div>
-          ) : (
-            <div className="flex flex-col gap-1">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <Skeleton key={i} className="h-10" />
-              ))}
-            </div>
-          )
+          <div className="flex flex-col gap-1">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <Skeleton key={i} className="h-10" />
+            ))}
+          </div>
         ) : notes.length === 0 && folders.length === 0 ? (
           <div className="flex flex-col items-center gap-4 rounded-lg border border-dashed py-16 text-center">
             <FileText className="size-8 text-muted-foreground" />
@@ -390,25 +381,12 @@ export default function Home() {
               </Button>
             )}
           </div>
-        ) : asCards ? (
-          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" data-testid="note-list">
-            {notes.map((n) => (
-              <NoteCard
-                key={n.id}
-                n={n}
-                selected={selected.has(noteKey(n.alias))}
-                anySelected={selected.size > 0}
-                onSelect={() => toggleSelected(noteKey(n.alias))}
-                onPin={() => togglePin(n)}
-                onTag={(t) => update({ tag: t })}
-              />
-            ))}
-          </ul>
         ) : (
           <ItemList
             folders={folders}
             notes={notes}
-            showLocation={flat || scope === 'all' || scope === 'shared'}
+            showLocation={flat || scope === 'all' || scope === 'shared' || recent}
+            recent={recent}
             selected={selected}
             allSelected={allSelected}
             onSelectAll={() => setSelected(allSelected ? new Set() : new Set(allKeys))}
@@ -492,10 +470,12 @@ interface ItemListProps {
   onSelect: (key: string) => void
   onPin: (n: NoteSummary) => void
   onTag: (tag: string) => void
+  // recent shows when the viewer last opened each document instead of when it changed.
+  recent?: boolean
 }
 
 // ItemList shows folders, then documents, as rows: name, location, owner and last change.
-function ItemList({ folders, notes, showLocation, selected, allSelected, onSelectAll, onSelect, onPin, onTag }: ItemListProps) {
+function ItemList({ folders, notes, showLocation, selected, allSelected, onSelectAll, onSelect, onPin, onTag, recent }: ItemListProps) {
   const navigate = useNavigate()
   const any = selected.size > 0
   const row = (sel: boolean) =>
@@ -507,7 +487,7 @@ function ItemList({ folders, notes, showLocation, selected, allSelected, onSelec
         <span>Name</span>
         {showLocation && <span className="hidden sm:block">Location</span>}
         <span className="hidden sm:block">Owner</span>
-        <span className="hidden sm:block">Last modified</span>
+        <span className="hidden sm:block">{recent ? 'Last opened' : 'Last modified'}</span>
         <span />
       </div>
       {folders.length > 0 && (
@@ -574,7 +554,7 @@ function ItemList({ folders, notes, showLocation, selected, allSelected, onSelec
                 )}
                 <Owner name={n.owner} ownerId={n.owner_id} />
                 <span className="hidden text-muted-foreground sm:block" title={`${n.view_count} views`}>
-                  {relativeTime(n.updated_at)}
+                  {relativeTime(recent && n.visited_at ? n.visited_at : n.updated_at)}
                 </span>
                 <span className="flex items-center justify-end gap-2">
                   <button
@@ -599,93 +579,6 @@ function ItemList({ folders, notes, showLocation, selected, allSelected, onSelec
         </ul>
       )}
     </div>
-  )
-}
-
-interface NoteCardProps {
-  n: NoteSummary
-  selected: boolean
-  anySelected: boolean
-  onSelect: () => void
-  onPin: () => void
-  onTag: (tag: string) => void
-}
-
-// NoteCard is a document in the Recent view, with its description and tags.
-function NoteCard({ n, selected, anySelected, onSelect, onPin, onTag }: NoteCardProps) {
-  const navigate = useNavigate()
-  return (
-    <li className="group relative">
-      <Link
-        to={'/n/' + n.alias}
-        className={cn('flex h-full flex-col gap-2 rounded-lg border bg-card p-4 transition-colors hover:border-primary/60', selected && 'border-primary bg-primary/5')}
-      >
-        <div className={cn('font-medium leading-snug', n.slides ? 'pr-20' : 'pr-14')}>{noteTitle(n)}</div>
-        {n.description && <p className="line-clamp-3 text-sm text-muted-foreground">{n.description}</p>}
-        <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1 text-xs text-muted-foreground">
-          {n.tags.length === 0 && !n.folder_name && <span className="h-5" />}
-          {n.folder_name && (
-            <span
-              role="link"
-              tabIndex={0}
-              onClick={(e) => {
-                e.preventDefault()
-                navigate('/f/' + n.folder_id)
-              }}
-              className="flex items-center gap-1 rounded-md bg-muted/70 px-1.5 py-0.5 text-foreground/80 hover:text-primary"
-              title={'In ' + n.folder_name}
-            >
-              <Folder className="size-3" />
-              {n.folder_name}
-            </span>
-          )}
-          {n.tags.map((t) => (
-            <span
-              key={t}
-              role="button"
-              tabIndex={0}
-              onClick={(e) => {
-                e.preventDefault()
-                onTag(t)
-              }}
-              className="rounded-md bg-muted/70 px-1.5 py-0.5 text-foreground/80 hover:text-primary"
-            >
-              <span className="text-muted-foreground">#</span>
-              {t}
-            </span>
-          ))}
-        </div>
-        <div className="flex items-center gap-1.5 border-t pt-2 text-xs text-muted-foreground" data-testid="note-meta">
-          {n.owner && (
-            <span className="flex min-w-0 items-center gap-1" title={'Owner: ' + n.owner}>
-              <PersonAvatar id={n.owner_id} name={n.owner} size={16} />
-              <span className="truncate">{n.owner}</span>
-            </span>
-          )}
-          <span className="ml-auto flex shrink-0 items-center gap-1" title={`${n.view_count} views`}>
-            <Eye className="size-3" /> {n.view_count}
-          </span>
-          <span className="shrink-0">·</span>
-          <span className="shrink-0">{relativeTime(n.visited_at || n.updated_at)}</span>
-        </div>
-      </Link>
-      {/* Aligned with the first line of the title: p-4 and the title's leading-snug line height. */}
-      <div className="absolute top-4 right-4 flex h-[1.375rem] items-center gap-2">
-        <button
-          className={cn('text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-primary focus-visible:opacity-100', n.pinned && 'text-primary opacity-100')}
-          aria-label={n.pinned ? 'Unpin' : 'Pin'}
-          onClick={onPin}
-        >
-          {n.pinned ? <Pin className="size-4" /> : <PinOff className="size-4" />}
-        </button>
-        {n.slides && (
-          <a href={'/p/' + n.alias} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-primary" aria-label="Present" title="Present the slides">
-            <Presentation className="size-4" />
-          </a>
-        )}
-        <SelectBox checked={selected} anySelected={anySelected} label={'Select ' + noteTitle(n)} onChange={onSelect} />
-      </div>
-    </li>
   )
 }
 
