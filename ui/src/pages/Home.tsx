@@ -628,16 +628,19 @@ export default function Home() {
 }
 
 function SelectBox({ checked, anySelected, label, onChange }: { checked: boolean; anySelected: boolean; label: string; onChange: () => void }) {
+  // The label fills the column and the row padding, so a near miss selects instead of opening.
   return (
-    <Checkbox
-      checked={checked}
-      onCheckedChange={onChange}
-      aria-label={label}
-      className={cn(
-        'relative z-10 bg-background transition-opacity',
-        checked || anySelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
-      )}
-    />
+    <label className="relative z-10 -my-2 -ml-3 -mr-1.5 flex cursor-pointer items-center self-stretch py-2 pl-3 pr-1.5">
+      <Checkbox
+        checked={checked}
+        onCheckedChange={onChange}
+        aria-label={label}
+        className={cn(
+          'bg-background transition-opacity',
+          checked || anySelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
+        )}
+      />
+    </label>
   )
 }
 
