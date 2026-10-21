@@ -67,7 +67,7 @@ import { applyThreadMarks, type PreviewThread } from '@/render/previewThreads'
 import { api, ApiError, atLeast, duplicateNote, shareParam, withShare, type Level, type Note } from '@/lib/api'
 import { loginHref, useMe } from '@/lib/me'
 import { localName } from '@/lib/presence'
-import { docWidth, docWidthPx, extractTitle, isSlides } from '@/lib/meta'
+import { docWidth, docWidthPx, extractTitle, isSlides, widthEdit } from '@/lib/meta'
 import { cn } from '@/lib/utils'
 import { shortDateTime } from '@/lib/time'
 import { modeFromKey, type Mode } from '@/lib/shortcuts'
@@ -653,6 +653,16 @@ export default function Editor() {
     [session],
   )
 
+  const setWide = (wide: boolean) => {
+    if (!session) return
+    const edit = widthEdit(session.text.toString(), wide)
+    if (!edit) return
+    session.doc.transact(() => {
+      session.text.delete(edit.from, edit.to - edit.from)
+      if (edit.insert) session.text.insert(edit.from, edit.insert)
+    })
+  }
+
   const startSuggest = (from: number, to: number) => {
     if (!session) return
     const original = session.text.toString().slice(from, to)
@@ -897,6 +907,11 @@ export default function Editor() {
                   >
                     Who wrote what
                   </DropdownMenuCheckboxItem>
+                  {canEdit && ready && (
+                    <DropdownMenuCheckboxItem checked={width === 'wide'} onCheckedChange={(on) => setWide(Boolean(on))}>
+                      Wide layout
+                    </DropdownMenuCheckboxItem>
+                  )}
                   <DropdownMenuSeparator />
                 </>
               )}
