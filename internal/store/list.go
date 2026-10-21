@@ -108,7 +108,8 @@ func (s *Store) ListNotes(ctx context.Context, f ListFilter) ([]NoteSummary, err
 	where = "n.deleted_at IS NULL AND " + where
 	join := "LEFT JOIN note_visit v ON v.note_id = n.id AND v.user_id = ?"
 	args = append([]any{f.Viewer.UserID}, args...)
-	order := "n.updated_at DESC"
+	order := `COALESCE(v.pinned, 0) DESC, CASE WHEN COALESCE(v.pinned, 0) = 1 THEN LOWER(COALESCE(NULLIF(n.title, ''), 'Untitled')) END,
+		n.updated_at DESC, n.id`
 	switch f.Scope {
 	case ScopeRecent:
 		where += " AND v.visited_at IS NOT NULL"
