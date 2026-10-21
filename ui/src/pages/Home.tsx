@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import {
   ChevronDown,
   ChevronRight,
+  Copy,
   ExternalLink,
   FileText,
   FileUp,
@@ -36,7 +37,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
-import { api, atLeast, noteTitle, type FolderSummary, type FolderView, type GroupRef, type NoteSummary, type TagCount } from '@/lib/api'
+import { api, atLeast, duplicateNote, noteTitle, type FolderSummary, type FolderView, type GroupRef, type NoteSummary, type TagCount } from '@/lib/api'
 import { folderKey, noteKey, splitSelection } from '@/lib/folders'
 import { useMe } from '@/lib/me'
 import { importFiles, isImportable } from '@/lib/importNotes'
@@ -227,6 +228,16 @@ export default function Home() {
     setNotes((ns) => ns && placeAfterPin(ns, n.id, !n.pinned, mode, hasMore))
   }
 
+  const duplicate = async (alias: string) => {
+    try {
+      const copy = await duplicateNote(alias)
+      toast.success('Duplicated')
+      navigate('/n/' + copy.alias)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e))
+    }
+  }
+
   const toggleSelected = (key: string) =>
     setSelected((cur) => {
       const next = new Set(cur)
@@ -312,6 +323,7 @@ export default function Home() {
       const out: MenuEntry[] = [
         { label: 'Open', icon: <FileText />, onSelect: () => navigate('/n/' + n.alias) },
         { label: 'Open in a new tab', icon: <ExternalLink />, onSelect: () => window.open('/n/' + n.alias, '_blank') },
+        { label: 'Duplicate', icon: <Copy />, onSelect: () => void duplicate(n.alias) },
       ]
       if (!local) out.push({ label: 'Share…', icon: <Share2 />, onSelect: () => setShare({ alias: n.alias, isOwner: mine }), separated: true })
       out.push({ label: n.pinned ? 'Unpin' : 'Pin', icon: n.pinned ? <PinOff /> : <Pin />, onSelect: () => void togglePin(n), separated: local })

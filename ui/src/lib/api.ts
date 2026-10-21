@@ -179,6 +179,8 @@ export interface TagCount {
   count: number
 }
 
+export const duplicateNote = (alias: string) => api.post<Note>('/api/notes/' + encodeURIComponent(alias) + '/duplicate')
+
 export const noteTitle = (n: { title: string; alias: string }) => n.title || 'Untitled'
 
 // shareParam is the view-only token: from a short /v/<token> address, or from ?share= in older links.

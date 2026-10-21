@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"strings"
 	"time"
 
@@ -23,6 +24,8 @@ type NoteSpec struct {
 	AgentPolicy  string          `json:"agent_policy,omitempty"`
 	// Folder is the id of the folder to create the note in. The note then starts with no grants of its own.
 	Folder string `json:"folder,omitempty"`
+	// eventData adds to the data of the note.create event.
+	eventData map[string]any
 }
 
 // PermissionSpec sets a new note's grants: a HedgeDoc 1 mode, explicit grants, or both (explicit wins).
@@ -159,6 +162,7 @@ func (s *Server) noteFromSpec(ctx context.Context, id *Identity, spec NoteSpec) 
 		data["imported"] = true
 		data["original_created_at"] = nn.CreatedAt
 	}
+	maps.Copy(data, spec.eventData)
 	nn.Event = id.event("", "note.create", data)
 	if spec.AgentPolicy != "" && !store.AgentPolicy(spec.AgentPolicy).Valid() {
 		return nn, badSpec("agent_policy must be none, read, suggest or edit")
