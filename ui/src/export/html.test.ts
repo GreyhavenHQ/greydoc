@@ -11,3 +11,11 @@ describe('standaloneHTML', () => {
     expect(out).not.toContain('data-line')
   })
 })
+
+describe('standaloneHTML width', () => {
+  it('uses a 728px text column, or 1200px for a wide document', () => {
+    const article = document.createElement('article')
+    expect(standaloneHTML('A', article)).toContain('main{max-width:728px;')
+    expect(standaloneHTML('A', article, 'wide')).toContain('main{max-width:1200px;')
+  })
+})

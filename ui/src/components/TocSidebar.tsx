@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { activePath, buildTree, type Heading, type TocNode as Node } from '@/lib/toc'
+import { docWidthPx, type DocWidth } from '@/lib/meta'
 
 function collect(root: HTMLElement): Heading[] {
   return Array.from(root.querySelectorAll<HTMLElement>('h1[id], h2[id], h3[id], h4[id]')).map((h) => ({
@@ -50,8 +51,14 @@ function TocList({ nodes, active, onPath, expandAll, go, depth = 0 }: {
 }
 
 // WithToc centers its content and puts a table of contents in the right margin, like HedgeDoc's view mode.
-// scroller is the scrolling element. Without it, the window scrolls.
-export function WithToc({ show, scroller, children }: { show: boolean; scroller?: HTMLElement | null; children: React.ReactNode }) {
+// scroller is the scrolling element. Without it, the window scrolls. inset is the side padding of children, in px.
+export function WithToc({ show, scroller, width = 'normal', inset, children }: {
+  show: boolean
+  scroller?: HTMLElement | null
+  width?: DocWidth
+  inset: number
+  children: React.ReactNode
+}) {
   const main = useRef<HTMLDivElement>(null)
   const [headings, setHeadings] = useState<Heading[]>([])
   const [active, setActive] = useState('')
@@ -107,7 +114,14 @@ export function WithToc({ show, scroller, children }: { show: boolean; scroller?
   const visible = show && headings.length >= 2
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,48rem)_minmax(0,1fr)]">
+    <div
+      className={cn(
+        'grid grid-cols-[minmax(0,1fr)_minmax(0,var(--doc-column))_minmax(0,1fr)]',
+        visible && width === 'wide' && 'xl:grid-cols-[minmax(0,1fr)_minmax(0,var(--doc-column))_minmax(15rem,1fr)]',
+      )}
+      style={{ '--doc-column': `${docWidthPx[width] + 2 * inset}px` } as React.CSSProperties}
+      data-width={width}
+    >
       <div />
       <div ref={main} className="min-w-0">
         {children}

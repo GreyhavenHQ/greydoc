@@ -41,6 +41,9 @@ function closingLine(lines: string[]): number {
 
 export type DocWidth = 'normal' | 'wide'
 
+// docWidthPx is the text column width. Normal matches HedgeDoc.
+export const docWidthPx: Record<DocWidth, number> = { normal: 728, wide: 1200 }
+
 export function docWidth(text: string): DocWidth {
   const w = splitFrontMatter(text.slice(0, 8192)).data?.width
   return typeof w === 'string' && w.trim().toLowerCase() === 'wide' ? 'wide' : 'normal'

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Preview } from '@/render/Preview'
 import { useNote } from '@/lib/useNote'
-import { extractTitle } from '@/lib/meta'
+import { docWidth, docWidthPx, extractTitle } from '@/lib/meta'
 import { loginHref } from '@/lib/me'
 import { download, fileName, standaloneHTML } from '@/export/html'
 import { hydrateMermaid } from '@/render/mermaid'
@@ -18,6 +18,7 @@ export default function View({ alias: given }: { alias?: string } = {}) {
   const alias = given ?? params.alias ?? ''
   const { note, text, error } = useNote(alias)
   const title = extractTitle(text) || note?.title || 'Untitled'
+  const width = docWidth(text)
   const exported = useRef(false)
   const [exporting, setExporting] = useState(false)
 
@@ -32,16 +33,16 @@ export default function View({ alias: given }: { alias?: string } = {}) {
     setExporting(true)
     const box = document.createElement('article')
     box.className = 'markdown-body'
-    box.style.cssText = 'position:absolute;left:-10000px;top:0;width:800px'
+    box.style.cssText = `position:absolute;left:-10000px;top:0;width:${docWidthPx[width]}px`
     document.body.appendChild(box)
     box.innerHTML = renderMarkdown(text).html
     hydrateMermaid(box, { interactive: false, mode: 'light' })
-      .then(() => download(fileName(title, '.html'), standaloneHTML(title, box), 'text/html'))
+      .then(() => download(fileName(title, '.html'), standaloneHTML(title, box, width), 'text/html'))
       .finally(() => {
         box.remove()
         setExporting(false)
       })
-  }, [note, text, title])
+  }, [note, text, title, width])
 
   if (error) {
     if (error.status === 401) {
@@ -59,7 +60,7 @@ export default function View({ alias: given }: { alias?: string } = {}) {
   }
   return (
     <main data-testid="view-page">
-      <WithToc show>
+      <WithToc show width={width} inset={24}>
         <div className="px-6 py-12">
           {exporting && <div className="mb-4 text-sm text-muted-foreground">Preparing the HTML file…</div>}
           <Preview source={text} followHash />
