@@ -117,7 +117,7 @@ docker compose up -d greydoc
 
 ### Not in HedgeDoc 1
 
-Comments, suggestions, AI actions, live mode, authorship marks, the agent policy, MCP, the audit log and the trash are new in greydoc.
+Comments, suggestions, AI actions, live mode, authorship marks, the agent policy, MCP, the audit log, the trash and the wide layout (`width: wide` in the front matter) are new in greydoc.
 
 ## Connect an agent
 
