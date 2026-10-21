@@ -230,6 +230,54 @@ test('the home page shows one uncut row of tags and lists all of them on demand'
   await expect(filter.getByRole('button').first()).toHaveAttribute('aria-pressed', 'true')
 })
 
+test('a document row keeps its title visible and collects extra tags under +N', async ({ page }) => {
+  const id = Date.now().toString(36)
+  const tags = Array.from({ length: 20 }, (_, i) => `row-${id}-${i}`)
+  const title = 'Short ' + id
+  await page.request.post('/api/notes', { data: { content: `---\ntags: [${tags.join(', ')}]\n---\n# ${title}` } })
+  const long = 'Long ' + id + ' ' + 'x'.repeat(200)
+  await page.request.post('/api/notes', { data: { content: `---\ntags: [a-${id}, b-${id}, c-${id}, d-${id}, e-${id}]\n---\n# ${long}` } })
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.goto('/?scope=all')
+
+  const row = page.getByTestId('note-list').locator('li', { hasText: title })
+  const name = row.getByTestId('note-name')
+  const titleSpan = row.getByText(title, { exact: true })
+  await expect(titleSpan).toBeVisible()
+  expect(await titleSpan.evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true)
+
+  const visible = () =>
+    row.getByTestId('row-tags').evaluate((box) => {
+      const top = box.getBoundingClientRect().top
+      return Array.from(box.children).filter((c) => c.getBoundingClientRect().top < top + 1).map((c) => c.getBoundingClientRect().right)
+    })
+  const nameRight = (await name.boundingBox())!
+  const shown = await visible()
+  for (const right of shown) expect(right).toBeLessThanOrEqual(nameRight.x + nameRight.width + 0.5)
+  const more = row.getByTestId('row-tags-more')
+  await expect(more).toHaveText(`+${20 - shown.length}`)
+
+  await page.setViewportSize({ width: 900, height: 900 })
+  await expect.poll(async () => Number((await more.textContent())!.slice(1))).toBeGreaterThan(20 - shown.length)
+
+  await more.click()
+  const list = page.getByTestId('row-tag-list')
+  await expect(list.getByRole('button')).toHaveCount(20)
+  await list.getByRole('button', { name: tags[19] }).click()
+  await expect(page).toHaveURL(new RegExp('tag=' + tags[19]))
+  await expect(page).not.toHaveURL(/\/n\//)
+
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.goto('/?scope=all')
+  const longRow = page.getByTestId('note-list').locator('li', { hasText: 'Long ' + id })
+  const longTitle = longRow.getByText(long, { exact: true })
+  expect(await longTitle.evaluate((e) => e.scrollWidth > e.clientWidth)).toBe(true)
+  const box = (await longTitle.boundingBox())!
+  const cell = (await longRow.getByTestId('note-name').boundingBox())!
+  expect(box.x + box.width).toBeLessThanOrEqual(cell.x + cell.width + 0.5)
+  await expect(longRow.getByTestId('row-tags-more')).toHaveText('+5')
+})
+
 test('task boxes in the preview change the text', async ({ page }) => {
   const resp = await page.request.post('/api/notes', { data: { content: '# Todo\n\n- [ ] write\n- [x] read\n' } })
   const alias = (await resp.json()).alias
