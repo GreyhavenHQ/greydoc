@@ -758,22 +758,13 @@ function ItemList({ folders, notes, showLocation, selected, allSelected, onSelec
                 }}
               >
                 <SelectBox checked={selected.has(key)} anySelected={any} label={'Select ' + noteTitle(n)} onChange={() => onSelect(key)} />
-                <div className="flex min-w-0 flex-col">
+                <div className="flex min-w-0 flex-col" data-testid="note-name">
                   <div className="flex min-w-0 items-center gap-2">
                     <Link to={'/n/' + n.alias} className={rowLink}>
                       {n.slides ? <Presentation className="size-4 shrink-0 text-muted-foreground" /> : <FileText className="size-4 shrink-0 text-muted-foreground" />}
                       <span className="truncate">{noteTitle(n)}</span>
                     </Link>
-                    {n.tags.map((t) => (
-                      <button
-                        key={t}
-                        onClick={() => onTag(t)}
-                        className="relative z-10 hidden shrink-0 rounded-md bg-muted/70 px-1.5 text-xs text-foreground/80 hover:text-primary md:block"
-                      >
-                        <span className="text-muted-foreground">#</span>
-                        {t}
-                      </button>
-                    ))}
+                    {n.tags.length > 0 && <RowTags tags={n.tags} onTag={onTag} />}
                     <button
                       className={cn(
                         'relative z-10 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-primary focus-visible:opacity-100',
@@ -916,6 +907,79 @@ function TagFilter({ tags, selected, onSelect }: { tags: TagCount[]; selected: s
           </div>
         </PopoverContent>
       </Popover>
+    </div>
+  )
+}
+
+// RowTags fills the space the title leaves. Tags that do not fit are hidden and counted in a "+N" chip.
+function RowTags({ tags, onTag }: { tags: string[]; onTag: (tag: string) => void }) {
+  const box = useRef<HTMLDivElement>(null)
+  const [shown, setShown] = useState(tags.length)
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    const el = box.current
+    if (!el) return
+    const measure = () => {
+      const b = el.getBoundingClientRect()
+      const chips = Array.from(el.children)
+      const i = chips.findIndex((c) => {
+        const r = c.getBoundingClientRect()
+        return r.top >= b.bottom || r.right > b.right + 0.5
+      })
+      setShown(i < 0 ? chips.length : i)
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [tags])
+  const hidden = tags.length - shown
+  return (
+    <div className="hidden min-w-0 flex-[1_1_0] items-center gap-1.5 md:flex">
+      {/* One row only: tags that do not fit wrap to a hidden second row. */}
+      <div ref={box} className="flex h-4 min-w-0 flex-wrap gap-1.5 overflow-hidden" data-testid="row-tags">
+        {tags.map((t, i) => (
+          <button
+            key={t}
+            onClick={() => onTag(t)}
+            tabIndex={i < shown ? undefined : -1}
+            className={cn('relative z-10 shrink-0 rounded-md bg-muted/70 px-1.5 text-xs text-foreground/80 hover:text-primary', i >= shown && 'invisible')}
+          >
+            <span className="text-muted-foreground">#</span>
+            {t}
+          </button>
+        ))}
+      </div>
+      {hidden > 0 && (
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <button
+              className="relative z-10 shrink-0 rounded-md bg-muted/70 px-1.5 text-xs text-muted-foreground hover:text-primary"
+              aria-label={`${hidden} more ${hidden === 1 ? 'tag' : 'tags'}`}
+              data-testid="row-tags-more"
+            >
+              +{hidden}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-56 p-1" data-testid="row-tag-list">
+            <div className="max-h-72 overflow-y-auto">
+              {tags.map((t) => (
+                <button
+                  key={t}
+                  onClick={() => {
+                    setOpen(false)
+                    onTag(t)
+                  }}
+                  className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-sm hover:bg-muted"
+                >
+                  <span className="text-muted-foreground">#</span>
+                  <span className="min-w-0 flex-1 truncate">{t}</span>
+                </button>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
+      )}
     </div>
   )
 }
