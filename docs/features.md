@@ -201,6 +201,16 @@ tags: [roadmap, q4]
 
 Click a tag to show only the documents that have it.
 
+### Width
+
+A document reads in a 728px column, the width of HedgeDoc. For wide tables, open the **...** menu and check **Wide layout**. This adds `width: wide` to the front matter, and the column grows to 1200px when the window allows it. Every reader, the view page and the HTML download use the same width.
+
+```yaml
+---
+width: wide
+---
+```
+
 ### Search
 
 The search field finds words in titles, tags and text.

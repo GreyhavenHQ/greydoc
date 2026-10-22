@@ -13,7 +13,7 @@ export default function Features() {
     <div className="min-h-screen">
       <AppHeader />
       <main data-testid="features-page">
-        <WithToc show>
+        <WithToc show inset={24}>
           <div className="px-6 py-10">
             <Preview source={features} followHash />
           </div>

@@ -465,7 +465,7 @@ const liveField = StateField.define<DecorationSet>({
 
 const liveTheme = EditorView.theme({
   '&.cm-live .cm-scroller': { fontFamily: 'var(--font-sans)', lineHeight: '1.7' },
-  '&.cm-live .cm-content': { maxWidth: '48rem', margin: '0 auto', padding: '40px 32px 30vh', fontSize: '16px' },
+  '&.cm-live .cm-content': { maxWidth: 'calc(var(--doc-width, 728px) + 64px)', margin: '0 auto', padding: '40px 32px 30vh', fontSize: '16px' },
   '&.cm-live .cm-line': { padding: '0' },
   '.cm-lp-h': { fontWeight: '650', lineHeight: '1.3' },
   '.cm-lp-h1': { fontSize: '2em', paddingTop: '0.6em !important', letterSpacing: '-0.01em' },

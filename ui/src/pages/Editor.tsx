@@ -67,7 +67,7 @@ import { applyThreadMarks, type PreviewThread } from '@/render/previewThreads'
 import { api, ApiError, atLeast, duplicateNote, shareParam, withShare, type Level, type Note } from '@/lib/api'
 import { loginHref, useMe } from '@/lib/me'
 import { localName } from '@/lib/presence'
-import { extractTitle, isSlides } from '@/lib/meta'
+import { docWidth, docWidthPx, extractTitle, isSlides, widthEdit } from '@/lib/meta'
 import { cn } from '@/lib/utils'
 import { shortDateTime } from '@/lib/time'
 import { modeFromKey, type Mode } from '@/lib/shortcuts'
@@ -653,6 +653,16 @@ export default function Editor() {
     [session],
   )
 
+  const setWide = (wide: boolean) => {
+    if (!session) return
+    const edit = widthEdit(session.text.toString(), wide)
+    if (!edit) return
+    session.doc.transact(() => {
+      session.text.delete(edit.from, edit.to - edit.from)
+      if (edit.insert) session.text.insert(edit.from, edit.insert)
+    })
+  }
+
   const startSuggest = (from: number, to: number) => {
     if (!session) return
     const original = session.text.toString().slice(from, to)
@@ -780,13 +790,14 @@ export default function Editor() {
   const ready = Boolean(session && loaded)
   const shown = ready ? text : (note.content ?? '')
   shownLines.current = shown.split('\n').length
+  const width = docWidth(shown)
 
   const showEditor = mode !== 'view' && atLeast(level, 'comment')
   const showPreview = (mode !== 'edit' && mode !== 'live') || !atLeast(level, 'comment')
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="flex h-screen flex-col">
+      <div className="flex h-screen flex-col" style={{ '--doc-width': `${docWidthPx[width]}px` } as React.CSSProperties}>
         <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
           <Link
             to={note?.folder ? '/f/' + note.folder.id : '/'}
@@ -896,6 +907,11 @@ export default function Editor() {
                   >
                     Who wrote what
                   </DropdownMenuCheckboxItem>
+                  {canEdit && ready && (
+                    <DropdownMenuCheckboxItem checked={width === 'wide'} onCheckedChange={(on) => setWide(Boolean(on))}>
+                      Wide layout
+                    </DropdownMenuCheckboxItem>
+                  )}
                   <DropdownMenuSeparator />
                 </>
               )}
@@ -1054,7 +1070,7 @@ export default function Editor() {
                   }}
                 />
               )}
-              <WithToc show={!showEditor && !commentsOpen} scroller={previewEl}>
+              <WithToc show={!showEditor && !commentsOpen} scroller={previewEl} width={width} inset={32}>
                 <div className="px-8 py-8">
                   <Preview source={shown} ref={article} followHash onRendered={onPreviewRendered} onToggleTask={canEdit && ready ? toggleTask : undefined} />
                 </div>
