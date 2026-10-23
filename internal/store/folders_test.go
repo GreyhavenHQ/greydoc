@@ -203,3 +203,42 @@ func TestSharedFoldersTopOnly(t *testing.T) {
 		}
 	})
 }
+
+func TestSharedRootSkipsNotesInVisibleFolders(t *testing.T) {
+	eachDialect(t, func(t *testing.T, st *Store) {
+		alice, _ := st.UpsertOIDCUser(ctx, "a", "alice", "Alice", "", nil)
+		bob, _ := st.UpsertOIDCUser(ctx, "b", "bob", "Bob", "", nil)
+		project, _ := st.CreateFolder(ctx, NewFolder{Name: "Project", OwnerID: alice.ID})
+		private, _ := st.CreateFolder(ctx, NewFolder{Name: "Private", OwnerID: alice.ID})
+		_ = st.SetFolderUserGrant(ctx, project.ID, bob.ID, permission.Read, nil)
+		inside, _ := st.CreateNote(ctx, NewNote{OwnerID: alice.ID, Alias: "inside", FolderID: project.ID})
+		hidden, _ := st.CreateNote(ctx, NewNote{OwnerID: alice.ID, Alias: "hidden", FolderID: private.ID})
+		loose, _ := st.CreateNote(ctx, NewNote{OwnerID: alice.ID, Alias: "loose"})
+		for _, n := range []*Note{inside, hidden, loose} {
+			_ = st.SetUserGrant(ctx, n.ID, bob.ID, permission.Write, nil)
+		}
+
+		bv := Viewer{UserID: bob.ID}
+		aliases := func(f ListFilter) []string {
+			ns, err := st.ListNotes(ctx, f)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var out []string
+			for _, n := range ns {
+				out = append(out, n.PrimaryAlias)
+			}
+			slices.Sort(out)
+			return out
+		}
+		if got := aliases(ListFilter{Viewer: bv, Scope: ScopeShared, Folder: FolderRoot}); !slices.Equal(got, []string{"hidden", "loose"}) {
+			t.Fatalf("shared root: %v", got)
+		}
+		if got := aliases(ListFilter{Viewer: bv, Scope: ScopeShared}); !slices.Equal(got, []string{"hidden", "inside", "loose"}) {
+			t.Fatalf("shared flat: %v", got)
+		}
+		if got := aliases(ListFilter{Viewer: Viewer{UserID: alice.ID}, Scope: ScopeMine, Folder: FolderRoot}); !slices.Equal(got, []string{"loose"}) {
+			t.Fatalf("alice root: %v", got)
+		}
+	})
+}

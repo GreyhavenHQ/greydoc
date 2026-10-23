@@ -150,7 +150,13 @@ func (s *Store) ListNotes(ctx context.Context, f ListFilter) ([]NoteSummary, err
 	switch f.Folder {
 	case "":
 	case FolderRoot:
-		where += " AND n.folder_id IS NULL"
+		if f.Scope == ScopeShared && !f.Viewer.Local {
+			vf, fargs := s.visibleFolders(f.Viewer)
+			where += " AND (n.folder_id IS NULL OR n.folder_id NOT IN (" + vf + "))"
+			args = append(args, fargs...)
+		} else {
+			where += " AND n.folder_id IS NULL"
+		}
 	default:
 		where += " AND n.folder_id = ?"
 		args = append(args, f.Folder)
