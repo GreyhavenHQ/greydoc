@@ -40,7 +40,7 @@ func TestListNotesVisibility(t *testing.T) {
 		if got := aliases(ListFilter{Scope: ScopeMine}); len(got) != 1 || got[0] != own.PrimaryAlias {
 			t.Fatalf("mine: %v", got)
 		}
-		if got := aliases(ListFilter{Scope: ScopeShared}); len(got) != 1 || got[0] != "bob-shared" {
+		if got := aliases(ListFilter{Scope: ScopeShared}); len(got) != 2 || !contains(got, "bob-shared") || !contains(got, "public") {
 			t.Fatalf("shared: %v", got)
 		}
 		if got := aliases(ListFilter{Scope: ScopeAll, Tag: "q4"}); len(got) != 1 || got[0] != "public" {
@@ -227,6 +227,50 @@ func TestListNotesPinnedFirst(t *testing.T) {
 		search := []string{ids["zeta"], ids["mid"], ids["alpha"]}
 		if got, want := aliases(av, ListFilter{Scope: ScopeAll, IDs: search}), []string{"zeta", "mid", "alpha"}; !slices.Equal(got, want) {
 			t.Errorf("search: %v, want %v", got, want)
+		}
+	})
+}
+
+func TestSharedCountsBuiltinGroups(t *testing.T) {
+	eachDialect(t, func(t *testing.T, st *Store) {
+		alice, _ := st.UpsertOIDCUser(ctx, "a", "alice", "Alice", "", nil)
+		bob, _ := st.UpsertOIDCUser(ctx, "b", "bob", "Bob", "", nil)
+		_, _ = st.CreateNote(ctx, NewNote{OwnerID: alice.ID, Alias: "signed-in", Groups: map[string]permission.Level{GroupSignedIn: permission.Write}})
+		_, _ = st.CreateNote(ctx, NewNote{OwnerID: alice.ID, Alias: "everyone", Groups: map[string]permission.Level{GroupEveryone: permission.Read}})
+		_, _ = st.CreateNote(ctx, NewNote{OwnerID: bob.ID, Alias: "bob-own", Groups: map[string]permission.Level{GroupSignedIn: permission.Read}})
+		f, _ := st.CreateFolder(ctx, NewFolder{Name: "Open", OwnerID: alice.ID, Groups: map[string]permission.Level{GroupSignedIn: permission.Read}})
+		_, _ = st.CreateFolder(ctx, NewFolder{Name: "Mine", OwnerID: bob.ID, Groups: map[string]permission.Level{GroupSignedIn: permission.Read}})
+
+		bv := Viewer{UserID: bob.ID}
+		ns, err := st.ListNotes(ctx, ListFilter{Viewer: bv, Scope: ScopeShared})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got []string
+		for _, n := range ns {
+			got = append(got, n.PrimaryAlias)
+		}
+		slices.Sort(got)
+		if !slices.Equal(got, []string{"everyone", "signed-in"}) {
+			t.Fatalf("shared notes: %v", got)
+		}
+		fs, err := st.ListFolders(ctx, FolderFilter{Viewer: bv, Scope: ScopeShared})
+		if err != nil || len(fs) != 1 || fs[0].ID != f.ID {
+			t.Fatalf("shared folders: %v %v", fs, err)
+		}
+	})
+}
+
+func TestSharedEmptyInLocalMode(t *testing.T) {
+	eachDialect(t, func(t *testing.T, st *Store) {
+		_, _ = st.CreateNote(ctx, NewNote{Alias: "pub", Groups: map[string]permission.Level{GroupEveryone: permission.Read}})
+		_, _ = st.CreateFolder(ctx, NewFolder{Name: "Pub", Groups: map[string]permission.Level{GroupEveryone: permission.Read}})
+		lv := Viewer{Local: true}
+		if ns, err := st.ListNotes(ctx, ListFilter{Viewer: lv, Scope: ScopeShared}); err != nil || len(ns) != 0 {
+			t.Fatalf("local shared notes: %v %v", ns, err)
+		}
+		if fs, err := st.ListFolders(ctx, FolderFilter{Viewer: lv, Scope: ScopeShared}); err != nil || len(fs) != 0 {
+			t.Fatalf("local shared folders: %v %v", fs, err)
 		}
 	})
 }

@@ -232,17 +232,7 @@ func (s *Store) ListFolders(ctx context.Context, f FolderFilter) ([]FolderSummar
 	case f.Parent != "":
 		where, args = "f.parent_id = ?", []any{f.Parent}
 	case f.Scope == ScopeShared:
-		groups := f.Viewer.Groups
-		gw := "1 = 0"
-		if len(groups) > 0 {
-			gw = "gg.group_name IN (" + placeholders(len(groups)) + ")"
-		}
-		where = `(f.owner_id IS NULL OR f.owner_id <> ?) AND (EXISTS (SELECT 1 FROM folder_user_grant ug WHERE ug.folder_id = f.id AND ug.user_id = ?)
-			OR EXISTS (SELECT 1 FROM folder_group_grant gg WHERE gg.folder_id = f.id AND ` + gw + `))`
-		args = []any{f.Viewer.UserID, f.Viewer.UserID}
-		for _, g := range groups {
-			args = append(args, g)
-		}
+		where, args = sharedWhere("folder", "f", f.Viewer)
 	case f.Viewer.Local:
 		where = "f.parent_id IS NULL"
 	default:
