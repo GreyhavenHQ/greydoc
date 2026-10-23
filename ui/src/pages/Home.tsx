@@ -112,6 +112,8 @@ export default function Home() {
       Object.assign(sp, { scope: 'all', folder: urlFolderId })
     } else if (urlScope === 'mine') {
       Object.assign(sp, { scope: local ? 'all' : 'mine', folder: 'root' })
+    } else if (urlScope === 'shared') {
+      Object.assign(sp, { scope: 'shared', folder: 'root' })
     } else {
       sp.scope = urlScope
     }
