@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { activePath, buildTree, type Heading, type TocNode as Node } from '@/lib/toc'
+import { activeHeading, activePath, buildTree, type Heading, type TocNode as Node } from '@/lib/toc'
 import { docWidthPx, type DocWidth } from '@/lib/meta'
+import { atBottom } from '@/render/scrollSync'
 
 function collect(root: HTMLElement): Heading[] {
   return Array.from(root.querySelectorAll<HTMLElement>('h1[id], h2[id], h3[id], h4[id]')).map((h) => ({
@@ -84,13 +85,12 @@ export function WithToc({ show, scroller, width = 'normal', inset, children }: {
   const spy = useCallback(() => {
     const el = main.current
     if (!el || !headings.length) return
-    const top = (scroller?.getBoundingClientRect().top ?? 0) + 80
-    let current = headings[0].id
-    for (const h of headings) {
+    const line = (scroller?.getBoundingClientRect().top ?? 0) + 80
+    const tops = headings.flatMap((h) => {
       const node = el.querySelector(`[id="${CSS.escape(h.id)}"]`)
-      if (node && node.getBoundingClientRect().top <= top) current = h.id
-    }
-    setActive(current)
+      return node ? [{ id: h.id, top: node.getBoundingClientRect().top }] : []
+    })
+    setActive(activeHeading(tops, line, atBottom(scroller ?? document.documentElement)) || headings[0].id)
   }, [headings, scroller])
 
   useEffect(() => {

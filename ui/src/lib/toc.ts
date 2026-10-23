@@ -31,3 +31,12 @@ export function activePath(nodes: TocNode[], active: string): Set<string> {
   }
   return new Set()
 }
+
+// activeHeading is the last heading above the reading line, or the last heading at the end of the document.
+export function activeHeading(tops: { id: string; top: number }[], line: number, atEnd: boolean): string {
+  if (!tops.length) return ''
+  if (atEnd) return tops[tops.length - 1].id
+  let current = tops[0].id
+  for (const t of tops) if (t.top <= line) current = t.id
+  return current
+}
