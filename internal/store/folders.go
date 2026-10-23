@@ -233,6 +233,11 @@ func (s *Store) ListFolders(ctx context.Context, f FolderFilter) ([]FolderSummar
 		where, args = "f.parent_id = ?", []any{f.Parent}
 	case f.Scope == ScopeShared:
 		where, args = sharedWhere("folder", "f", f.Viewer)
+		if !f.Viewer.Local {
+			vf, fargs := s.visibleFolders(f.Viewer)
+			where += " AND (f.parent_id IS NULL OR f.parent_id NOT IN (" + vf + "))"
+			args = append(args, fargs...)
+		}
 	case f.Viewer.Local:
 		where = "f.parent_id IS NULL"
 	default:

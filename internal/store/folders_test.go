@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/greyhavenhq/greydoc/internal/permission"
@@ -173,6 +174,32 @@ func TestGroupFilterThroughFolders(t *testing.T) {
 		}
 		if len(got) != 2 || !contains(got, "in-sub") || !contains(got, "direct") {
 			t.Fatalf("group filter: %v", got)
+		}
+	})
+}
+
+func TestSharedFoldersTopOnly(t *testing.T) {
+	eachDialect(t, func(t *testing.T, st *Store) {
+		alice, _ := st.UpsertOIDCUser(ctx, "a", "alice", "Alice", "", nil)
+		bob, _ := st.UpsertOIDCUser(ctx, "b", "bob", "Bob", "", nil)
+		top, _ := st.CreateFolder(ctx, NewFolder{Name: "Project", OwnerID: alice.ID})
+		sub, _ := st.CreateFolder(ctx, NewFolder{Name: "Specs", OwnerID: alice.ID, ParentID: top.ID, Groups: map[string]permission.Level{GroupSignedIn: permission.Read}})
+		private, _ := st.CreateFolder(ctx, NewFolder{Name: "Private", OwnerID: alice.ID})
+		inner, _ := st.CreateFolder(ctx, NewFolder{Name: "Inner", OwnerID: alice.ID, ParentID: private.ID})
+		_ = st.SetFolderUserGrant(ctx, top.ID, bob.ID, permission.Read, nil)
+		_ = st.SetFolderUserGrant(ctx, sub.ID, bob.ID, permission.Read, nil)
+		_ = st.SetFolderUserGrant(ctx, inner.ID, bob.ID, permission.Read, nil)
+
+		fs, err := st.ListFolders(ctx, FolderFilter{Viewer: Viewer{UserID: bob.ID}, Scope: ScopeShared})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got []string
+		for _, f := range fs {
+			got = append(got, f.Name)
+		}
+		if !slices.Equal(got, []string{"Inner", "Project"}) {
+			t.Fatalf("shared folders: %v", got)
 		}
 	})
 }
