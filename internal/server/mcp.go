@@ -168,7 +168,7 @@ func textResult(s string) (*mcp.CallToolResult, any, error) {
 type listNotesIn struct {
 	Scope  string `json:"scope,omitempty" jsonschema:"recent, mine, shared or all (default all)"`
 	Tag    string `json:"tag,omitempty" jsonschema:"only documents with this tag"`
-	Folder string `json:"folder,omitempty" jsonschema:"only documents directly in this folder id (from list_folders), or root for documents outside any folder"`
+	Folder string `json:"folder,omitempty" jsonschema:"only documents directly in this folder id (from list_folders), or root for documents outside any folder (with scope shared: outside any folder you can open)"`
 	Limit  int    `json:"limit,omitempty" jsonschema:"documents per page, 1 to 200 (default 50)"`
 	Offset int    `json:"offset,omitempty" jsonschema:"documents to skip: the next_offset of the previous page"`
 }
@@ -206,7 +206,7 @@ type createNoteIn struct {
 
 type listFoldersIn struct {
 	Parent string `json:"parent,omitempty" jsonschema:"list the subfolders of this folder id. Empty lists top-level folders."`
-	Scope  string `json:"scope,omitempty" jsonschema:"for top-level folders: mine (default) or shared"`
+	Scope  string `json:"scope,omitempty" jsonschema:"for top-level folders: mine (default) or shared (the highest folders shared with you)"`
 }
 
 type moveNoteIn struct {
