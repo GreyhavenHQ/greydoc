@@ -64,6 +64,7 @@ export function WithToc({ show, scroller, width = 'normal', inset, children }: {
   const [headings, setHeadings] = useState<Heading[]>([])
   const [active, setActive] = useState('')
   const [expandAll, setExpandAll] = useState(false)
+  const pinned = useRef('')
 
   useEffect(() => {
     const el = main.current
@@ -84,7 +85,7 @@ export function WithToc({ show, scroller, width = 'normal', inset, children }: {
 
   const spy = useCallback(() => {
     const el = main.current
-    if (!el || !headings.length) return
+    if (!el || !headings.length || pinned.current) return
     const line = (scroller?.getBoundingClientRect().top ?? 0) + 80
     const tops = headings.flatMap((h) => {
       const node = el.querySelector(`[id="${CSS.escape(h.id)}"]`)
@@ -98,14 +99,27 @@ export function WithToc({ show, scroller, width = 'normal', inset, children }: {
     const target: HTMLElement | Window = scroller ?? window
     spy()
     target.addEventListener('scroll', spy, { passive: true })
-    return () => target.removeEventListener('scroll', spy)
+    const release = () => {
+      if (!pinned.current) return
+      pinned.current = ''
+      spy()
+    }
+    const inputs = ['wheel', 'touchstart', 'keydown', 'pointerdown']
+    for (const e of inputs) target.addEventListener(e, release, { passive: true })
+    return () => {
+      target.removeEventListener('scroll', spy)
+      for (const e of inputs) target.removeEventListener(e, release)
+    }
   }, [show, scroller, spy])
 
   const go = (id: string) => {
+    pinned.current = id
+    setActive(id)
     main.current?.querySelector(`[id="${CSS.escape(id)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     history.replaceState(null, '', '#' + id)
   }
   const scrollTo = (bottom: boolean) => {
+    pinned.current = ''
     const target = scroller ?? document.documentElement
     ;(scroller ?? window).scrollTo({ top: bottom ? target.scrollHeight : 0, behavior: 'smooth' })
   }

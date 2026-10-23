@@ -61,11 +61,46 @@ test('the table of contents opens the section being read, like HedgeDoc', async 
   await expect(toc.getByRole('link')).toHaveText(['Setup', 'Install', 'Usage', 'Daily work'])
 })
 
+test('the table of contents selects short sections at the end of the document', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 800 })
+  const long = Array.from({ length: 30 }, (_, i) => `Line ${i} of the section.`).join('\n\n')
+  const short = 'One line.\n\nTwo lines.'
+  const content = `# Machine\n\n${long}\n\n# Process\n\n${short}\n\n# Resources\n\n${short}\n\n# Review\n\n${short}`
+  const alias = (await (await page.request.post('/api/notes', { data: { content } })).json()).alias
+  await page.goto('/s/' + alias)
+  const toc = page.getByTestId('toc-sidebar')
+  const link = (name: string) => toc.getByRole('link', { name })
+  const settled = () => expect.poll(() => page.evaluate(() => new Promise((r) => {
+    const y = window.scrollY
+    setTimeout(() => r(window.scrollY === y), 200)
+  }))).toBe(true)
+  await link('Review').click()
+  await settled()
+  await expect(link('Review')).toHaveAttribute('aria-current', 'location')
+  await link('Resources').click()
+  await settled()
+  await expect(link('Resources')).toHaveAttribute('aria-current', 'location')
+  await page.mouse.move(600, 400)
+  await expect(link('Resources')).toHaveAttribute('aria-current', 'location')
+  await page.mouse.wheel(0, -3000)
+  await expect(link('Machine')).toHaveAttribute('aria-current', 'location')
+  await page.mouse.wheel(0, 5000)
+  await expect(link('Review')).toHaveAttribute('aria-current', 'location')
+  await link('Resources').click()
+  await settled()
+  await toc.getByRole('button', { name: 'Top' }).click()
+  await expect(link('Machine')).toHaveAttribute('aria-current', 'location')
+  await toc.getByRole('button', { name: 'Bottom' }).click()
+  await expect(link('Review')).toHaveAttribute('aria-current', 'location')
+})
+
 test('the editor shows the table of contents in preview-only mode', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 800 })
   const alias = (await (await page.request.post('/api/notes', { data: { content: '# One\n\ntext\n\n## Two\n\ntext' } })).json()).alias
   await page.goto('/n/' + alias + '?view')
   await expect(page.getByTestId('toc-sidebar').getByRole('link')).toHaveText(['One', 'Two'])
+  await page.getByTestId('toc-sidebar').getByRole('link', { name: 'Two' }).click()
+  await expect(page.getByTestId('toc-sidebar').getByRole('link', { name: 'Two' })).toHaveAttribute('aria-current', 'location')
   await page.goto('/n/' + alias + '?both')
   await expect(page.getByTestId('preview').locator('h2')).toHaveText('Two')
   await expect(page.getByTestId('toc-sidebar')).toHaveCount(0)
