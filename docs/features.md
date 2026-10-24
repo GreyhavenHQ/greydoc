@@ -189,6 +189,8 @@ A **view-only link** gives a client the rendered document, with no editor and no
 
 The home page lists your recent documents, your own documents and the documents shared with you. Each document shows its owner, its view count and its tags. Pin a document to keep it at the top.
 
+**Shared with me** lists the documents and folders of other people that a grant opens to you: a grant to you, to one of your teams, to **Signed-in users** or to **Everyone**. If the instance gives every new document a Signed-in grant, this list holds almost every document of other people. Only the highest folder that you can open is listed. A document inside a folder that you can open is listed in that folder, not at the top.
+
 ### Tags
 
 Put tags in the front matter:

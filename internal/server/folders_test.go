@@ -244,3 +244,50 @@ func TestNoteNamesItsFolderOnlyToReaders(t *testing.T) {
 		t.Fatalf("carol learned the folder: %s", body)
 	}
 }
+
+func TestSharedWithMeLists(t *testing.T) {
+	e, idp := newOIDCEnv(t)
+	alice := e.login(idp, map[string]any{"sub": "a", "preferred_username": "alice"})
+	bob := e.login(idp, map[string]any{"sub": "b", "preferred_username": "bob"})
+	project := e.createFolder(alice, "Project", "")
+	specs := e.createFolder(alice, "Specs", project)
+	private := e.createFolder(alice, "Private", "")
+	e.do(alice, "PUT", "/api/folders/"+project+"/permissions/users/bob", map[string]string{"level": "read"})
+	e.do(alice, "PUT", "/api/folders/"+specs+"/permissions/users/bob", map[string]string{"level": "read"})
+	e.do(alice, "PUT", "/api/folders/"+specs+"/permissions/groups/_signed_in", map[string]string{"level": "read"})
+
+	open := e.createNote(alice, "# Open")
+	e.do(alice, "PUT", "/api/notes/"+open+"/permissions/groups/_signed_in", map[string]string{"level": "read"})
+	inside := e.createNote(alice, "# Inside")
+	e.move(alice, []string{inside}, nil, project, false)
+	e.do(alice, "PUT", "/api/notes/"+inside+"/permissions/users/bob", map[string]string{"level": "write"})
+	hidden := e.createNote(alice, "# Hidden")
+	e.move(alice, []string{hidden}, nil, private, false)
+	e.do(alice, "PUT", "/api/notes/"+hidden+"/permissions/users/bob", map[string]string{"level": "read"})
+
+	_, body := e.do(bob, "GET", "/api/folders?scope=shared", nil)
+	if !strings.Contains(body, `"name":"Project"`) || strings.Contains(body, "Specs") || strings.Contains(body, "Private") {
+		t.Fatalf("shared folders: %s", body)
+	}
+	_, body = e.do(bob, "GET", "/api/folders/"+project, nil)
+	if !strings.Contains(body, `"name":"Specs"`) {
+		t.Fatalf("project: %s", body)
+	}
+	if _, body := e.do(bob, "GET", "/api/notes?folder="+project, nil); !strings.Contains(body, inside) {
+		t.Fatalf("project notes: %s", body)
+	}
+	_, body = e.do(bob, "GET", "/api/notes?scope=shared&folder=root", nil)
+	if !strings.Contains(body, open) || !strings.Contains(body, hidden) || strings.Contains(body, inside) {
+		t.Fatalf("shared root: %s", body)
+	}
+	if strings.Contains(body, "Private") {
+		t.Fatalf("shared root names a hidden folder: %s", body)
+	}
+	_, body = e.do(bob, "GET", "/api/notes?scope=shared", nil)
+	if !strings.Contains(body, open) || !strings.Contains(body, hidden) || !strings.Contains(body, inside) {
+		t.Fatalf("shared flat: %s", body)
+	}
+	if _, body := e.do(alice, "GET", "/api/notes?scope=shared", nil); strings.Contains(body, open) {
+		t.Fatalf("alice sees her own note as shared: %s", body)
+	}
+}

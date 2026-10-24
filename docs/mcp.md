@@ -86,8 +86,8 @@ The policy only lowers access. An agent never gets more than the person it acts 
 
 | Tool | What it does |
 |---|---|
-| `list_notes` | Documents you can read, last updated first. Filter by scope (`recent`, `mine`, `shared`, `all`), tag, or `folder` (a folder id, or `root` for documents outside any folder). Pages with `limit` and `offset`. |
-| `list_folders` | Your top-level folders, the folders shared with you, or the subfolders of one folder. |
+| `list_notes` | Documents you can read, last updated first. Filter by scope (`recent`, `mine`, `shared`, `all`), tag, or `folder` (a folder id, or `root` for documents outside any folder). With scope `shared`, `root` gives the documents outside any folder that you can open. Pages with `limit` and `offset`. |
+| `list_folders` | Your top-level folders, the highest folders shared with you, or the subfolders of one folder. |
 | `search_notes` | Full-text search on title, tags and text, best match first, with an excerpt. Same filters and pages as `list_notes`. |
 | `read_note` | The Markdown text, title, tags, your access level, the agent policy, and counts of open comments and suggestions. |
 | `create_note` | Create a document owned by you. Pass `folder` to create it in a folder. It then gets its access from the folder. |
