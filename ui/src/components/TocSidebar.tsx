@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { activePath, buildTree, type Heading, type TocNode as Node } from '@/lib/toc'
+import { activeHeading, activePath, buildTree, type Heading, type TocNode as Node } from '@/lib/toc'
 import { docWidthPx, type DocWidth } from '@/lib/meta'
+import { atBottom } from '@/render/scrollSync'
 
 function collect(root: HTMLElement): Heading[] {
   return Array.from(root.querySelectorAll<HTMLElement>('h1[id], h2[id], h3[id], h4[id]')).map((h) => ({
@@ -63,6 +64,7 @@ export function WithToc({ show, scroller, width = 'normal', inset, children }: {
   const [headings, setHeadings] = useState<Heading[]>([])
   const [active, setActive] = useState('')
   const [expandAll, setExpandAll] = useState(false)
+  const pinned = useRef('')
 
   useEffect(() => {
     const el = main.current
@@ -83,14 +85,13 @@ export function WithToc({ show, scroller, width = 'normal', inset, children }: {
 
   const spy = useCallback(() => {
     const el = main.current
-    if (!el || !headings.length) return
-    const top = (scroller?.getBoundingClientRect().top ?? 0) + 80
-    let current = headings[0].id
-    for (const h of headings) {
+    if (!el || !headings.length || pinned.current) return
+    const line = (scroller?.getBoundingClientRect().top ?? 0) + 80
+    const tops = headings.flatMap((h) => {
       const node = el.querySelector(`[id="${CSS.escape(h.id)}"]`)
-      if (node && node.getBoundingClientRect().top <= top) current = h.id
-    }
-    setActive(current)
+      return node ? [{ id: h.id, top: node.getBoundingClientRect().top }] : []
+    })
+    setActive(activeHeading(tops, line, atBottom(scroller ?? document.documentElement)) || headings[0].id)
   }, [headings, scroller])
 
   useEffect(() => {
@@ -98,14 +99,27 @@ export function WithToc({ show, scroller, width = 'normal', inset, children }: {
     const target: HTMLElement | Window = scroller ?? window
     spy()
     target.addEventListener('scroll', spy, { passive: true })
-    return () => target.removeEventListener('scroll', spy)
+    const release = () => {
+      if (!pinned.current) return
+      pinned.current = ''
+      spy()
+    }
+    const inputs = ['wheel', 'touchstart', 'keydown', 'pointerdown']
+    for (const e of inputs) target.addEventListener(e, release, { passive: true })
+    return () => {
+      target.removeEventListener('scroll', spy)
+      for (const e of inputs) target.removeEventListener(e, release)
+    }
   }, [show, scroller, spy])
 
   const go = (id: string) => {
+    pinned.current = id
+    setActive(id)
     main.current?.querySelector(`[id="${CSS.escape(id)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     history.replaceState(null, '', '#' + id)
   }
   const scrollTo = (bottom: boolean) => {
+    pinned.current = ''
     const target = scroller ?? document.documentElement
     ;(scroller ?? window).scrollTo({ top: bottom ? target.scrollHeight : 0, behavior: 'smooth' })
   }
