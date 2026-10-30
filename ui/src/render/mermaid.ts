@@ -94,10 +94,20 @@ const icons = {
 export interface PanZoom {
   reset: () => void
   zoomBy: (factor: number) => void
+  zoomAt: (clientX: number, clientY: number, factor: number) => void
+  scale: () => number
+}
+
+export interface PanZoomOptions {
+  // wheel 'modifier' zooms only with Ctrl or Cmd, or in full screen. 'always' zooms on any wheel.
+  wheel?: 'modifier' | 'always'
+  doubleClick?: boolean
+  maxScale?: number
 }
 
 // attachPanZoom zooms the canvas around the pointer (Ctrl or Cmd + wheel, or pinch) and pans on drag.
-export function attachPanZoom(view: HTMLElement, canvas: HTMLElement): PanZoom {
+export function attachPanZoom(view: HTMLElement, canvas: HTMLElement, opts: PanZoomOptions = {}): PanZoom {
+  const maxScale = opts.maxScale ?? 8
   let scale = 1
   let x = 0
   let y = 0
@@ -107,7 +117,7 @@ export function attachPanZoom(view: HTMLElement, canvas: HTMLElement): PanZoom {
   }
   // zoomAt keeps the canvas point under (px, py) in place. px and py are relative to the canvas layout box.
   const zoomAt = (px: number, py: number, factor: number) => {
-    const next = Math.min(8, Math.max(0.2, scale * factor))
+    const next = Math.min(maxScale, Math.max(0.2, scale * factor))
     x = px - ((px - x) * next) / scale
     y = py - ((py - y) * next) / scale
     scale = next
@@ -117,19 +127,22 @@ export function attachPanZoom(view: HTMLElement, canvas: HTMLElement): PanZoom {
     const rect = view.getBoundingClientRect()
     return { left: rect.left + view.clientLeft + canvas.offsetLeft, top: rect.top + view.clientTop + canvas.offsetTop }
   }
+  const zoomAtClient = (clientX: number, clientY: number, factor: number) => {
+    const o = origin()
+    zoomAt(clientX - o.left, clientY - o.top, factor)
+  }
   view.addEventListener(
     'wheel',
     (e) => {
-      if (!(e.ctrlKey || e.metaKey) && !view.classList.contains('is-fullscreen')) return
+      if (opts.wheel !== 'always' && !(e.ctrlKey || e.metaKey) && !view.classList.contains('is-fullscreen')) return
       e.preventDefault()
-      const o = origin()
-      zoomAt(e.clientX - o.left, e.clientY - o.top, Math.exp(-e.deltaY * (e.ctrlKey && !e.metaKey ? 0.01 : 0.002)))
+      zoomAtClient(e.clientX, e.clientY, Math.exp(-e.deltaY * (e.ctrlKey && !e.metaKey ? 0.01 : 0.002)))
     },
     { passive: false },
   )
   let drag: { x: number; y: number } | null = null
   view.addEventListener('pointerdown', (e) => {
-    if ((e.target as Element).closest('.mermaid-toolbar')) return
+    if ((e.target as Element).closest('.mermaid-toolbar, [data-panzoom-ignore]')) return
     drag = { x: e.clientX - x, y: e.clientY - y }
     view.setPointerCapture(e.pointerId)
   })
@@ -146,10 +159,12 @@ export function attachPanZoom(view: HTMLElement, canvas: HTMLElement): PanZoom {
     y = 0
     apply()
   }
-  view.addEventListener('dblclick', reset)
+  if (opts.doubleClick !== false) view.addEventListener('dblclick', reset)
   return {
     reset,
     zoomBy: (factor) => zoomAt(canvas.offsetWidth / 2, canvas.offsetHeight / 2, factor),
+    zoomAt: zoomAtClient,
+    scale: () => scale,
   }
 }
 

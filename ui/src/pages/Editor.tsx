@@ -580,7 +580,7 @@ export default function Editor() {
     if (!el) return
     const onClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement
-      if (target.closest('a, input, button') || !document.getSelection()?.isCollapsed) return
+      if (target.closest('a, input, button, img.is-zoomable') || !document.getSelection()?.isCollapsed) return
       const id = target.closest<HTMLElement>('[data-thread]')?.dataset.thread
       if (!id) return
       setActiveThread(id)

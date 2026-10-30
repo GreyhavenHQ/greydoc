@@ -133,6 +133,12 @@ let eagerImages = false
 
 const resizable = /^\/uploads\/[0-9a-f]{32}\.(?:png|jpg)$/
 
+// originalSrc maps the resized copy of an upload back to the original file.
+export function originalSrc(src: string): string {
+  const path = src.replace(/\?w=1600$/, '')
+  return resizable.test(path) ? path : src
+}
+
 // Base CSS sets img height to auto, which beats the width and height attributes. Inline styles keep them.
 DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   if (node.nodeName !== 'IMG') return

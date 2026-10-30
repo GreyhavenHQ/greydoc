@@ -1,6 +1,7 @@
-import { forwardRef, useEffect, useLayoutEffect, useRef } from 'react'
+import { forwardRef, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import 'katex/dist/katex.min.css'
-import { renderMarkdown } from '@/render/markdown'
+import { originalSrc, renderMarkdown } from '@/render/markdown'
+import { ImageLightbox } from '@/render/ImageLightbox'
 import { hydrateMermaid } from '@/render/mermaid'
 import { hydrateNoteLinks } from '@/render/noteLinks'
 import { findHeading, scrollToHash } from '@/render/headings'
@@ -24,6 +25,7 @@ export const Preview = forwardRef<HTMLElement, PreviewProps>(function Preview({ 
   const toggle = useRef(onToggleTask)
   toggle.current = onToggleTask
   const { resolvedTheme } = useTheme()
+  const [zoom, setZoom] = useState<{ src: string; preview: string; alt: string } | null>(null)
 
   useLayoutEffect(() => {
     const el = root.current
@@ -97,23 +99,44 @@ export const Preview = forwardRef<HTMLElement, PreviewProps>(function Preview({ 
         navigator.clipboard?.writeText(url.href).then(() => toast.success('Link copied'), () => {})
       }
     }
+    // Only images that the page shows smaller than their file can open, and never inside a link.
+    const zoomable = (t: EventTarget | null): t is HTMLImageElement => {
+      if (!(t instanceof HTMLImageElement) || t.closest('a')) return false
+      const ok = t.naturalWidth > t.clientWidth + 1 || t.naturalHeight > t.clientHeight + 1
+      t.classList.toggle('is-zoomable', ok)
+      return ok
+    }
+    const hover = (e: PointerEvent) => void zoomable(e.target)
+    const open = (e: MouseEvent) => {
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+      if (!document.getSelection()?.isCollapsed || !zoomable(e.target)) return
+      const img = e.target
+      setZoom({ src: originalSrc(img.getAttribute('src') ?? ''), preview: img.currentSrc || img.src, alt: img.alt })
+    }
     el.addEventListener('click', stop)
     el.addEventListener('click', jump)
+    el.addEventListener('pointerover', hover)
+    el.addEventListener('click', open)
     return () => {
       el.removeEventListener('click', stop)
       el.removeEventListener('click', jump)
+      el.removeEventListener('pointerover', hover)
+      el.removeEventListener('click', open)
     }
   }, [])
 
   return (
-    <article
-      ref={(el) => {
-        root.current = el
-        if (typeof ref === 'function') ref(el)
-        else if (ref) ref.current = el
-      }}
-      className={'markdown-body ' + (className ?? '')}
-      data-testid="preview"
-    />
+    <>
+      <article
+        ref={(el) => {
+          root.current = el
+          if (typeof ref === 'function') ref(el)
+          else if (ref) ref.current = el
+        }}
+        className={'markdown-body ' + (className ?? '')}
+        data-testid="preview"
+      />
+      {zoom && <ImageLightbox src={zoom.src} previewSrc={zoom.preview} alt={zoom.alt} onClose={() => setZoom(null)} />}
+    </>
   )
 })

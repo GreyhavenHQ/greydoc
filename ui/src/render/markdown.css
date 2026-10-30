@@ -32,6 +32,7 @@
 .markdown-body blockquote { padding: 0.1em 0 0.1em 1em; border-left: 3px solid rgb(var(--border)); color: rgb(var(--muted-foreground)); }
 .markdown-body hr { border: none; border-top: 1px solid rgb(var(--border)); margin: 2em 0; }
 .markdown-body img { max-width: 100%; border-radius: var(--radius); }
+.markdown-body img.is-zoomable { cursor: zoom-in; }
 .markdown-body code {
   font-family: var(--font-mono); font-size: 0.875em; background: rgb(var(--muted));
   border: 1px solid rgb(var(--border) / 0.6); border-radius: 4px; padding: 0.1em 0.35em;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { headingsOf, renderMarkdown } from '@/render/markdown'
+import { headingsOf, originalSrc, renderMarkdown } from '@/render/markdown'
 import { diagramUsesElk, mermaidConfig } from '@/render/mermaidTheme'
 
 const html = (src: string) => renderMarkdown(src).html
@@ -199,5 +199,17 @@ describe('ELK layout', () => {
     expect(diagramUsesElk('---\ntitle: x\n---\nstateDiagram-v2\n[*]-->A')).toBe(true)
     expect(diagramUsesElk('mindmap\n  root')).toBe(false)
     expect(diagramUsesElk('sequenceDiagram\nA->>B: hi')).toBe(false)
+  })
+})
+
+describe('originalSrc', () => {
+  const hex = '0123456789abcdef0123456789abcdef'
+  it('drops the resize query of a large upload', () => {
+    expect(originalSrc(`/uploads/${hex}.png?w=1600`)).toBe(`/uploads/${hex}.png`)
+    expect(originalSrc(`/uploads/${hex}.jpg?w=1600`)).toBe(`/uploads/${hex}.jpg`)
+  })
+  it('keeps other addresses', () => {
+    expect(originalSrc('https://example.com/a.png?w=1600')).toBe('https://example.com/a.png?w=1600')
+    expect(originalSrc(`/uploads/${hex}.gif`)).toBe(`/uploads/${hex}.gif`)
   })
 })
