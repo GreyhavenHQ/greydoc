@@ -188,3 +188,27 @@ func TestHedgeDocStyleAliases(t *testing.T) {
 		}
 	})
 }
+
+func TestNoteByAliasAcceptsID(t *testing.T) {
+	eachDialect(t, func(t *testing.T, st *Store) {
+		n, _ := st.CreateNote(ctx, NewNote{Alias: "by-id"})
+		got, err := st.NoteByAlias(ctx, n.ID)
+		if err != nil || got.ID != n.ID || got.PrimaryAlias != "by-id" {
+			t.Fatalf("%v %+v", err, got)
+		}
+		if _, err := st.NoteByAlias(ctx, "0123456789abcdef0123456789abcdef"); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("unknown id: %v", err)
+		}
+	})
+}
+
+func TestNormalizeAliasRefusesIDShape(t *testing.T) {
+	if _, err := NormalizeAlias("0123456789abcdef0123456789ABCDEF"); !errors.Is(err, ErrAliasForbidden) {
+		t.Fatalf("id shape: %v", err)
+	}
+	for _, a := range []string{GenerateRandomAlias(), "-q8sZjE2S5mXJTTVyr4nqQ", "0123456789abcdef0123456789abcdeg"} {
+		if _, err := NormalizeAlias(a); err != nil {
+			t.Fatalf("%q: %v", a, err)
+		}
+	}
+}

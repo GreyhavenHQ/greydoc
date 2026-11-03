@@ -73,6 +73,9 @@ var reservedAliases = []string{
 // aliasPattern accepts HedgeDoc 1 note IDs, which are base64url and may start with - or _.
 var aliasPattern = regexp.MustCompile(`^[a-z0-9_-]{1,64}$`)
 
+// idPattern is the shape of note.id. An alias with this shape could hide another document's id address.
+var idPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
+
 var crockford = base32.NewEncoding("0123456789ABCDEFGHJKMNPQRSTVWXYZ").WithPadding(base32.NoPadding)
 
 // GenerateRandomAlias returns 128 random bits as lowercase Crockford base32 (26 chars), as HedgeDoc does.
@@ -86,7 +89,7 @@ func GenerateRandomAlias() string {
 
 func NormalizeAlias(alias string) (string, error) {
 	a := strings.ToLower(strings.TrimSpace(alias))
-	if !aliasPattern.MatchString(a) || strings.Trim(a, "-_") == "" || slices.Contains(reservedAliases, a) {
+	if !aliasPattern.MatchString(a) || strings.Trim(a, "-_") == "" || slices.Contains(reservedAliases, a) || idPattern.MatchString(a) {
 		return "", ErrAliasForbidden
 	}
 	return a, nil
@@ -206,7 +209,16 @@ func (s *Store) NoteByID(ctx context.Context, id string) (*Note, error) {
 		FROM note n JOIN note_alias a ON a.note_id = n.id AND a.is_primary = 1 WHERE n.id = ?`), id))
 }
 
+// NoteByAlias resolves an alias, then falls back to the note id, which is a permanent address.
 func (s *Store) NoteByAlias(ctx context.Context, alias string) (*Note, error) {
+	n, err := s.noteByAliasName(ctx, alias)
+	if errors.Is(err, ErrNotFound) && idPattern.MatchString(strings.ToLower(alias)) {
+		return s.NoteByID(ctx, strings.ToLower(alias))
+	}
+	return n, err
+}
+
+func (s *Store) noteByAliasName(ctx context.Context, alias string) (*Note, error) {
 	return s.scanNote(ctx, s.db.QueryRowContext(ctx, s.q(`SELECT `+noteColumns+`
 		FROM note_alias x JOIN note n ON n.id = x.note_id
 		JOIN note_alias a ON a.note_id = n.id AND a.is_primary = 1 WHERE x.name = ?`), strings.ToLower(alias)))

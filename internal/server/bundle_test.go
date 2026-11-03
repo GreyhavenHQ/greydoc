@@ -252,3 +252,13 @@ func keys(m map[string]string) []string {
 	}
 	return out
 }
+
+func TestNoteBundleImportRenamesIDShapedAlias(t *testing.T) {
+	e := newTestEnv(t)
+	meta := `{"alias":"0123456789abcdef0123456789abcdef","extra_aliases":["kept-extra"]}`
+	raw := zipOf(t, map[string][]byte{"a.md": []byte("# A\n"), "note.json": []byte(meta)})
+	code, body := importBundle(t, e, "id.zip", raw)
+	if code != 201 || !strings.Contains(body, `"renamed":true`) || strings.Contains(body, "0123456789abcdef") {
+		t.Fatalf("%d %s", code, body)
+	}
+}
