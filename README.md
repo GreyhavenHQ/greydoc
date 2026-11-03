@@ -39,6 +39,7 @@ docker compose up -d greydoc
 |---|---|
 | New document | Press "New document", or open `/new`. `/new?alias=standup` picks the address. |
 | Short address | `/<alias>` opens `/n/<alias>`. HedgeDoc 1 links work for imported documents; see [docs/import-hedgedoc.md](docs/import-hedgedoc.md). |
+| Change the address | Menu, "Address", for the owner. A new custom address replaces the previous one, which stops working. `/n/<document id>` always opens the document, and older generated or imported addresses keep working. `PUT /api/notes/<alias>/slug` with `{"slug": "<name>"}` does the same. |
 | Read and edit in one view | Documents open in split view: editor and preview side by side, as in HedgeDoc. Live mode (the notebook button, Ctrl+Alt+L) renders the document in place: the line you edit shows its Markdown, and a click on a diagram, table or formula edits its source. The pencil and eye buttons give the editor alone and the preview alone. Your browser remembers the last mode you chose. |
 | Tags | Add `tags: [design, q4]` to the front matter. Click a tag on the home page to filter. |
 | Link to a document | Type `[[` in the editor and pick a document. It inserts `[[alias|Title]]`: the address, then the link text, which you can edit. `[[alias]]` alone shows the current title of the document. |
