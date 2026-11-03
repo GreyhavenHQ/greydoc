@@ -247,6 +247,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/notes/{alias}/aliases", s.handleAliases)
 	s.mux.HandleFunc("PUT /api/notes/{alias}/aliases", s.handleAliases)
 	s.mux.HandleFunc("DELETE /api/notes/{alias}/aliases/{name}", s.handleAliases)
+	s.mux.HandleFunc("PUT /api/notes/{alias}/slug", s.handleSlug)
 
 	s.mux.HandleFunc("GET /ws/{alias}", s.handleWS)
 	s.mux.HandleFunc("GET /api/notes/{alias}/timeline", s.handleTimeline)

@@ -235,3 +235,32 @@ func (s *Server) handleAliases(w http.ResponseWriter, r *http.Request) {
 	aliases, _ := s.store.Aliases(r.Context(), n.ID)
 	writeJSON(w, http.StatusOK, map[string]any{"aliases": aliases})
 }
+
+// handleSlug sets the custom slug of a note. The previous custom slug stops working; the id address always works.
+func (s *Server) handleSlug(w http.ResponseWriter, r *http.Request) {
+	n, _, ok := s.noteFor(w, r, permission.Full)
+	if !ok {
+		return
+	}
+	id := identityFrom(r.Context())
+	if !id.canWriteScope() {
+		writeError(w, http.StatusForbidden, "forbidden", "this token can only read")
+		return
+	}
+	var req struct {
+		Slug string `json:"slug"`
+	}
+	if !readJSON(w, r, &req) {
+		return
+	}
+	alias, err := s.store.SetSlug(r.Context(), n.ID, req.Slug, id.event(n.ID, "alias.change", nil))
+	if err != nil {
+		s.writeNoteError(w, err)
+		return
+	}
+	if alias != n.PrimaryAlias {
+		s.hub.Broadcast(n.ID, map[string]any{"type": "alias", "alias": alias})
+	}
+	aliases, _ := s.store.Aliases(r.Context(), n.ID)
+	writeJSON(w, http.StatusOK, map[string]any{"alias": alias, "aliases": aliases})
+}
