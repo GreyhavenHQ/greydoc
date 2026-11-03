@@ -179,6 +179,9 @@ export interface TagCount {
   count: number
 }
 
+export const setSlug = (alias: string, slug: string) =>
+  api.put<{ alias: string; aliases: { name: string; primary: boolean }[] }>('/api/notes/' + encodeURIComponent(alias) + '/slug', { slug })
+
 export const duplicateNote = (alias: string) => api.post<Note>('/api/notes/' + encodeURIComponent(alias) + '/duplicate')
 
 export const noteTitle = (n: { title: string; alias: string }) => n.title || 'Untitled'

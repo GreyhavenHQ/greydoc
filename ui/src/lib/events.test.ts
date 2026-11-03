@@ -12,4 +12,9 @@ suite('event text', () => {
   it('keeps old group grants readable', () => {
     expect(describe(ev('permission.group', { group: 'eng', level: 'read' }))).toBe('gave group eng view access')
   })
+  it('shows a slug change with the previous address', () => {
+    expect(describe(ev('alias.change', { alias: 'roadmap-2027', previous: 'team-roadmap' }))).toBe(
+      'changed the address from /team-roadmap to /roadmap-2027',
+    )
+  })
 })
