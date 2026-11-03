@@ -204,7 +204,13 @@ export default function Editor() {
   textRef.current = text
   const presence = usePresence(session)
 
+  const noteRef = useRef<Note | null>(null)
+  noteRef.current = note
+
   useEffect(() => {
+    // A URL that names the open note, for example after a slug change, keeps the note and its live connection.
+    const cur = noteRef.current
+    if (cur && (alias.toLowerCase() === cur.alias || alias.toLowerCase() === cur.id)) return
     setNote(null)
     setError('')
     setInTrash(false)
@@ -234,9 +240,10 @@ export default function Editor() {
       })
   }, [alias, navigate])
 
+  const noteId = note?.id
   useEffect(() => {
-    if (!note || !me) return
-    const s = new NoteSession(note.alias, { name: me.local_mode ? localName() : undefined, share: shareParam() })
+    if (!noteId || !me) return
+    const s = new NoteSession(noteId, { name: me.local_mode ? localName() : undefined, share: shareParam() })
     const name = me.local_mode ? localName() : me.display_name || me.username || 'guest'
     s.setUser({ id: me.id, name, color: personColor(personSeed(me.id, name, me.local_mode)) })
     // Timings from page load, reported when a note is slow to arrive.
@@ -250,7 +257,7 @@ export default function Editor() {
       if (v && !reported && now > 3000) {
         reported = true
         console.warn(
-          `greydoc: "${note.alias}" took ${(now / 1000).toFixed(1)} s to arrive. WebSocket created at ${(created / 1000).toFixed(1)} s, ` +
+          `greydoc: "${noteId}" took ${(now / 1000).toFixed(1)} s to arrive. WebSocket created at ${(created / 1000).toFixed(1)} s, ` +
             `connected at ${(connectedAt / 1000).toFixed(1)} s, text at ${(now / 1000).toFixed(1)} s, ` +
             `${s.attempts} connection attempt(s)${s.lastClose ? `, last close code ${s.lastClose}` : ''}. ` +
             `The Server-Timing header of the /ws/ request shows how long greydoc itself took.`,
@@ -295,7 +302,7 @@ export default function Editor() {
       setSynced(false)
       setLoaded(false)
     }
-  }, [note, me, navigate])
+  }, [noteId, me, navigate])
 
   const canEdit = atLeast(level, 'write')
   const isOwner = level === 'full'
