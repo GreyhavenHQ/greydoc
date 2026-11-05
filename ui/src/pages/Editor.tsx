@@ -9,6 +9,7 @@ import {
   FileArchive,
   FileCode,
   History,
+  Link2,
   MessageSquare,
   MoreHorizontal,
   NotebookPen,
@@ -41,6 +42,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Spinner } from '@/components/ui/spinner'
 import { ShareDialog } from '@/components/ShareDialog'
+import { AddressDialog } from '@/components/AddressDialog'
 import { Timeline } from '@/components/Timeline'
 import { CommentsPanel, type Draft, type Suggestion, type Thread } from '@/components/CommentsPanel'
 import { SuggestComposer, type SuggestDraft } from '@/components/SuggestComposer'
@@ -179,6 +181,7 @@ export default function Editor() {
   const [loaded, setLoaded] = useState(false)
   const [connected, setConnected] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
+  const [addressOpen, setAddressOpen] = useState(false)
   const [timelineOpen, setTimelineOpen] = useState(false)
   const [timelineKey, setTimelineKey] = useState(0)
   const [showAuthors, setShowAuthors] = useState(false)
@@ -204,7 +207,13 @@ export default function Editor() {
   textRef.current = text
   const presence = usePresence(session)
 
+  const noteRef = useRef<Note | null>(null)
+  noteRef.current = note
+
   useEffect(() => {
+    // A URL that names the open note, for example after a slug change, keeps the note and its live connection.
+    const cur = noteRef.current
+    if (cur && (alias.toLowerCase() === cur.alias || alias.toLowerCase() === cur.id)) return
     setNote(null)
     setError('')
     setInTrash(false)
@@ -234,9 +243,24 @@ export default function Editor() {
       })
   }, [alias, navigate])
 
+  // applyAlias follows a slug change: the note keeps its session and the URL moves to the new address.
+  const applyAlias = useCallback(
+    (next: string, aliases?: Note['aliases']) => {
+      const cur = noteRef.current
+      if (!cur) return
+      noteRef.current = { ...cur, alias: next, aliases: aliases ?? cur.aliases }
+      setNote(noteRef.current)
+      navigate('/n/' + next + location.search + location.hash, { replace: true })
+    },
+    [navigate],
+  )
+  const applyAliasRef = useRef(applyAlias)
+  applyAliasRef.current = applyAlias
+
+  const noteId = note?.id
   useEffect(() => {
-    if (!note || !me) return
-    const s = new NoteSession(note.alias, { name: me.local_mode ? localName() : undefined, share: shareParam() })
+    if (!noteId || !me) return
+    const s = new NoteSession(noteId, { name: me.local_mode ? localName() : undefined, share: shareParam() })
     const name = me.local_mode ? localName() : me.display_name || me.username || 'guest'
     s.setUser({ id: me.id, name, color: personColor(personSeed(me.id, name, me.local_mode)) })
     // Timings from page load, reported when a note is slow to arrive.
@@ -250,7 +274,7 @@ export default function Editor() {
       if (v && !reported && now > 3000) {
         reported = true
         console.warn(
-          `greydoc: "${note.alias}" took ${(now / 1000).toFixed(1)} s to arrive. WebSocket created at ${(created / 1000).toFixed(1)} s, ` +
+          `greydoc: "${noteId}" took ${(now / 1000).toFixed(1)} s to arrive. WebSocket created at ${(created / 1000).toFixed(1)} s, ` +
             `connected at ${(connectedAt / 1000).toFixed(1)} s, text at ${(now / 1000).toFixed(1)} s, ` +
             `${s.attempts} connection attempt(s)${s.lastClose ? `, last close code ${s.lastClose}` : ''}. ` +
             `The Server-Timing header of the /ws/ request shows how long greydoc itself took.`,
@@ -277,6 +301,7 @@ export default function Editor() {
         }
       }
       if (ev.type === 'timeline') setTimelineKey((k) => k + 1)
+      if (ev.type === 'alias' && typeof ev.alias === 'string') applyAliasRef.current(ev.alias)
       if (ev.type === 'comments') loadThreadsRef.current()
       if (ev.type === 'suggestions') loadSuggestionsRef.current()
       if (ev.type === 'deleted' || ev.type === 'trashed') {
@@ -295,7 +320,7 @@ export default function Editor() {
       setSynced(false)
       setLoaded(false)
     }
-  }, [note, me, navigate])
+  }, [noteId, me, navigate])
 
   const canEdit = atLeast(level, 'write')
   const isOwner = level === 'full'
@@ -925,6 +950,11 @@ export default function Editor() {
                   <Eye className="size-4" /> View mode
                 </a>
               </DropdownMenuItem>
+              {isOwner && (
+                <DropdownMenuItem onSelect={() => setAddressOpen(true)}>
+                  <Link2 className="size-4" /> Address
+                </DropdownMenuItem>
+              )}
               {me?.authenticated && (
                 <DropdownMenuItem onSelect={duplicateThis}>
                   <Copy className="size-4" /> Duplicate this document
@@ -1098,6 +1128,7 @@ export default function Editor() {
           )}
         </main>
         <ShareDialog alias={note.alias} isOwner={isOwner} open={shareOpen} onOpenChange={setShareOpen} />
+        {isOwner && <AddressDialog note={note} open={addressOpen} onOpenChange={setAddressOpen} onChanged={applyAlias} />}
         <Timeline
           alias={note.alias}
           open={timelineOpen}

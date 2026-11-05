@@ -105,7 +105,9 @@ CREATE TABLE IF NOT EXISTS note_alias (
     name TEXT PRIMARY KEY,
     note_id TEXT NOT NULL REFERENCES note(id) ON DELETE CASCADE,
     is_primary INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    -- custom marks a slug set by SetSlug. A note has at most one, and it is the primary.
+    custom INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_note_alias_note ON note_alias(note_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_note_alias_primary ON note_alias(note_id) WHERE is_primary = 1;

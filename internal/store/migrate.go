@@ -48,6 +48,7 @@ var migrations = []migration{
 		_, err := tx.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_note_folder ON note(folder_id)`)
 		return err
 	}},
+	addColumn("011_note_alias_custom", "note_alias", "custom", "INTEGER NOT NULL DEFAULT 0"),
 }
 
 // dropNamedGroupGrants deletes grants to OIDC groups and records each one in the note history.

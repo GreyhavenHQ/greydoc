@@ -17,6 +17,7 @@ func TestCopySQLiteToPostgres(t *testing.T) {
 	g, _ := src.CreateGroup(ctx, "Design", "", "", nil)
 	_ = src.AddGroupMember(ctx, g.ID, u.ID, nil)
 	n, _ := src.CreateNote(ctx, NewNote{OwnerID: u.ID, Alias: "plan", ExtraAliases: []string{"Old-ID"}, Groups: map[string]permission.Level{g.ID: permission.Write}})
+	_, _ = src.SetSlug(ctx, n.ID, "custom-plan", nil)
 	_ = src.SaveSnapshot(ctx, n.ID, []byte{1, 2, 3}, NoteState{Content: "# Plan\nbody", Title: "Plan", Tags: []string{"q4"}})
 	_ = src.AppendUpdates(ctx, n.ID, []NoteUpdate{{UserID: u.ID, Source: SourceHuman, ClientID: 1 << 52, Data: []byte{9}}})
 	_ = src.AddEvent(ctx, &Event{NoteID: n.ID, ActorID: u.ID, ActorName: "Alice", Kind: "note.create"})
@@ -50,6 +51,12 @@ func TestCopySQLiteToPostgres(t *testing.T) {
 	}
 	if du, _ := dst.UserByID(ctx, u.ID); len(du.GroupIDs) != 1 {
 		t.Fatalf("membership %+v", du)
+	}
+	if _, err := dst.SetSlug(ctx, n.ID, "next-plan", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := dst.NoteByAlias(ctx, "custom-plan"); err != ErrNotFound {
+		t.Fatalf("the custom flag did not survive the copy: %v", err)
 	}
 	if err := dst.CopyFrom(ctx, src); err == nil {
 		t.Fatal("copied twice into a database with notes")

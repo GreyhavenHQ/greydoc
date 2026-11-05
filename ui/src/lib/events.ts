@@ -84,6 +84,8 @@ export function describe(e: AuditEvent): string {
       return `added the address /${d.alias}`
     case 'alias.primary':
       return `made /${d.alias} the main address`
+    case 'alias.change':
+      return `changed the address from /${d.previous} to /${d.alias}`
     case 'alias.remove':
       return `removed the address /${d.alias}`
     case 'revision.restore':

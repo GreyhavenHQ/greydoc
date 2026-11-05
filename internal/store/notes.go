@@ -73,6 +73,9 @@ var reservedAliases = []string{
 // aliasPattern accepts HedgeDoc 1 note IDs, which are base64url and may start with - or _.
 var aliasPattern = regexp.MustCompile(`^[a-z0-9_-]{1,64}$`)
 
+// idPattern is the shape of note.id. An alias with this shape could hide another document's id address.
+var idPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
+
 var crockford = base32.NewEncoding("0123456789ABCDEFGHJKMNPQRSTVWXYZ").WithPadding(base32.NoPadding)
 
 // GenerateRandomAlias returns 128 random bits as lowercase Crockford base32 (26 chars), as HedgeDoc does.
@@ -86,7 +89,7 @@ func GenerateRandomAlias() string {
 
 func NormalizeAlias(alias string) (string, error) {
 	a := strings.ToLower(strings.TrimSpace(alias))
-	if !aliasPattern.MatchString(a) || strings.Trim(a, "-_") == "" || slices.Contains(reservedAliases, a) {
+	if !aliasPattern.MatchString(a) || strings.Trim(a, "-_") == "" || slices.Contains(reservedAliases, a) || idPattern.MatchString(a) {
 		return "", ErrAliasForbidden
 	}
 	return a, nil
@@ -206,7 +209,16 @@ func (s *Store) NoteByID(ctx context.Context, id string) (*Note, error) {
 		FROM note n JOIN note_alias a ON a.note_id = n.id AND a.is_primary = 1 WHERE n.id = ?`), id))
 }
 
+// NoteByAlias resolves an alias, then falls back to the note id, which is a permanent address.
 func (s *Store) NoteByAlias(ctx context.Context, alias string) (*Note, error) {
+	n, err := s.noteByAliasName(ctx, alias)
+	if errors.Is(err, ErrNotFound) && idPattern.MatchString(strings.ToLower(alias)) {
+		return s.NoteByID(ctx, strings.ToLower(alias))
+	}
+	return n, err
+}
+
+func (s *Store) noteByAliasName(ctx context.Context, alias string) (*Note, error) {
 	return s.scanNote(ctx, s.db.QueryRowContext(ctx, s.q(`SELECT `+noteColumns+`
 		FROM note_alias x JOIN note n ON n.id = x.note_id
 		JOIN note_alias a ON a.note_id = n.id AND a.is_primary = 1 WHERE x.name = ?`), strings.ToLower(alias)))
@@ -280,12 +292,78 @@ func (s *Store) MakeAliasPrimary(ctx context.Context, noteID, alias string) erro
 		if n != 1 {
 			return ErrNotFound
 		}
-		if _, err := tx.ExecContext(ctx, s.q(`UPDATE note_alias SET is_primary = 0 WHERE note_id = ?`), noteID); err != nil {
+		return s.promoteAlias(ctx, tx, noteID, alias)
+	})
+}
+
+// promoteAlias makes an existing alias primary and deletes the custom slug it replaces.
+func (s *Store) promoteAlias(ctx context.Context, tx *sql.Tx, noteID, alias string) error {
+	if _, err := tx.ExecContext(ctx, s.q(`UPDATE note_alias SET is_primary = 0 WHERE note_id = ?`), noteID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, s.q(`DELETE FROM note_alias WHERE note_id = ? AND custom = 1 AND name <> ?`), noteID, alias); err != nil {
+		return err
+	}
+	_, err := tx.ExecContext(ctx, s.q(`UPDATE note_alias SET is_primary = 1 WHERE note_id = ? AND name = ?`), noteID, alias)
+	return err
+}
+
+// SetSlug makes slug the primary alias of the note and releases the previous custom slug.
+// Other aliases stay. ev, if set, gets the new and previous alias and is written only on a change.
+func (s *Store) SetSlug(ctx context.Context, noteID, slug string, ev *Event) (string, error) {
+	slug, err := NormalizeAlias(slug)
+	if err != nil {
+		return "", err
+	}
+	err = s.tx(ctx, func(tx *sql.Tx) error {
+		var previous string
+		if err := tx.QueryRowContext(ctx, s.q(`SELECT name FROM note_alias WHERE note_id = ? AND is_primary = 1`),
+			noteID).Scan(&previous); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return ErrNotFound
+			}
 			return err
 		}
-		_, err := tx.ExecContext(ctx, s.q(`UPDATE note_alias SET is_primary = 1 WHERE note_id = ? AND name = ?`), noteID, alias)
-		return err
+		if previous == slug {
+			return nil
+		}
+		var owner string
+		err := tx.QueryRowContext(ctx, s.q(`SELECT note_id FROM note_alias WHERE name = ?`), slug).Scan(&owner)
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			if err := s.promoteAlias(ctx, tx, noteID, ""); err != nil {
+				return err
+			}
+			if _, err := tx.ExecContext(ctx, s.q(`INSERT INTO note_alias (name, note_id, is_primary, created_at, custom)
+				VALUES (?, ?, 1, ?, 1)`), slug, noteID, Now()); err != nil {
+				if isUniqueViolation(err) {
+					return ErrAliasTaken
+				}
+				return err
+			}
+		case err != nil:
+			return err
+		case owner != noteID:
+			return ErrAliasTaken
+		default:
+			if err := s.promoteAlias(ctx, tx, noteID, slug); err != nil {
+				return err
+			}
+		}
+		if ev == nil {
+			return nil
+		}
+		ev.NoteID = noteID
+		if ev.Data == nil {
+			ev.Data = map[string]any{}
+		}
+		ev.Data["alias"], ev.Data["previous"] = slug, previous
+		return s.insertEvent(ctx, tx, ev)
 	})
+	if err != nil {
+		return "", err
+	}
+	return slug, nil
 }
 
 func (s *Store) RemoveAlias(ctx context.Context, alias string) error {
