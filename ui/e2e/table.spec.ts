@@ -95,3 +95,45 @@ test('bold and undo work inside a cell', async ({ page }) => {
   await page.keyboard.press('Escape')
   await expect(cell(page, 'Asia').locator('strong')).toHaveCount(0)
 })
+
+async function menu(page: Page, at: string, item: string) {
+  await cell(page, at).click()
+  await page.getByRole('button', { name: 'Table options' }).click()
+  await page.getByRole('menuitem', { name: item }).click()
+}
+
+test('the table menu adds and deletes rows', async ({ page }) => {
+  const alias = await openSample(page)
+  const empty = '|  |  |  |  |'
+  const t = tableLines(sample)
+  await menu(page, 'Bob', 'Add row above')
+  await expect.poll(async () => tableLines(await markdown(page, alias))).toEqual([t[0], t[1], t[2], empty, t[3], t[4]])
+  await menu(page, 'Bob', 'Add row below')
+  await expect.poll(async () => tableLines(await markdown(page, alias))).toEqual([t[0], t[1], t[2], empty, t[3], empty, t[4]])
+  await menu(page, 'Bob', 'Delete row')
+  await expect.poll(async () => tableLines(await markdown(page, alias))).toEqual([t[0], t[1], t[2], empty, empty, t[4]])
+})
+
+test('the table menu edits columns, alignment, tidies and shows the source', async ({ page }) => {
+  const alias = await openSample(page)
+  const head = async () => tableLines(await markdown(page, alias)).slice(0, 2)
+  await menu(page, 'Revenue', 'Add column left')
+  await expect.poll(head).toEqual(['| Region |  | Revenue | Growth | Owner |', '|--------| --- |--------:|-------:|-------|'])
+  await menu(page, 'Revenue', 'Add column right')
+  await expect.poll(head).toEqual(['| Region |  | Revenue |  | Growth | Owner |', '|--------| --- |--------:| --- |-------:|-------|'])
+  await menu(page, 'Revenue', 'Delete column')
+  await expect.poll(head).toEqual(['| Region |  |  | Growth | Owner |', '|--------| --- | --- |-------:|-------|'])
+  await menu(page, 'Owner', 'Align center')
+  await expect.poll(async () => (await head())[1]).toBe('|--------| --- | --- |-------:|:---:|')
+  await expect(cell(page, 'Alice')).toHaveCSS('text-align', 'center')
+  await menu(page, 'Owner', 'Tidy table')
+  await expect.poll(async () => new Set(tableLines(await markdown(page, alias)).map((l) => l.length)).size).toBe(1)
+  expect(tableLines(await markdown(page, alias))[0]).toBe('| Region        |     |     | Growth | Owner |')
+
+  const editor = page.getByTestId('editor')
+  await menu(page, 'Owner', 'Show as Markdown')
+  await expect(editor.locator('.cm-lp-grid')).toHaveCount(0)
+  await expect(editor.locator('.cm-lp-table-src')).toHaveCount(5)
+  await editor.locator('.cm-line', { hasText: 'Last edit' }).click()
+  await expect(editor.locator('.cm-lp-grid')).toHaveCount(1)
+})

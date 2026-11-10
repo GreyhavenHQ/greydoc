@@ -50,7 +50,8 @@ import { AiMenu } from '@/components/AiMenu'
 import { SelectionToolbar, toolbarButton } from '@/components/SelectionToolbar'
 import { imageUpload } from '@/editor/upload'
 import { formatKeymap } from '@/editor/format'
-import { canToggleTasks } from '@/editor/live'
+import { canToggleTasks, tableMenu, type TableMenuRequest } from '@/editor/live'
+import { TableMenu } from '@/components/TableMenu'
 import { taskToggle } from '@/lib/tasks'
 import { captureEdits, setSuggestionRanges, suggestionDecorations, type SuggestionAction } from '@/editor/suggestions'
 import { anchorRange, resolvePoint, resolveRange } from '@/editor/anchors'
@@ -615,6 +616,7 @@ export default function Editor() {
     return () => el.removeEventListener('click', onClick)
   }, [previewEl])
 
+  const [tableMenuReq, setTableMenuReq] = useState<TableMenuRequest | null>(null)
   const editorExtensions = useMemo(
     () => [
       formatKeymap({ onComment: commentOn }),
@@ -650,6 +652,7 @@ export default function Editor() {
         } else decideRef.current(sg, a === 'accept')
       }),
       canToggleTasks.of(() => canEditRef.current),
+      tableMenu.of(setTableMenuReq),
       captureEdits(
         () => suggestingRef.current,
         (e) => {
@@ -1051,6 +1054,7 @@ export default function Editor() {
                   ))}
                 </div>
               )}
+              {tableMenuReq && <TableMenu request={tableMenuReq} onClose={() => setTableMenuReq(null)} />}
               {session && ready ? (
                 <CodeEditor
                   ytext={session.text}

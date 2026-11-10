@@ -5,7 +5,7 @@ import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemir
 import katex from 'katex'
 import { yUndoManagerKeymap } from 'y-codemirror.next'
 import { renderInline, renderMarkdown } from '@/render/markdown'
-import { addColumn, addRow, cellText, parseTable, setCell, type Table } from '@/editor/table'
+import { addColumn, addRow, cellText, parseTable, removeColumn, removeRow, setAlign, setCell, tidy, type Align, type Table } from '@/editor/table'
 import { naturalSize, renderMermaid, themeMode } from '@/render/mermaid'
 import { splitFrontMatter } from '@/lib/meta'
 import { mentionsOn } from '@/lib/mentions'
@@ -196,6 +196,72 @@ function selectText(el: HTMLElement, a: number, b: number) {
 
 const cellWraps: Record<string, string> = { b: '**', i: '*', e: '`' }
 
+export interface TableMenuRequest {
+  view: EditorView
+  from: number
+  row: number
+  col: number
+  rect: DOMRect
+}
+
+// tableMenu opens the table menu of the page for a cell. Without it the grid shows no menu button.
+export const tableMenu = Facet.define<(r: TableMenuRequest) => void, ((r: TableMenuRequest) => void) | null>({
+  combine: (v) => v[0] ?? null,
+})
+
+// showTableSource shows the table at a position as Markdown until the cursor leaves it.
+const showTableSource = StateEffect.define<number>()
+const tableSource = StateField.define<number>({
+  create: () => -1,
+  update(v, tr) {
+    if (v >= 0) v = tr.changes.mapPos(v)
+    for (const e of tr.effects) if (e.is(showTableSource)) v = e.value
+    if (v < 0) return v
+    const t = parseTable(tr.state.doc, v)
+    const head = tr.state.selection.main.head
+    return t && head >= t.from && head <= t.to ? t.from : -1
+  },
+})
+
+export type TableAction =
+  | 'row-above'
+  | 'row-below'
+  | 'col-left'
+  | 'col-right'
+  | 'del-row'
+  | 'del-col'
+  | 'align-left'
+  | 'align-center'
+  | 'align-right'
+  | 'tidy'
+  | 'source'
+  | 'focus'
+
+// runTableAction changes the table at from for the cell at row and col, then puts the caret back in a cell.
+export function runTableAction(view: EditorView, from: number, row: number, col: number, action: TableAction) {
+  const t = parseTable(view.state.doc, from)
+  if (!t) return
+  const rows = t.body.length + 1
+  const cols = t.header.cells.length
+  if (action === 'source') {
+    view.focus()
+    view.dispatch({ selection: { anchor: t.from }, effects: showTableSource.of(t.from) })
+    return
+  }
+  let changes: ChangeSpec | null = null
+  let to = [row, col]
+  if (action === 'row-above' && row > 0) changes = addRow(t, row - 1)
+  else if (action === 'row-below') [changes, to] = [addRow(t, row), [row + 1, col]]
+  else if (action === 'col-left') changes = addColumn(t, col)
+  else if (action === 'col-right') [changes, to] = [addColumn(t, col + 1), [row, col + 1]]
+  else if (action === 'del-row') [changes, to] = [removeRow(t, row), [Math.min(row, rows - 2), col]]
+  else if (action === 'del-col') [changes, to] = [removeColumn(t, col), [row, Math.min(col, cols - 2)]]
+  else if (action.startsWith('align-')) changes = setAlign(t, col, action.slice(6) as Align)
+  else if (action === 'tidy') changes = tidy(t)
+  if (changes) view.dispatch({ changes, userEvent: 'input.table' })
+  focusCell(view, t.from, to[0], to[1])
+}
+
 // TableWidget shows a table as a grid. Each cell is editable in place and writes to its own span in the text.
 // The DOM is patched, not rebuilt, so a remote change keeps the focus and the caret of the person typing.
 class TableWidget extends WidgetType {
@@ -233,6 +299,20 @@ class TableWidget extends WidgetType {
           const [changes, r, c] = change(t)
           view.dispatch({ changes, userEvent: 'input.table' })
           focusCell(view, t.from, r, c)
+        }
+        wrap.appendChild(b)
+      }
+      const open = view.state.facet(tableMenu)
+      if (open) {
+        const b = document.createElement('button')
+        b.className = 'cm-lp-grid-menu'
+        b.textContent = '⋯'
+        b.title = 'Table options'
+        b.setAttribute('aria-label', 'Table options')
+        b.onmousedown = (e) => e.preventDefault()
+        b.onclick = () => {
+          const t = tableAt(view, wrap)
+          if (t) open({ view, from: t.from, row: Number(wrap.dataset.row), col: Number(wrap.dataset.col), rect: b.getBoundingClientRect() })
         }
         wrap.appendChild(b)
       }
@@ -295,9 +375,26 @@ function editableCell(view: EditorView, wrap: HTMLElement, el: HTMLElement) {
     el.dataset.src = text
     if (t) view.dispatch({ changes: setCell(t, r, c, text), userEvent: 'input.type' })
   }
+  el.oncontextmenu = (e) => {
+    const open = view.state.facet(tableMenu)
+    const t = tableAt(view, wrap)
+    if (!open || !t) return
+    e.preventDefault()
+    const [r, c] = pos()
+    open({ view, from: t.from, row: r, col: c, rect: new DOMRect(e.clientX, e.clientY, 0, 0) })
+  }
   el.onfocus = () => {
     const t = tableAt(view, wrap)
     const [r, c] = pos()
+    wrap.dataset.row = String(r)
+    wrap.dataset.col = String(c)
+    const menu = wrap.querySelector<HTMLElement>('.cm-lp-grid-menu')
+    if (menu) {
+      const a = el.getBoundingClientRect()
+      const w = wrap.getBoundingClientRect()
+      menu.style.left = a.right - w.left - 22 + 'px'
+      menu.style.top = a.top - w.top + 4 + 'px'
+    }
     // The focused cell shows its Markdown source, as plain text. Equal text stays, so a selection stays.
     const src = t ? cellText(t, r, c) : ''
     if (el.textContent !== src || el.childElementCount) el.textContent = src
@@ -668,6 +765,10 @@ export function liveDecorations(state: EditorState): DecorationSet {
           return false
         case 'Table': {
           const t = parseTable(doc, node.from)
+          if (t && t.from === state.field(tableSource, false)) {
+            lineClass(t.from, t.to, 'cm-lp-table-src')
+            return false
+          }
           if (t) {
             const editable = !state.readOnly && state.facet(canToggleTasks)()
             out.push(Decoration.replace({ widget: new TableWidget(doc.sliceString(t.from, t.to), editable), block: true }).range(t.from, t.to))
@@ -844,6 +945,13 @@ const liveTheme = EditorView.theme({
     backgroundColor: 'rgb(var(--card))', fontSize: '13px', lineHeight: '1', cursor: 'pointer',
   },
   '.cm-lp-grid-wrap:hover .cm-lp-grid-add, .cm-lp-grid-active .cm-lp-grid-add': { opacity: '1' },
+  '.cm-lp-grid-menu': {
+    position: 'absolute', display: 'none', width: '18px', height: '18px', borderRadius: '4px', fontSize: '12px', lineHeight: '1',
+    color: 'rgb(var(--muted-foreground))', backgroundColor: 'rgb(var(--card))', border: '1px solid rgb(var(--border))', cursor: 'pointer',
+  },
+  '.cm-lp-grid-active .cm-lp-grid-menu': { display: 'block' },
+  '.cm-lp-grid-menu:hover': { color: 'rgb(var(--primary))', borderColor: 'rgb(var(--primary) / 0.6)' },
+  '.cm-lp-table-src': { fontFamily: 'var(--font-mono)', fontSize: '0.85em' },
   '.cm-lp-grid-add-row': { left: '0', right: '22px', bottom: '2px', height: '16px' },
   '.cm-lp-grid-add-col': { top: '0', bottom: '22px', right: '2px', width: '16px' },
   '.cm-lp-math': { textAlign: 'center' },
@@ -862,5 +970,5 @@ const liveHighlight = tagHighlighter([
 ])
 
 export function livePreview(): Extension {
-  return [liveField, liveTheme, syntaxHighlighting(liveHighlight), EditorView.editorAttributes.of({ class: 'cm-live' })]
+  return [tableSource, liveField, liveTheme, syntaxHighlighting(liveHighlight), EditorView.editorAttributes.of({ class: 'cm-live' })]
 }
