@@ -53,6 +53,7 @@ import { formatKeymap } from '@/editor/format'
 import { canToggleTasks, tableMenu, type TableMenuRequest } from '@/editor/live'
 import { TableMenu } from '@/components/TableMenu'
 import { FormatToolbar } from '@/components/FormatToolbar'
+import { LinkPopover, linkTarget, type LinkTarget } from '@/components/LinkPopover'
 import { taskToggle } from '@/lib/tasks'
 import { captureEdits, setSuggestionRanges, suggestionDecorations, type SuggestionAction } from '@/editor/suggestions'
 import { anchorRange, resolvePoint, resolveRange } from '@/editor/anchors'
@@ -620,9 +621,14 @@ export default function Editor() {
 
   const [tableMenuReq, setTableMenuReq] = useState<TableMenuRequest | null>(null)
   const formatSink = useRef<((s: EditorState) => void) | null>(null)
+  const [linkEdit, setLinkEdit] = useState<LinkTarget | null>(null)
+  const openLink = useCallback((v: CMView) => {
+    setLinkEdit(linkTarget(v))
+    return true
+  }, [])
   const editorExtensions = useMemo(
     () => [
-      formatKeymap({ onComment: commentOn }),
+      formatKeymap({ onComment: commentOn, onLink: openLink }),
       threadDecorations((id) => {
         setActiveThread(id)
         setCommentsOpen(true)
@@ -671,7 +677,7 @@ export default function Editor() {
         },
       ),
     ],
-    [commentOn, mentionsEnabled],
+    [commentOn, openLink, mentionsEnabled],
   )
 
   const toggleTask = useCallback(
@@ -1008,7 +1014,7 @@ export default function Editor() {
         <main className="flex min-h-0 flex-1">
           {showEditor && (
             <section className={cn('relative flex min-w-0 flex-col border-r', showPreview ? 'w-1/2' : 'w-full')}>
-              {canEdit && ready && <FormatToolbar view={view} alias={note.alias} sink={formatSink} />}
+              {canEdit && ready && <FormatToolbar view={view} alias={note.alias} sink={formatSink} onLink={openLink} />}
               <div className="relative min-h-0 flex-1">
                 {selection && atLeast(level, 'comment') && (
                   <SelectionToolbar
@@ -1062,6 +1068,7 @@ export default function Editor() {
                     ))}
                   </div>
                 )}
+                {linkEdit && view && <LinkPopover view={view} target={linkEdit} onClose={() => setLinkEdit(null)} />}
                 {tableMenuReq && <TableMenu request={tableMenuReq} onClose={() => setTableMenuReq(null)} />}
                 {session && ready ? (
                   <CodeEditor

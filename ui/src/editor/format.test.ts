@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { EditorSelection, EditorState, type StateCommand, type Transaction } from '@codemirror/state'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { ensureSyntaxTree } from '@codemirror/language'
-import { formatState, insertBlock, insertLink, setHeading, toggleList, toggleQuote, toggleWrap } from '@/editor/format'
+import { formatState, insertBlock, insertLink, linkAt, linkChange, setHeading, toggleList, toggleQuote, toggleWrap } from '@/editor/format'
 import { captureEdits, type PendingEdit } from '@/editor/suggestions'
 
 // Text notation: | is a cursor, « and » are the anchor and the head of a selection.
@@ -173,5 +173,37 @@ describe('formatState', () => {
     expect(at('1. it|em').list).toBe('ordered')
     expect(at('- [ ] it|em').list).toBe('task')
     expect(at('> quo|te').quote).toBe(true)
+  })
+})
+
+describe('links', () => {
+  const state = (s: string) => {
+    const st = EditorState.create({ ...parse(s), extensions: markdown({ base: markdownLanguage }) })
+    ensureSyntaxTree(st, st.doc.length, 1000)
+    return st
+  }
+  const apply = (s: string, text: string, url: string) => {
+    const st = state(s)
+    const change = linkChange(st, text, url)
+    return show(st.update(change).state)
+  }
+
+  it('reads the link at the cursor', () => {
+    expect(linkAt(state('See the [Q4 re|view](https://example.com) now.'))).toEqual({ from: 8, to: 40, text: 'Q4 review', url: 'https://example.com' })
+    expect(linkAt(state('See |the [Q4 review](https://example.com) now.'))).toBeNull()
+  })
+
+  it('changes the text and the address of a link', () => {
+    expect(apply('See [Q4 re|view](https://example.com) now.', 'Q4 plan', 'https://example.org')).toBe('See [Q4 plan](https://example.org)| now.')
+  })
+
+  it('removes a link and keeps its text', () => {
+    expect(apply('See [Q4 re|view](https://example.com) now.', 'Q4 review', '')).toBe('See Q4 review| now.')
+  })
+
+  it('makes a link of a selection or inserts one at the cursor', () => {
+    expect(apply('See «this» now.', 'this', 'https://x.example')).toBe('See [this](https://x.example)| now.')
+    expect(apply('See | now.', '', 'https://x.example')).toBe('See [https://x.example](https://x.example)| now.')
+    expect(apply('See «a» now.', 'a', 'https://x.example/a (b)')).toBe('See [a](https://x.example/a%20%28b%29)| now.')
   })
 })

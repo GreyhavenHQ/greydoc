@@ -1,6 +1,6 @@
 import { EditorSelection, Prec, type ChangeSpec, type EditorState, type Extension, type StateCommand, type Transaction } from '@codemirror/state'
 import { syntaxTree } from '@codemirror/language'
-import { keymap, type KeyBinding } from '@codemirror/view'
+import { keymap, type EditorView, type KeyBinding } from '@codemirror/view'
 
 const userEvent = 'input.format'
 
@@ -211,6 +211,37 @@ export function formatState(state: EditorState): FormatState {
   }
 }
 
+export interface LinkInfo {
+  from: number
+  to: number
+  text: string
+  url: string
+}
+
+// linkAt finds the [text](url) link around the main cursor.
+export function linkAt(state: EditorState): LinkInfo | null {
+  const head = state.selection.main.head
+  for (const side of [-1, 1] as const) {
+    for (let n: ReturnType<typeof syntaxTree>['topNode'] | null = syntaxTree(state).resolveInner(head, side); n; n = n.parent) {
+      if (n.name !== 'Link') continue
+      const marks = n.getChildren('LinkMark')
+      const url = n.getChild('URL')
+      if (marks.length < 2 || !url) return null
+      return { from: n.from, to: n.to, text: state.sliceDoc(marks[0].to, marks[1].from), url: state.sliceDoc(url.from, url.to) }
+    }
+  }
+  return null
+}
+
+// linkChange sets the link at the cursor, or makes one of the selection. An empty url removes the link and keeps its text.
+export function linkChange(state: EditorState, text: string, url: string) {
+  const link = linkAt(state)
+  const { from, to } = link ?? state.selection.main
+  const label = text.replace(/[[\]]/g, '') || url
+  const insert = url ? `[${label}](${url.replace(/[()\s]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0'))})` : label
+  return { changes: { from, to, insert }, selection: { anchor: from + insert.length }, scrollIntoView: true, userEvent }
+}
+
 // insertLink turns each range into [text](url) with url selected, or a selected address into [](address).
 export const insertLink: StateCommand = ({ state, dispatch }) => {
   if (state.readOnly) return false
@@ -228,7 +259,8 @@ export const insertLink: StateCommand = ({ state, dispatch }) => {
 }
 
 // formatKeymap binds the formatting keys. It runs before the default keymap, which binds Mod-i to selectParentSyntax.
-export function formatKeymap(opts: { onComment: (from: number, to: number) => void }): Extension {
+// onLink, when set, opens a link editor instead of writing the Markdown of a link.
+export function formatKeymap(opts: { onComment: (from: number, to: number) => void; onLink?: (view: EditorView) => boolean }): Extension {
   const bindings: KeyBinding[] = [
     { key: 'Mod-b', run: toggleWrap('**') },
     { key: 'Mod-i', run: toggleWrap('*') },
@@ -238,7 +270,7 @@ export function formatKeymap(opts: { onComment: (from: number, to: number) => vo
     { key: 'Mod-e', run: toggleWrap('`') },
     { key: 'Mod-.', run: toggleWrap('^') },
     { key: 'Mod-,', run: toggleWrap('~') },
-    { key: 'Mod-k', run: insertLink },
+    { key: 'Mod-k', run: (view) => (opts.onLink && !view.state.readOnly ? opts.onLink(view) : insertLink(view)) },
     ...[0, 1, 2, 3, 4, 5, 6].map((n) => ({ key: `Mod-Alt-${n}`, run: setHeading(n) })),
     { key: 'Mod-Shift-7', run: toggleList('ordered') },
     { key: 'Mod-Shift-8', run: toggleList('bullet') },

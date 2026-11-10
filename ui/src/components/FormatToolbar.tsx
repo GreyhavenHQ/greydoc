@@ -20,7 +20,7 @@ import {
   Table,
   Undo2,
 } from 'lucide-react'
-import { formatState, insertBlock, insertLink, setHeading, toggleList, toggleQuote, toggleWrap, type FormatState } from '@/editor/format'
+import { formatState, insertBlock, setHeading, toggleList, toggleQuote, toggleWrap, type FormatState } from '@/editor/format'
 import { focusCell } from '@/editor/live'
 import { uploadFiles } from '@/editor/upload'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -63,7 +63,17 @@ const styles = [
 
 // FormatToolbar is the bar above the editor. Every button runs an editor command on the Markdown text.
 // sink receives the editor state after each change, so only the bar re-renders.
-export function FormatToolbar({ view, alias, sink }: { view: EditorView | null; alias: string; sink: RefObject<((s: EditorState) => void) | null> }) {
+export function FormatToolbar({
+  view,
+  alias,
+  sink,
+  onLink,
+}: {
+  view: EditorView | null
+  alias: string
+  sink: RefObject<((s: EditorState) => void) | null>
+  onLink: (view: EditorView) => void
+}) {
   const [fmt, setFmt] = useState<FormatState | null>(() => (view ? formatState(view.state) : null))
   const file = useRef<HTMLInputElement>(null)
   useEffect(() => {
@@ -123,7 +133,7 @@ export function FormatToolbar({ view, alias, sink }: { view: EditorView | null; 
       <Btn label="Inline code" keys="Mod-E" on={!!fmt?.code} onClick={run(toggleWrap('`'))}>
         <Code />
       </Btn>
-      <Btn label="Link" keys="Mod-K" on={!!fmt?.link} onClick={run(insertLink)}>
+      <Btn label="Link" keys="Mod-K" on={!!fmt?.link} onClick={() => view && onLink(view)}>
         <Link />
       </Btn>
       <Sep />
