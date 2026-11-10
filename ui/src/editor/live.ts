@@ -407,10 +407,17 @@ function editableCell(view: EditorView, wrap: HTMLElement, el: HTMLElement) {
     el.innerHTML = renderInline(text)
   }
   el.oninput = () => write(el.textContent ?? '')
-  // Chromium does not select a word on double click in an editable cell inside the editor, so the cell does it.
-  el.ondblclick = () => {
+  // Chromium and WebKit do not select a word on double click in an editable cell inside the editor, so the cell does it.
+  el.ondblclick = (e) => {
     const sel = getSelection()
-    if (!sel?.isCollapsed) return
+    if (!sel) return
+    if (!sel.isCollapsed && el.contains(sel.anchorNode) && el.contains(sel.focusNode)) return
+    const at = document.caretRangeFromPoint?.(e.clientX, e.clientY)
+    if (at && el.contains(at.startContainer)) {
+      sel.removeAllRanges()
+      sel.addRange(at)
+    } else if (!el.contains(sel.anchorNode)) return
+    sel.collapseToStart()
     sel.modify('move', 'backward', 'word')
     sel.modify('extend', 'forward', 'word')
   }
