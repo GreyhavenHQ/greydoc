@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
@@ -22,6 +23,8 @@ type User struct {
 	Groups []string `json:"-"`
 	// GroupIDs are the greydoc groups of the user. They give document access.
 	GroupIDs []string `json:"-"`
+	// Prefs are the editor preferences of the user.
+	Prefs map[string]string `json:"-"`
 }
 
 func (s *Store) EnsureLocalUser(ctx context.Context) (*User, error) {
@@ -95,12 +98,16 @@ func (s *Store) freeUsername(ctx context.Context, tx *sql.Tx, want string) (stri
 
 func (s *Store) UserByID(ctx context.Context, id string) (*User, error) {
 	var u User
-	err := s.db.QueryRowContext(ctx, s.q(`SELECT id, username, display_name, email FROM app_user WHERE id = ?`), id).
-		Scan(&u.ID, &u.Username, &u.DisplayName, &u.Email)
+	var prefs string
+	err := s.db.QueryRowContext(ctx, s.q(`SELECT id, username, display_name, email, prefs FROM app_user WHERE id = ?`), id).
+		Scan(&u.ID, &u.Username, &u.DisplayName, &u.Email, &prefs)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal([]byte(prefs), &u.Prefs); err != nil {
 		return nil, err
 	}
 	if u.Groups, err = s.userGroups(ctx, id); err != nil {
@@ -108,6 +115,27 @@ func (s *Store) UserByID(ctx context.Context, id string) (*User, error) {
 	}
 	u.GroupIDs, err = s.UserGroupIDs(ctx, id)
 	return &u, err
+}
+
+// SetUserPrefs replaces the editor preferences of the user. The caller validates them.
+func (s *Store) SetUserPrefs(ctx context.Context, id string, prefs map[string]string) error {
+	if prefs == nil {
+		prefs = map[string]string{}
+	}
+	b, err := json.Marshal(prefs)
+	if err != nil {
+		return err
+	}
+	res, err := s.db.ExecContext(ctx, s.q(`UPDATE app_user SET prefs = ? WHERE id = ?`), string(b), id)
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return err
+	} else if n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (s *Store) UserByUsername(ctx context.Context, username string) (*User, error) {

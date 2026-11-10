@@ -12,7 +12,9 @@ CREATE TABLE IF NOT EXISTS app_user (
     display_name TEXT NOT NULL DEFAULT '',
     email TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL,
-    last_login_at TEXT
+    last_login_at TEXT,
+    -- prefs is a JSON object of editor preferences. The server validates every key.
+    prefs TEXT NOT NULL DEFAULT '{}'
 );
 -- Groups come from the OIDC groups claim and are replaced on every login.
 CREATE TABLE IF NOT EXISTS user_group (
