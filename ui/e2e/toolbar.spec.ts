@@ -1,8 +1,7 @@
 import { expect, test, type Browser, type Page } from '@playwright/test'
+import { startWith } from './prefs'
 
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem('greydoc-mode', 'live'))
-})
+startWith({ default_mode: 'live' })
 
 async function open(page: Page, text: string): Promise<string> {
   const alias = (await (await page.request.post('/api/notes', { data: { content: text } })).json()).alias
@@ -74,8 +73,8 @@ test('insert a table and an image', async ({ page }) => {
 })
 
 test('the toolbar shows in the source editor too', async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem('greydoc-mode', 'edit'))
-  await open(page, 'x\n')
+  const alias = (await (await page.request.post('/api/notes', { data: { content: 'x\n' } })).json()).alias
+  await page.goto('/n/' + alias + '?edit')
   await expect(bar(page)).toBeVisible()
 })
 

@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { api } from '@/lib/api'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { api, setPrefs, type Prefs } from '@/lib/api'
 import { loginHref, useMe } from '@/lib/me'
 import { relativeTime } from '@/lib/time'
 
@@ -70,6 +71,66 @@ function CopyBlock({ value }: { value: string }) {
   )
 }
 
+function Choice<T extends string>({ label, hint, value, options, onChange }: { label: string; hint: string; value: T; options: [T, string][]; onChange: (v: T) => void }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <div>
+        <div className="font-medium">{label}</div>
+        <div className="text-muted-foreground">{hint}</div>
+      </div>
+      <ToggleGroup type="single" variant="outline" size="sm" value={value} onValueChange={(v) => v && onChange(v as T)} aria-label={label} className="w-fit">
+        {options.map(([v, name]) => (
+          <ToggleGroupItem key={v} value={v} aria-label={name} className="px-3">
+            {name}
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+    </div>
+  )
+}
+
+// EditorPrefs is the editor card. The choices are stored on the account, so they follow the user to every browser.
+function EditorPrefs() {
+  const { me, reload } = useMe()
+  const prefs = me?.prefs ?? {}
+  const save = (p: Prefs) =>
+    setPrefs(p)
+      .then(reload)
+      .catch((e) => toast.error(e instanceof Error ? e.message : String(e)))
+  return (
+    <Card data-testid="editor-prefs">
+      <CardHeader>
+        <CardTitle>Editor</CardTitle>
+        <CardDescription>How documents open for you. The buttons above a document change only that document, in that tab.</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-5 text-sm">
+        <Choice
+          label="Open documents in"
+          hint="Live shows the document as it reads and lets you edit it in place."
+          value={prefs.default_mode ?? 'split'}
+          options={[
+            ['live', 'Live'],
+            ['editor', 'Editor'],
+            ['split', 'Split'],
+            ['preview', 'Preview'],
+          ]}
+          onChange={(v) => save({ default_mode: v })}
+        />
+        <Choice
+          label="Live style"
+          hint="Document never shows Markdown. Obsidian shows the Markdown of the line you edit."
+          value={prefs.live_style ?? 'obsidian'}
+          options={[
+            ['document', 'Document'],
+            ['obsidian', 'Obsidian'],
+          ]}
+          onChange={(v) => save({ live_style: v })}
+        />
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function Settings() {
   const { me } = useMe()
   const [tokens, setTokens] = useState<Token[]>([])
@@ -111,6 +172,7 @@ export default function Settings() {
       <AppHeader />
       <main className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-8">
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+        <EditorPrefs />
         <Card>
           <CardHeader>
             <CardTitle>Connect an AI agent (MCP)</CardTitle>

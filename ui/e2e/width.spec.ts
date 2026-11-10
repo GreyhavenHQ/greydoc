@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { startWith } from './prefs'
 
 const table = '| ' + Array.from({ length: 12 }, (_, i) => `Column ${i}`).join(' | ') + ' |\n|' + '---|'.repeat(12) + '\n| ' + Array.from({ length: 12 }, (_, i) => `value ${i}`).join(' | ') + ' |\n'
 
@@ -14,28 +15,30 @@ async function source(page: Page, alias: string) {
 
 const width = async (page: Page, selector: string) => (await page.locator(selector).first().boundingBox())?.width
 
-test('a document renders in a 728px column, and 1200px once wide', async ({ page, browser }) => {
-  const alias = await noteWith(page, '# Report\n\n' + table)
-  await page.goto('/n/' + alias + '?view')
-  await expect.poll(() => width(page, '[data-testid=preview]')).toBe(728)
+test.describe('in live mode', () => {
+  startWith({ default_mode: 'live' })
+  test('a document renders in a 728px column, and 1200px once wide', async ({ page, browser }) => {
+    const alias = await noteWith(page, '# Report\n\n' + table)
+    await page.goto('/n/' + alias + '?view')
+    await expect.poll(() => width(page, '[data-testid=preview]')).toBe(728)
 
-  await page.getByRole('button', { name: 'More' }).click()
-  await page.getByRole('menuitemcheckbox', { name: 'Wide layout' }).click()
-  await expect.poll(() => source(page, alias)).toBe('---\nwidth: wide\n---\n# Report\n\n' + table)
-  await expect.poll(() => width(page, '[data-testid=preview]')).toBe(1200)
+    await page.getByRole('button', { name: 'More' }).click()
+    await page.getByRole('menuitemcheckbox', { name: 'Wide layout' }).click()
+    await expect.poll(() => source(page, alias)).toBe('---\nwidth: wide\n---\n# Report\n\n' + table)
+    await expect.poll(() => width(page, '[data-testid=preview]')).toBe(1200)
 
-  const other = await browser.newContext({ viewport: { width: 1440, height: 900 } })
-  await other.addInitScript(() => localStorage.setItem('greydoc-mode', 'live'))
-  const b = await other.newPage()
-  await b.goto('/n/' + alias)
-  await expect.poll(() => width(b, '[data-testid=editor] .cm-content')).toBe(1264)
+    const other = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    const b = await other.newPage()
+    await b.goto('/n/' + alias)
+    await expect.poll(() => width(b, '[data-testid=editor] .cm-content')).toBe(1264)
 
-  await page.getByRole('button', { name: 'More' }).click()
-  await page.getByRole('menuitemcheckbox', { name: 'Wide layout' }).click()
-  await expect.poll(() => source(page, alias)).toBe('# Report\n\n' + table)
-  await expect.poll(() => width(page, '[data-testid=preview]')).toBe(728)
-  await expect.poll(() => width(b, '[data-testid=editor] .cm-content')).toBe(792)
-  await other.close()
+    await page.getByRole('button', { name: 'More' }).click()
+    await page.getByRole('menuitemcheckbox', { name: 'Wide layout' }).click()
+    await expect.poll(() => source(page, alias)).toBe('# Report\n\n' + table)
+    await expect.poll(() => width(page, '[data-testid=preview]')).toBe(728)
+    await expect.poll(() => width(b, '[data-testid=editor] .cm-content')).toBe(792)
+    await other.close()
+  })
 })
 
 test('turning the wide layout off keeps the other front matter keys', async ({ page }) => {

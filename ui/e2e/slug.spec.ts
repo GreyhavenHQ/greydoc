@@ -1,6 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
 
-const splitView = () => localStorage.setItem('greydoc-mode', 'both')
 
 async function typeInEditor(page: Page, text: string) {
   await page.locator('[data-testid=editor] .cm-content').click()
@@ -18,7 +17,6 @@ async function setSlug(page: Page, slug: string) {
 
 test('the document menu sets a custom address and the id address keeps working', async ({ browser }) => {
   const ctxA = await browser.newContext()
-  await ctxA.addInitScript(splitView)
   const a = await ctxA.newPage()
   await a.goto('/new')
   await expect(a).toHaveURL(/\/n\/[a-z0-9]+$/)
@@ -26,7 +24,6 @@ test('the document menu sets a custom address and the id address keeps working',
   await typeInEditor(a, '# Slug plan\n')
 
   const ctxB = await browser.newContext()
-  await ctxB.addInitScript(splitView)
   const b = await ctxB.newPage()
   await b.goto(original)
   await expect(b.locator('[data-testid=editor] .cm-content')).toContainText('Slug plan')

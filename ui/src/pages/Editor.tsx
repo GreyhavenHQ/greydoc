@@ -70,7 +70,7 @@ import { Preview } from '@/render/Preview'
 import { atBottom, editorTopLine, lineForY, measure, scrollEditorToLine, yForLine, type Point } from '@/render/scrollSync'
 import { selectionToSource, type SourceSelection } from '@/render/sourceMap'
 import { applyThreadMarks, type PreviewThread } from '@/render/previewThreads'
-import { api, ApiError, atLeast, duplicateNote, shareParam, withShare, type Level, type Note } from '@/lib/api'
+import { api, ApiError, atLeast, duplicateNote, shareParam, withShare, type Level, type Note, type Prefs } from '@/lib/api'
 import { loginHref, useMe } from '@/lib/me'
 import { localName } from '@/lib/presence'
 import { docWidth, docWidthPx, extractTitle, isSlides, widthEdit } from '@/lib/meta'
@@ -85,18 +85,21 @@ interface PreviewSelection extends SourceSelection {
   bottom: number
 }
 
-const MODE_KEY = 'greydoc-mode'
-// Split view, as in HedgeDoc, until the user picks another mode.
+// The mode chosen with the header buttons holds for one note in one tab.
+const MODE_KEY = 'greydoc-mode:'
+// Split view, as in HedgeDoc, until the user picks another mode in Settings.
 const defaultEditMode: Mode = 'both'
+const prefModes: Record<NonNullable<Prefs['default_mode']>, Mode> = { live: 'live', editor: 'edit', split: 'both', preview: 'view' }
 
-// savedMode reads HedgeDoc 1's ?view, ?edit and ?both first, then the last mode used in this browser.
-// A new note has nothing to read, so it skips a remembered preview-only mode.
-function savedMode(fresh: boolean): Mode {
+// startMode reads HedgeDoc 1's ?view, ?edit and ?both first, then the mode of this note in this tab, then the account preference.
+// A new note has nothing to read, so it skips a preview-only default.
+function startMode(alias: string, fresh: boolean, prefs?: Prefs): Mode {
   const q = new URLSearchParams(location.search)
   for (const m of ['view', 'edit', 'both'] as const) if (q.has(m)) return m
-  const m = localStorage.getItem(MODE_KEY)
-  if (m === 'view' && fresh) return defaultEditMode
-  return m === 'live' || m === 'edit' || m === 'both' || m === 'view' ? m : defaultEditMode
+  const m = sessionStorage.getItem(MODE_KEY + alias.toLowerCase())
+  if (m === 'live' || m === 'edit' || m === 'both' || m === 'view') return m
+  const p = prefs?.default_mode ? prefModes[prefs.default_mode] : defaultEditMode
+  return p === 'view' && fresh ? defaultEditMode : p
 }
 
 interface PresenceUser {
@@ -174,11 +177,20 @@ export default function Editor() {
   const [inTrash, setInTrash] = useState(false)
   const [level, setLevel] = useState<Level>('read')
   const fresh = Boolean((useLocation().state as { fresh?: boolean } | null)?.fresh)
-  const [mode, setModeState] = useState<Mode>(() => savedMode(fresh))
-  const setMode = useCallback((m: Mode) => {
-    setModeState(m)
-    localStorage.setItem(MODE_KEY, m)
-  }, [])
+  const [mode, setModeState] = useState<Mode>(() => startMode(alias, fresh, me?.prefs))
+  const setMode = useCallback(
+    (m: Mode) => {
+      setModeState(m)
+      sessionStorage.setItem(MODE_KEY + alias.toLowerCase(), m)
+    },
+    [alias],
+  )
+  // Another note starts in its own mode. The preferences can arrive after the first render.
+  const prefMode = me?.prefs?.default_mode
+  useEffect(() => {
+    setModeState(startMode(alias, fresh, me?.prefs))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [alias, prefMode])
   const [session, setSession] = useState<NoteSession | null>(null)
   const [synced, setSynced] = useState(false)
   // The editor mounts after the first sync, so it opens on the real text and not on an empty document.

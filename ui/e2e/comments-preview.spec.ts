@@ -158,7 +158,6 @@ test('a highlight follows edits by another user and keeps task boxes working', a
   await expect.poll(joined(a, '.preview-thread')).toBe('the plan')
 
   const ctxB = await browser.newContext()
-  await ctxB.addInitScript(() => localStorage.setItem('greydoc-mode', 'both'))
   const b = await ctxB.newPage()
   await b.goto('/n/' + alias)
   await b.locator('[data-testid=editor] .cm-content').click()

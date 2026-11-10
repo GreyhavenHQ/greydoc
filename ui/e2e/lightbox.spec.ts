@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { startWith } from './prefs'
 
 const tiny = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64')
 
@@ -160,14 +161,16 @@ test('a text selection that ends on an image does not open the lightbox', async 
   await expect(page.getByTestId('lightbox')).toHaveCount(0)
 })
 
-test('live mode keeps its click behaviour on images', async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem('greydoc-mode', 'live'))
-  await noteWithImages(page, 'lightbox-live', (big) => `# Shots\n\n![wide shot](${big})\n`)
-  await page.goto('/n/lightbox-live')
-  const editor = page.getByTestId('editor')
-  await expect(editor.locator('.cm-live')).toHaveCount(1)
-  const img = editor.locator('img[alt="wide shot"]')
-  await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0)
-  await img.click()
-  await expect(page.getByTestId('lightbox')).toHaveCount(0)
+test.describe('in live mode', () => {
+  startWith({ default_mode: 'live' })
+  test('live mode keeps its click behaviour on images', async ({ page }) => {
+    await noteWithImages(page, 'lightbox-live', (big) => `# Shots\n\n![wide shot](${big})\n`)
+    await page.goto('/n/lightbox-live')
+    const editor = page.getByTestId('editor')
+    await expect(editor.locator('.cm-live')).toHaveCount(1)
+    const img = editor.locator('img[alt="wide shot"]')
+    await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0)
+    await img.click()
+    await expect(page.getByTestId('lightbox')).toHaveCount(0)
+  })
 })

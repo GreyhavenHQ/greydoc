@@ -1,14 +1,8 @@
 import { expect, test } from '@playwright/test'
+import { startWith } from './prefs'
 import { sample } from './sample'
 
-// The server runs in local mode, so these preferences belong to the one local user. They are reset after each test.
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem('greydoc-mode', 'live'))
-  expect((await page.request.patch('/api/me/prefs', { data: { live_style: 'document' } })).status()).toBe(200)
-})
-test.afterEach(async ({ request }) => {
-  await request.patch('/api/me/prefs', { data: { live_style: '' } })
-})
+startWith({ default_mode: 'live', live_style: 'document' })
 
 test('the document style never shows Markdown marks', async ({ page }) => {
   const alias = (await (await page.request.post('/api/notes', { data: { content: sample } })).json()).alias

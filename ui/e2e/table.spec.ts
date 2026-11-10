@@ -1,9 +1,8 @@
 import { expect, test, type Page } from '@playwright/test'
+import { startWith } from './prefs'
 import { sample } from './sample'
 
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem('greydoc-mode', 'live'))
-})
+startWith({ default_mode: 'live' })
 
 async function openSample(page: Page): Promise<string> {
   const alias = (await (await page.request.post('/api/notes', { data: { content: sample } })).json()).alias
@@ -54,7 +53,6 @@ test('the grid moves with Tab, Shift+Tab and Enter, and escapes pipes', async ({
 test('two people edit different cells at the same time', async ({ browser }) => {
   const a = await browser.newPage()
   const b = await browser.newPage()
-  for (const p of [a, b]) await p.addInitScript(() => localStorage.setItem('greydoc-mode', 'live'))
   const alias = await openSample(a)
   await b.goto('/n/' + alias)
   await cell(a, 'Alice').click()

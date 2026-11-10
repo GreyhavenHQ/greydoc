@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { startWith } from './prefs'
 import { sample } from './sample'
 
 const needles = [
@@ -55,10 +56,12 @@ async function probe(page: Page, root: string): Promise<Probe> {
   )
 }
 
-async function open(page: Page, mode: string, alias: string) {
+startWith({ default_mode: 'live' })
+
+// open uses HedgeDoc's ?view and ?edit. Without one, the note opens in live mode, the default of these tests.
+async function open(page: Page, mode: '' | 'view' | 'edit', alias: string) {
   await page.setViewportSize({ width: 1280, height: 1000 })
-  await page.addInitScript((m) => localStorage.setItem('greydoc-mode', m), mode)
-  await page.goto('/n/' + alias)
+  await page.goto('/n/' + alias + (mode ? '?' + mode : ''))
 }
 
 test('live mode uses the styles of the view', async ({ browser }) => {
@@ -73,7 +76,7 @@ test('live mode uses the styles of the view', async ({ browser }) => {
   const want = await probe(view, '[data-testid="preview"]')
 
   const live = await ctx.newPage()
-  await open(live, 'live', alias)
+  await open(live, '', alias)
   const editor = live.getByTestId('editor')
   await editor.locator('.cm-line', { hasText: 'Last edit' }).click()
   await live.keyboard.press('Control+End')
