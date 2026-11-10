@@ -73,7 +73,17 @@ export interface Me {
   display_name?: string
   groups?: string[]
   admin?: boolean
+  prefs?: Prefs
 }
+
+// Prefs are the editor preferences stored on the account.
+export interface Prefs {
+  default_mode?: 'live' | 'editor' | 'split' | 'preview'
+  live_style?: 'document' | 'obsidian'
+}
+
+// setPrefs merges the given preferences. An empty string removes one.
+export const setPrefs = (p: { [K in keyof Prefs]: Prefs[K] | '' }) => api.patch<{ prefs: Prefs }>('/api/me/prefs', p)
 
 export interface User {
   id: string

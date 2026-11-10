@@ -22,7 +22,7 @@ import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } 
 import * as Y from 'yjs'
 import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next'
 import type { Awareness } from 'y-protocols/awareness'
-import { livePreview, refreshLive } from '@/editor/live'
+import { livePreview, liveStyle, refreshLive, type LiveStyle } from '@/editor/live'
 import { useTheme } from '@/lib/theme'
 
 const theme = EditorView.theme({
@@ -70,6 +70,7 @@ export interface CodeEditorProps {
   overlay?: Extension
   // live renders Markdown in place instead of showing the source with line numbers.
   live?: boolean
+  liveStyle?: LiveStyle
   onView?: (view: EditorView | null) => void
   autoFocus?: boolean
 }
@@ -77,12 +78,13 @@ export interface CodeEditorProps {
 // The source style also sizes headings. It MUST NOT apply in live mode, which has the sizes of the view.
 const sourceView = () => [lineNumbers(), highlightActiveLineGutter(), highlightActiveLine(), syntaxHighlighting(markdownStyle)]
 
-export function CodeEditor({ ytext, awareness, readOnly, extensions = [], overlay = [], live = false, onView, autoFocus }: CodeEditorProps) {
+export function CodeEditor({ ytext, awareness, readOnly, extensions = [], overlay = [], live = false, liveStyle: style = 'obsidian', onView, autoFocus }: CodeEditorProps) {
   const host = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const readOnlyCompartment = useRef(new Compartment())
   const overlayCompartment = useRef(new Compartment())
   const viewCompartment = useRef(new Compartment())
+  const styleCompartment = useRef(new Compartment())
 
   useEffect(() => {
     const undoManager = new Y.UndoManager(ytext)
@@ -90,6 +92,7 @@ export function CodeEditor({ ytext, awareness, readOnly, extensions = [], overla
       doc: ytext.toString(),
       extensions: [
         viewCompartment.current.of(live ? livePreview() : sourceView()),
+        styleCompartment.current.of(liveStyle.of(style)),
         highlightSpecialChars(),
         drawSelection(),
         dropCursor(),
@@ -149,6 +152,10 @@ export function CodeEditor({ ytext, awareness, readOnly, extensions = [], overla
   useEffect(() => {
     viewRef.current?.dispatch({ effects: viewCompartment.current.reconfigure(live ? livePreview() : sourceView()) })
   }, [live])
+
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: styleCompartment.current.reconfigure(liveStyle.of(style)) })
+  }, [style])
 
   const { resolvedTheme } = useTheme()
   useEffect(() => {

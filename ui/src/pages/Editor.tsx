@@ -1058,6 +1058,7 @@ export default function Editor() {
                   readOnly={!atLeast(level, 'comment')}
                   overlay={authorsOverlay}
                   live={mode === 'live'}
+                  liveStyle={me?.prefs?.live_style ?? 'obsidian'}
                   extensions={editorExtensions}
                   onView={onView}
                   autoFocus

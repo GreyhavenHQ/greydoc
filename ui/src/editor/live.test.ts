@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { EditorSelection, EditorState } from '@codemirror/state'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
-import { liveDecorations } from '@/editor/live'
+import { liveDecorations, liveStyle, type LiveStyle } from '@/editor/live'
 
 const doc = [
   '---',
@@ -27,11 +27,11 @@ const doc = [
   'end',
 ].join('\n')
 
-function hidden(cursor: number) {
+function hidden(cursor: number, style: LiveStyle = 'obsidian') {
   const state = EditorState.create({
     doc,
     selection: EditorSelection.cursor(cursor),
-    extensions: [markdown({ base: markdownLanguage })],
+    extensions: [markdown({ base: markdownLanguage }), liveStyle.of(style)],
   })
   const out: { from: number; to: number; text: string; widget: string; block: boolean }[] = []
   liveDecorations(state).between(0, doc.length, (from, to, d) => {
@@ -131,5 +131,16 @@ describe('live preview', () => {
     const src = 'a\n\n```\n\n```\n\nb'
     const blank = decos(src, 0).filter((d) => d.cls === 'cm-lp-blank').map((d) => src.slice(0, d.from).split('\n').length)
     expect(blank).toEqual([2, 6])
+  })
+
+  it('keeps marks hidden on the active line in the document style', () => {
+    let texts = hidden(at('**bold**') + 3, 'document').map((x) => x.text)
+    expect(texts).toContain('**')
+    expect(texts).toContain('](https://x.example)')
+    texts = hidden(at('# Title') + 3, 'document').map((x) => x.text)
+    expect(texts).toContain('# ')
+    // Diagrams and front matter still show their source for editing.
+    expect(hidden(at('A-->B'), 'document').some((x) => x.widget === 'MermaidWidget')).toBe(false)
+    expect(hidden(at('tags'), 'document').some((x) => x.widget === 'FrontMatterWidget')).toBe(false)
   })
 })

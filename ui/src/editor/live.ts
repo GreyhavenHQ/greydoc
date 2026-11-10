@@ -1,6 +1,6 @@
 import { ensureSyntaxTree, syntaxHighlighting, syntaxTree } from '@codemirror/language'
 import { tagHighlighter, tags } from '@lezer/highlight'
-import { EditorState, Facet, StateEffect, StateField, type Extension, type Range } from '@codemirror/state'
+import { EditorState, Facet, RangeSet, StateEffect, StateField, type Extension, type Range } from '@codemirror/state'
 import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemirror/view'
 import katex from 'katex'
 import { renderMarkdown } from '@/render/markdown'
@@ -11,6 +11,10 @@ import { mentionsOn } from '@/lib/mentions'
 // Live preview: Markdown that renders in place, like Obsidian. Lines and blocks under a selection show their source.
 
 const hide = Decoration.replace({})
+
+// LiveStyle picks what the cursor reveals. obsidian shows the Markdown of the active line. document never shows marks.
+export type LiveStyle = 'obsidian' | 'document'
+export const liveStyle = Facet.define<LiveStyle, LiveStyle>({ combine: (v) => v[0] ?? 'obsidian' })
 
 function revealAt(view: EditorView, dom: HTMLElement) {
   const pos = view.posAtDOM(dom)
@@ -261,7 +265,10 @@ export function liveDecorations(state: EditorState): DecorationSet {
   const doc = state.doc
   const tree = ensureSyntaxTree(state, doc.length, 100) ?? syntaxTree(state)
   const ranges = state.selection.ranges
-  const touches = (from: number, to: number) => ranges.some((r) => r.from <= to && r.to >= from)
+  // touchesBlock reveals blocks that cannot be edited in place: diagrams, math and front matter.
+  const touchesBlock = (from: number, to: number) => ranges.some((r) => r.from <= to && r.to >= from)
+  const docStyle = state.facet(liveStyle) === 'document'
+  const touches = (from: number, to: number) => !docStyle && touchesBlock(from, to)
   const lineActive = (pos: number) => {
     const l = doc.lineAt(pos)
     return touches(l.from, l.to)
@@ -280,7 +287,7 @@ export function liveDecorations(state: EditorState): DecorationSet {
 
   const fmEnd = frontMatterEnd(state)
   if (fmEnd > 0) {
-    if (touches(0, fmEnd)) {
+    if (touchesBlock(0, fmEnd)) {
       lineClass(0, fmEnd, 'cm-lp-fm')
     } else {
       const { data } = splitFrontMatter(doc.sliceString(0, fmEnd) + '\n')
@@ -420,7 +427,7 @@ export function liveDecorations(state: EditorState): DecorationSet {
           const textNode = node.node.getChild('CodeText')
           const src = textNode ? doc.sliceString(textNode.from, textNode.to) : ''
           const closed = node.node.getChildren('CodeMark').length >= 2
-          if (lang === 'mermaid' && closed && !touches(node.from, node.to)) {
+          if (lang === 'mermaid' && closed && !touchesBlock(node.from, node.to)) {
             out.push(Decoration.replace({ widget: new MermaidWidget(src, mode), block: true }).range(node.from, node.to))
             return false
           }
@@ -441,7 +448,7 @@ export function liveDecorations(state: EditorState): DecorationSet {
           lineClass(node.from, node.to, 'cm-lp-codeblock')
           return false
         case 'Table': {
-          if (touches(node.from, node.to)) {
+          if (touchesBlock(node.from, node.to)) {
             lineClass(node.from, node.to, 'cm-lp-table-src')
             return false
           }
@@ -456,7 +463,7 @@ export function liveDecorations(state: EditorState): DecorationSet {
   // The view separates blocks with a 1em margin. A full blank line is taller, so it is shrunk.
   for (let n = 1; n <= doc.lines; n++) {
     const l = doc.line(n)
-    if (l.from > fmEnd && l.length === 0 && !touches(l.from, l.to) && !code.some(([a, b]) => l.from > a && l.from < b))
+    if (l.from > fmEnd && l.length === 0 && !touchesBlock(l.from, l.to) && !code.some(([a, b]) => l.from > a && l.from < b))
       out.push(Decoration.line({ class: 'cm-lp-blank' }).range(l.from))
   }
 
@@ -470,14 +477,14 @@ export function liveDecorations(state: EditorState): DecorationSet {
       while (m <= doc.lines && doc.line(m).text.trim() !== '$$') m++
       if (m > doc.lines) break
       const end = doc.line(m)
-      if (!touches(line.from, end.to)) {
+      if (!touchesBlock(line.from, end.to)) {
         const tex = doc.sliceString(line.to + 1, end.from - 1)
         out.push(Decoration.replace({ widget: new MathWidget(tex, true), block: true }).range(line.from, end.to))
       }
       n = m
       continue
     }
-    if (touches(line.from, line.to)) continue
+    if (touchesBlock(line.from, line.to) && !docStyle) continue
     for (const m of line.text.matchAll(/==(?=\S)(.+?)(?<=\S)==/g)) {
       const from = line.from + m.index!
       if (inCode(from)) continue
@@ -485,7 +492,7 @@ export function liveDecorations(state: EditorState): DecorationSet {
       out.push(Decoration.mark({ class: 'cm-lp-mark' }).range(from + 2, from + m[0].length - 2))
       out.push(hide.range(from + m[0].length - 2, from + m[0].length))
     }
-    if (!line.text.includes('$')) continue
+    if (!line.text.includes('$') || touchesBlock(line.from, line.to)) continue
     const re = /(?<![\\$])\$(?!\s)([^$\n]+?)(?<!\s)\$(?!\d)/g
     for (let m = re.exec(line.text); m; m = re.exec(line.text)) {
       const from = line.from + m.index
@@ -503,6 +510,7 @@ export const refreshLive = StateEffect.define<null>()
 const liveField = StateField.define<DecorationSet>({
   create: (state) => liveDecorations(state),
   update(deco, tr) {
+    if (tr.startState.facet(liveStyle) !== tr.state.facet(liveStyle)) return liveDecorations(tr.state)
     if (
       tr.docChanged ||
       tr.selection ||
@@ -512,7 +520,18 @@ const liveField = StateField.define<DecorationSet>({
       return liveDecorations(tr.state)
     return deco
   },
-  provide: (f) => EditorView.decorations.from(f),
+  provide: (f) => [
+    EditorView.decorations.from(f),
+    // In the document style the hidden marks are atomic: the cursor steps over them.
+    EditorView.atomicRanges.of((view) => {
+      if (view.state.facet(liveStyle) !== 'document') return RangeSet.empty
+      const out: Range<Decoration>[] = []
+      view.state.field(f).between(0, view.state.doc.length, (from, to, d) => {
+        if (d.point && from < to) out.push(d.range(from, to))
+      })
+      return RangeSet.of(out, true)
+    }),
+  ],
 })
 
 // The values copy render/markdown.css, so live mode looks like the view. parity.spec.ts checks them.
