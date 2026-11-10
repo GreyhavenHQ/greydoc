@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { EditorSelection, EditorState, type StateCommand, type Transaction } from '@codemirror/state'
-import { insertLink, setHeading, toggleList, toggleWrap } from '@/editor/format'
+import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
+import { ensureSyntaxTree } from '@codemirror/language'
+import { formatState, insertBlock, insertLink, setHeading, toggleList, toggleQuote, toggleWrap } from '@/editor/format'
 import { captureEdits, type PendingEdit } from '@/editor/suggestions'
 
 // Text notation: | is a cursor, « and » are the anchor and the head of a selection.
@@ -129,5 +131,47 @@ describe('insertLink', () => {
   })
   it('inserts an empty link at a cursor', () => {
     expect(fmt(insertLink, 'a |b')).toBe('a [|](url)b')
+  })
+})
+
+describe('toggleQuote', () => {
+  it('quotes and unquotes the touched lines', () => {
+    expect(fmt(toggleQuote, 'a|')).toBe('> a|')
+    expect(fmt(toggleQuote, '> a|')).toBe('a|')
+    expect(fmt(toggleQuote, '«a\nb»')).toBe('> «a\n> b»')
+    expect(fmt(toggleQuote, '«> a\n> b»')).toBe('«a\nb»')
+  })
+})
+
+describe('insertBlock', () => {
+  it('puts a block on an empty line with the cursor at the marker', () => {
+    expect(fmt(insertBlock('```\n§\n```\n'), '|')).toBe('```\n|\n```\n')
+  })
+  it('adds no second blank line when one follows already', () => {
+    expect(fmt(insertBlock('---\n§'), 'a|\n')).toBe('a\n\n---\n|\n')
+    expect(fmt(insertBlock('```\n§\n```\n'), 'a|\n\nb')).toBe('a\n\n```\n|\n```\n\nb')
+  })
+  it('puts a block after a line of text, separated by a blank line', () => {
+    expect(fmt(insertBlock('| § | Column 2 |\n| --- | --- |\n|  |  |\n'), 'te|xt\nnext')).toBe('text\n\n| | | Column 2 |\n| --- | --- |\n|  |  |\n\nnext')
+  })
+})
+
+describe('formatState', () => {
+  const at = (s: string) => {
+    const state = EditorState.create({ ...parse(s), extensions: markdown({ base: markdownLanguage }) })
+    ensureSyntaxTree(state, state.doc.length, 1000)
+    return formatState(state)
+  }
+  it('reports the marks and the block at the cursor', () => {
+    expect(at('a **bo|ld** b').bold).toBe(true)
+    expect(at('a **bold** |b').bold).toBe(false)
+    expect(at('a *it|al* b').italic).toBe(true)
+    expect(at('a [li|nk](x) b').link).toBe(true)
+    expect(at('## Ti|tle').block).toBe('h2')
+    expect(at('Ti|tle').block).toBe('p')
+    expect(at('- it|em').list).toBe('bullet')
+    expect(at('1. it|em').list).toBe('ordered')
+    expect(at('- [ ] it|em').list).toBe('task')
+    expect(at('> quo|te').quote).toBe(true)
   })
 })

@@ -1,28 +1,31 @@
 import { EditorView } from '@codemirror/view'
 import { toast } from 'sonner'
 
-// imageUpload sends pasted or dropped files to the note's media endpoint and inserts Markdown links.
-export function imageUpload(alias: () => string, canWrite: () => boolean) {
-  const send = async (view: EditorView, files: File[], pos: number) => {
-    for (const file of files) {
-      const id = toast.loading(`Uploading ${file.name}`)
-      try {
-        const form = new FormData()
-        form.append('file', file)
-        const resp = await fetch(`/api/notes/${alias()}/media`, { method: 'POST', body: form, credentials: 'same-origin' })
-        const data = await resp.json()
-        if (!resp.ok) throw new Error(data?.error?.message ?? `HTTP ${resp.status}`)
-        const isImage = file.type.startsWith('image/')
-        const label = file.name.replace(/\.[^.]+$/, '').replace(/[[\]]/g, '')
-        const md = (isImage ? '!' : '') + `[${label}](${data.url})`
-        view.dispatch({ changes: { from: pos, insert: md }, selection: { anchor: pos + md.length }, userEvent: 'input.paste' })
-        pos += md.length
-        toast.success('Uploaded', { id })
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : String(e), { id })
-      }
+// uploadFiles sends files to the note's media endpoint and inserts Markdown links at pos.
+export async function uploadFiles(view: EditorView, alias: string, files: File[], pos: number) {
+  for (const file of files) {
+    const id = toast.loading(`Uploading ${file.name}`)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const resp = await fetch(`/api/notes/${alias}/media`, { method: 'POST', body: form, credentials: 'same-origin' })
+      const data = await resp.json()
+      if (!resp.ok) throw new Error(data?.error?.message ?? `HTTP ${resp.status}`)
+      const isImage = file.type.startsWith('image/')
+      const label = file.name.replace(/\.[^.]+$/, '').replace(/[[\]]/g, '')
+      const md = (isImage ? '!' : '') + `[${label}](${data.url})`
+      view.dispatch({ changes: { from: pos, insert: md }, selection: { anchor: pos + md.length }, userEvent: 'input.paste' })
+      pos += md.length
+      toast.success('Uploaded', { id })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e), { id })
     }
   }
+}
+
+// imageUpload uploads pasted or dropped files.
+export function imageUpload(alias: () => string, canWrite: () => boolean) {
+  const send = (view: EditorView, files: File[], pos: number) => uploadFiles(view, alias(), files, pos)
   return EditorView.domEventHandlers({
     paste(e, view) {
       const files = Array.from(e.clipboardData?.files ?? [])

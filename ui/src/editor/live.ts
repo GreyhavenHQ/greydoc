@@ -359,7 +359,7 @@ class TableWidget extends WidgetType {
 const tableAt = (view: EditorView, wrap: HTMLElement) => parseTable(view.state.doc, view.posAtDOM(wrap))
 
 // focusCell finds the grid of the table at from after an update and puts the caret at the end of a cell.
-function focusCell(view: EditorView, from: number, row: number, col: number) {
+export function focusCell(view: EditorView, from: number, row: number, col: number) {
   for (const w of view.contentDOM.querySelectorAll<HTMLElement>('.cm-lp-grid-wrap')) {
     if (view.posAtDOM(w) === from) caretToEnd(w.querySelector('table')!.rows[row]?.cells[col] as HTMLElement | undefined)
   }

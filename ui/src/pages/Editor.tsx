@@ -52,12 +52,14 @@ import { imageUpload } from '@/editor/upload'
 import { formatKeymap } from '@/editor/format'
 import { canToggleTasks, tableMenu, type TableMenuRequest } from '@/editor/live'
 import { TableMenu } from '@/components/TableMenu'
+import { FormatToolbar } from '@/components/FormatToolbar'
 import { taskToggle } from '@/lib/tasks'
 import { captureEdits, setSuggestionRanges, suggestionDecorations, type SuggestionAction } from '@/editor/suggestions'
 import { anchorRange, resolvePoint, resolveRange } from '@/editor/anchors'
 import { setThreadRanges, threadDecorations } from '@/editor/threads'
 import { selectionListener, type SelectionInfo } from '@/editor/selection'
 import { EditorView as CMView } from '@codemirror/view'
+import type { EditorState } from '@codemirror/state'
 import { attribution, setClients } from '@/editor/attribution'
 import { personColor, personSeed, sourceLabel, type NoteClient } from '@/lib/authors'
 import { PersonAvatar } from '@/components/PersonAvatar'
@@ -617,6 +619,7 @@ export default function Editor() {
   }, [previewEl])
 
   const [tableMenuReq, setTableMenuReq] = useState<TableMenuRequest | null>(null)
+  const formatSink = useRef<((s: EditorState) => void) | null>(null)
   const editorExtensions = useMemo(
     () => [
       formatKeymap({ onComment: commentOn }),
@@ -653,6 +656,9 @@ export default function Editor() {
       }),
       canToggleTasks.of(() => canEditRef.current),
       tableMenu.of(setTableMenuReq),
+      CMView.updateListener.of((u) => {
+        if (u.selectionSet || u.docChanged) formatSink.current?.(u.state)
+      }),
       captureEdits(
         () => suggestingRef.current,
         (e) => {
@@ -1001,77 +1007,80 @@ export default function Editor() {
         </header>
         <main className="flex min-h-0 flex-1">
           {showEditor && (
-            <section className={cn('relative min-w-0 border-r', showPreview ? 'w-1/2' : 'w-full')}>
-              {selection && atLeast(level, 'comment') && (
-                <SelectionToolbar
-                  top={selection.top}
-                  left={selection.left}
-                  onComment={startComment}
-                  onSuggest={() => startSuggest(selection.from, selection.to)}
-                >
-                  {me?.ai_enabled && (
-                    <AiMenu
-                      triggerClassName={toolbarButton}
-                      alias={note.alias}
-                      target={() => {
-                        const v = viewRef.current
-                        if (!v || !session) return null
-                        const sel = v.state.selection.main
-                        if (sel.empty) return null
-                        return { original: v.state.sliceDoc(sel.from, sel.to), ...anchorRange(session.text, sel.from, sel.to) }
-                      }}
-                      onCreated={loadSuggestions}
-                      onStart={() => {
-                        const v = viewRef.current
-                        if (v) v.dispatch({ selection: { anchor: v.state.selection.main.to } })
-                      }}
-                    />
-                  )}
-                </SelectionToolbar>
-              )}
-              {suggestDraft && note && (
-                <SuggestComposer
-                  alias={note.alias}
-                  draft={suggestDraft}
-                  top={viewRef.current?.coordsAtPos(suggestDraft.to) ? viewRef.current.coordsAtPos(suggestDraft.to)!.bottom - viewRef.current.dom.getBoundingClientRect().top + 8 : 40}
-                  onChange={(proposed) => setSuggestDraft({ ...suggestDraft, proposed })}
-                  onNoAccess={onNoAccess}
-                  onDone={(created) => {
-                    setSuggestDraft(null)
-                    if (created) loadSuggestions()
-                    viewRef.current?.focus()
-                  }}
-                />
-              )}
-              {showAuthors && legend.length > 0 && (
-                <div className="absolute right-3 bottom-3 z-10 flex max-w-[80%] flex-wrap gap-2 rounded-md border bg-card/95 px-2.5 py-1.5 text-xs shadow-sm" data-testid="authors-legend">
-                  {legend.map((a) => (
-                    <span key={a.name} className="flex items-center gap-1">
-                      <span className="size-2.5 rounded-sm" style={{ backgroundColor: a.color }} />
-                      {a.name}
-                      {a.sources.size > 0 && <span className="text-muted-foreground">({[...a.sources].join(', ')})</span>}
-                    </span>
-                  ))}
-                </div>
-              )}
-              {tableMenuReq && <TableMenu request={tableMenuReq} onClose={() => setTableMenuReq(null)} />}
-              {session && ready ? (
-                <CodeEditor
-                  ytext={session.text}
-                  awareness={session.provider.awareness}
-                  readOnly={!atLeast(level, 'comment')}
-                  overlay={authorsOverlay}
-                  live={mode === 'live'}
-                  liveStyle={me?.prefs?.live_style ?? 'obsidian'}
-                  extensions={editorExtensions}
-                  onView={onView}
-                  autoFocus
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center text-sm text-muted-foreground" data-testid="editor-connecting">
-                  {connected ? 'Loading the live copy…' : 'Connecting…'}
-                </div>
-              )}
+            <section className={cn('relative flex min-w-0 flex-col border-r', showPreview ? 'w-1/2' : 'w-full')}>
+              {canEdit && ready && <FormatToolbar view={view} alias={note.alias} sink={formatSink} />}
+              <div className="relative min-h-0 flex-1">
+                {selection && atLeast(level, 'comment') && (
+                  <SelectionToolbar
+                    top={selection.top}
+                    left={selection.left}
+                    onComment={startComment}
+                    onSuggest={() => startSuggest(selection.from, selection.to)}
+                  >
+                    {me?.ai_enabled && (
+                      <AiMenu
+                        triggerClassName={toolbarButton}
+                        alias={note.alias}
+                        target={() => {
+                          const v = viewRef.current
+                          if (!v || !session) return null
+                          const sel = v.state.selection.main
+                          if (sel.empty) return null
+                          return { original: v.state.sliceDoc(sel.from, sel.to), ...anchorRange(session.text, sel.from, sel.to) }
+                        }}
+                        onCreated={loadSuggestions}
+                        onStart={() => {
+                          const v = viewRef.current
+                          if (v) v.dispatch({ selection: { anchor: v.state.selection.main.to } })
+                        }}
+                      />
+                    )}
+                  </SelectionToolbar>
+                )}
+                {suggestDraft && note && (
+                  <SuggestComposer
+                    alias={note.alias}
+                    draft={suggestDraft}
+                    top={viewRef.current?.coordsAtPos(suggestDraft.to) ? viewRef.current.coordsAtPos(suggestDraft.to)!.bottom - viewRef.current.dom.getBoundingClientRect().top + 8 : 40}
+                    onChange={(proposed) => setSuggestDraft({ ...suggestDraft, proposed })}
+                    onNoAccess={onNoAccess}
+                    onDone={(created) => {
+                      setSuggestDraft(null)
+                      if (created) loadSuggestions()
+                      viewRef.current?.focus()
+                    }}
+                  />
+                )}
+                {showAuthors && legend.length > 0 && (
+                  <div className="absolute right-3 bottom-3 z-10 flex max-w-[80%] flex-wrap gap-2 rounded-md border bg-card/95 px-2.5 py-1.5 text-xs shadow-sm" data-testid="authors-legend">
+                    {legend.map((a) => (
+                      <span key={a.name} className="flex items-center gap-1">
+                        <span className="size-2.5 rounded-sm" style={{ backgroundColor: a.color }} />
+                        {a.name}
+                        {a.sources.size > 0 && <span className="text-muted-foreground">({[...a.sources].join(', ')})</span>}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {tableMenuReq && <TableMenu request={tableMenuReq} onClose={() => setTableMenuReq(null)} />}
+                {session && ready ? (
+                  <CodeEditor
+                    ytext={session.text}
+                    awareness={session.provider.awareness}
+                    readOnly={!atLeast(level, 'comment')}
+                    overlay={authorsOverlay}
+                    live={mode === 'live'}
+                    liveStyle={me?.prefs?.live_style ?? 'obsidian'}
+                    extensions={editorExtensions}
+                    onView={onView}
+                    autoFocus
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground" data-testid="editor-connecting">
+                    {connected ? 'Loading the live copy…' : 'Connecting…'}
+                  </div>
+                )}
+              </div>
             </section>
           )}
           {showPreview && (

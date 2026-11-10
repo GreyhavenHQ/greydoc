@@ -1,4 +1,5 @@
 import { EditorSelection, Prec, type ChangeSpec, type EditorState, type Extension, type StateCommand, type Transaction } from '@codemirror/state'
+import { syntaxTree } from '@codemirror/language'
 import { keymap, type KeyBinding } from '@codemirror/view'
 
 const userEvent = 'input.format'
@@ -134,6 +135,79 @@ export function setHeading(level: number): StateCommand {
       lines.map((l) => ({ from: l.from, to: l.from + l.len, insert })),
     )
     return true
+  }
+}
+
+// toggleQuote quotes every touched line, or unquotes them when all are quoted.
+export const toggleQuote: StateCommand = ({ state, dispatch }) => {
+  if (state.readOnly) return false
+  const lines = targetLines(state).map((l) => state.doc.line(l))
+  const quoted = (t: string) => /^>\s?/.exec(t)
+  const all = lines.every((l) => quoted(l.text))
+  applyLines(
+    state,
+    dispatch,
+    lines.map((l) => (all ? { from: l.from, to: l.from + quoted(l.text)![0].length } : { from: l.from, insert: '> ' })),
+  )
+  return true
+}
+
+// insertBlock puts a block of text on its own lines and leaves the cursor at §.
+export function insertBlock(text: string): StateCommand {
+  return ({ state, dispatch }) => {
+    if (state.readOnly) return false
+    const line = state.doc.lineAt(state.selection.main.head)
+    const pre = line.length ? '\n\n' : ''
+    const at = line.length ? line.to : line.from
+    const i = Math.max(text.indexOf('§'), 0)
+    const after = state.sliceDoc(at, at + 2)
+    const blank = after === '\n\n' || (after === '\n' && at + 1 === state.doc.length)
+    const body = blank && text.endsWith('\n') ? text.slice(0, -1) : text
+    dispatch(
+      state.update({
+        changes: { from: at, insert: pre + body.replace('§', '') },
+        selection: { anchor: at + pre.length + i },
+        scrollIntoView: true,
+        userEvent,
+      }),
+    )
+    return true
+  }
+}
+
+export interface FormatState {
+  bold: boolean
+  italic: boolean
+  strike: boolean
+  code: boolean
+  link: boolean
+  quote: boolean
+  // block is p or h1 to h6.
+  block: string
+  list: ListKind | null
+}
+
+// formatState reads the formatting at the main cursor, for the toolbar.
+export function formatState(state: EditorState): FormatState {
+  const head = state.selection.main.head
+  const names = new Set<string>()
+  for (let n: ReturnType<typeof syntaxTree>['topNode'] | null = syntaxTree(state).resolveInner(head, -1); n; n = n.parent) names.add(n.name)
+  for (let n: ReturnType<typeof syntaxTree>['topNode'] | null = syntaxTree(state).resolveInner(head, 1); n; n = n.parent) {
+    if (n.name === 'StrongEmphasis' || n.name === 'Emphasis' || n.name === 'Link' || n.name === 'InlineCode') names.add(n.name)
+  }
+  const text = state.doc.lineAt(head).text
+  const h = headingPrefix.exec(text)
+  const item = /^\s*(?:>\s?)*\s*([-*+] \[[ xX]\] |[-*+] |\d+[.)] )/.exec(text)
+  const list = item ? (isKind.task.test(item[1]) ? 'task' : isKind.ordered.test(item[1]) ? 'ordered' : 'bullet') : null
+  return {
+    bold: names.has('StrongEmphasis'),
+    italic: names.has('Emphasis'),
+    strike: names.has('Strikethrough'),
+    code: names.has('InlineCode'),
+    link: names.has('Link'),
+    quote: names.has('Blockquote') || /^\s*>/.test(text),
+    block: h ? 'h' + h[1].length : 'p',
+    list,
   }
 }
 
