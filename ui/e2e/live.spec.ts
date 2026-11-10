@@ -25,7 +25,7 @@ test('live mode renders markdown in place', async ({ page }) => {
   await expect(editor.locator('.cm-lp-h1')).toHaveText('Plan')
   await expect(editor.locator('.cm-lp-strong')).toHaveText('bold')
   await expect(editor.locator('.cm-lp-mermaid svg').first()).toBeVisible({ timeout: 15_000 })
-  await expect(editor.locator('.cm-lp-table table')).toHaveCount(1)
+  await expect(editor.locator('.cm-lp-grid')).toHaveCount(1)
   await expect(editor.locator('.cm-lp-check')).toHaveCount(1)
 
   // Clicking a rendered diagram shows its source for editing.

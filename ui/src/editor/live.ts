@@ -1,9 +1,11 @@
 import { ensureSyntaxTree, syntaxHighlighting, syntaxTree } from '@codemirror/language'
 import { tagHighlighter, tags } from '@lezer/highlight'
-import { EditorState, Facet, RangeSet, StateEffect, StateField, type Extension, type Range } from '@codemirror/state'
+import { EditorState, Facet, RangeSet, StateEffect, StateField, Text, type ChangeSpec, type Extension, type Range } from '@codemirror/state'
 import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemirror/view'
 import katex from 'katex'
-import { renderMarkdown } from '@/render/markdown'
+import { yUndoManagerKeymap } from 'y-codemirror.next'
+import { renderInline, renderMarkdown } from '@/render/markdown'
+import { addColumn, addRow, cellText, parseTable, setCell, type Table } from '@/editor/table'
 import { naturalSize, renderMermaid, themeMode } from '@/render/mermaid'
 import { splitFrontMatter } from '@/lib/meta'
 import { mentionsOn } from '@/lib/mentions'
@@ -155,6 +157,223 @@ class LabelWidget extends WidgetType {
     el.className = this.cls
     el.textContent = this.text
     return el
+  }
+}
+
+const undo = yUndoManagerKeymap.find((k) => k.key === 'Mod-z')!.run!
+const redo = yUndoManagerKeymap.find((k) => k.key === 'Mod-Shift-z')!.run!
+
+function caretToEnd(el: HTMLElement | undefined) {
+  if (!el) return
+  el.focus()
+  const sel = getSelection()
+  sel?.selectAllChildren(el)
+  sel?.collapseToEnd()
+}
+
+// textOffsets returns the selection inside a cell as offsets in its text.
+function textOffsets(el: HTMLElement): [number, number] {
+  const sel = getSelection()
+  if (!sel?.rangeCount) return [0, 0]
+  const r = sel.getRangeAt(0)
+  const pre = document.createRange()
+  pre.selectNodeContents(el)
+  pre.setEnd(r.startContainer, r.startOffset)
+  const a = pre.toString().length
+  return [a, a + r.toString().length]
+}
+
+function selectText(el: HTMLElement, a: number, b: number) {
+  const node = el.firstChild
+  if (!node) return caretToEnd(el)
+  const r = document.createRange()
+  r.setStart(node, Math.min(a, node.textContent!.length))
+  r.setEnd(node, Math.min(b, node.textContent!.length))
+  const sel = getSelection()
+  sel?.removeAllRanges()
+  sel?.addRange(r)
+}
+
+const cellWraps: Record<string, string> = { b: '**', i: '*', e: '`' }
+
+// TableWidget shows a table as a grid. Each cell is editable in place and writes to its own span in the text.
+// The DOM is patched, not rebuilt, so a remote change keeps the focus and the caret of the person typing.
+class TableWidget extends WidgetType {
+  constructor(
+    readonly src: string,
+    readonly canEdit: boolean,
+  ) {
+    super()
+  }
+  eq(o: TableWidget) {
+    return o.src === this.src && o.canEdit === this.canEdit
+  }
+  toDOM(view: EditorView) {
+    const wrap = document.createElement('div')
+    wrap.className = 'cm-lp-block cm-lp-grid-wrap markdown-body'
+    wrap.dataset.editable = String(this.canEdit)
+    const table = document.createElement('table')
+    table.className = 'cm-lp-grid'
+    wrap.appendChild(table)
+    if (this.canEdit) {
+      // The editor and the page handle mouse events for their own selection. Inside the grid they belong to the cell.
+      for (const type of ['mousedown', 'mouseup', 'click', 'dblclick'] as const) wrap.addEventListener(type, (e) => e.stopPropagation())
+      wrap.addEventListener('focusin', () => wrap.classList.add('cm-lp-grid-active'))
+      wrap.addEventListener('focusout', () => wrap.classList.remove('cm-lp-grid-active'))
+      const add = (cls: string, title: string, change: (t: Table) => [ChangeSpec, number, number]) => {
+        const b = document.createElement('button')
+        b.className = 'cm-lp-grid-add ' + cls
+        b.textContent = '+'
+        b.title = title
+        b.setAttribute('aria-label', title)
+        b.onmousedown = (e) => e.preventDefault()
+        b.onclick = () => {
+          const t = tableAt(view, wrap)
+          if (!t) return
+          const [changes, r, c] = change(t)
+          view.dispatch({ changes, userEvent: 'input.table' })
+          focusCell(view, t.from, r, c)
+        }
+        wrap.appendChild(b)
+      }
+      add('cm-lp-grid-add-row', 'Add a row', (t) => [addRow(t, t.body.length), t.body.length + 1, 0])
+      add('cm-lp-grid-add-col', 'Add a column', (t) => [addColumn(t, t.header.cells.length), 0, t.header.cells.length])
+    }
+    this.sync(wrap, view)
+    return wrap
+  }
+  updateDOM(dom: HTMLElement, view: EditorView) {
+    if (!dom.classList.contains('cm-lp-grid-wrap') || dom.dataset.editable !== String(this.canEdit)) return false
+    this.sync(dom, view)
+    return true
+  }
+  sync(wrap: HTMLElement, view: EditorView) {
+    const t = parseTable(Text.of(this.src.split('\n')), 0)!
+    const table = wrap.querySelector('table')!
+    const rows = t.body.length + 1
+    const cols = t.header.cells.length
+    while (table.rows.length > rows) table.deleteRow(-1)
+    for (let r = 0; r < rows; r++) {
+      const tr = table.rows[r] ?? table.insertRow()
+      while (tr.cells.length > cols) tr.deleteCell(-1)
+      for (let c = 0; c < cols; c++) {
+        let el = tr.cells[c] as HTMLElement | undefined
+        if (!el) {
+          el = document.createElement(r === 0 ? 'th' : 'td')
+          if (this.canEdit) editableCell(view, wrap, el)
+          tr.appendChild(el)
+        }
+        el.style.textAlign = t.align[c] ?? ''
+        const text = cellText(t, r, c)
+        if (el === document.activeElement || el.dataset.src === text) continue
+        el.dataset.src = text
+        el.innerHTML = renderInline(text)
+      }
+    }
+  }
+  ignoreEvent() {
+    return true
+  }
+}
+
+const tableAt = (view: EditorView, wrap: HTMLElement) => parseTable(view.state.doc, view.posAtDOM(wrap))
+
+// focusCell finds the grid of the table at from after an update and puts the caret at the end of a cell.
+function focusCell(view: EditorView, from: number, row: number, col: number) {
+  for (const w of view.contentDOM.querySelectorAll<HTMLElement>('.cm-lp-grid-wrap')) {
+    if (view.posAtDOM(w) === from) caretToEnd(w.querySelector('table')!.rows[row]?.cells[col] as HTMLElement | undefined)
+  }
+}
+
+function editableCell(view: EditorView, wrap: HTMLElement, el: HTMLElement) {
+  el.contentEditable = 'true'
+  el.spellcheck = true
+  const pos = () => [(el.parentElement as HTMLTableRowElement).rowIndex, (el as HTMLTableCellElement).cellIndex] as const
+  const write = (text: string) => {
+    const t = tableAt(view, wrap)
+    const [r, c] = pos()
+    el.dataset.src = text
+    if (t) view.dispatch({ changes: setCell(t, r, c, text), userEvent: 'input.type' })
+  }
+  el.onfocus = () => {
+    const t = tableAt(view, wrap)
+    const [r, c] = pos()
+    // The focused cell shows its Markdown source, as plain text. Equal text stays, so a selection stays.
+    const src = t ? cellText(t, r, c) : ''
+    if (el.textContent !== src || el.childElementCount) el.textContent = src
+  }
+  el.onblur = () => {
+    const t = tableAt(view, wrap)
+    const [r, c] = pos()
+    const text = t ? cellText(t, r, c) : (el.textContent ?? '')
+    el.dataset.src = text
+    el.innerHTML = renderInline(text)
+  }
+  el.oninput = () => write(el.textContent ?? '')
+  // Chromium does not select a word on double click in an editable cell inside the editor, so the cell does it.
+  el.ondblclick = () => {
+    const sel = getSelection()
+    if (!sel?.isCollapsed) return
+    sel.modify('move', 'backward', 'word')
+    sel.modify('extend', 'forward', 'word')
+  }
+  el.onpaste = (e) => {
+    e.preventDefault()
+    document.execCommand('insertText', false, (e.clipboardData?.getData('text/plain') ?? '').replace(/\r?\n/g, ' '))
+  }
+  el.onkeydown = (e) => {
+    const t = tableAt(view, wrap)
+    if (!t) return
+    const [r, c] = pos()
+    const rows = t.body.length + 1
+    const cols = t.header.cells.length
+    const mod = e.ctrlKey || e.metaKey
+    const key = e.key.toLowerCase()
+    const refresh = () => {
+      const now = tableAt(view, wrap)
+      el.textContent = now ? cellText(now, r, c) : ''
+      caretToEnd(el)
+    }
+    if (mod && cellWraps[key] && !e.shiftKey && !e.altKey) {
+      e.preventDefault()
+      const m = cellWraps[key]
+      const text = el.textContent ?? ''
+      const [a, b] = textOffsets(el)
+      el.textContent = text.slice(0, a) + m + text.slice(a, b) + m + text.slice(b)
+      write(el.textContent)
+      selectText(el, a + m.length, b + m.length)
+    } else if (mod && (key === 'z' || key === 'y')) {
+      e.preventDefault()
+      ;(key === 'y' || e.shiftKey ? redo : undo)(view)
+      refresh()
+    } else if (e.key === 'Tab') {
+      e.preventDefault()
+      const i = r * cols + c + (e.shiftKey ? -1 : 1)
+      if (i < 0) return
+      if (i >= rows * cols) {
+        view.dispatch({ changes: addRow(t, rows - 1), userEvent: 'input.table' })
+        focusCell(view, t.from, rows, 0)
+      } else caretToEnd(wrap.querySelector('table')!.rows[Math.floor(i / cols)].cells[i % cols] as HTMLElement)
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (r === rows - 1) {
+        view.dispatch({ changes: addRow(t, r), userEvent: 'input.table' })
+        focusCell(view, t.from, r + 1, c)
+      } else caretToEnd(wrap.querySelector('table')!.rows[r + 1].cells[c] as HTMLElement)
+    } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault()
+      const next = r + (e.key === 'ArrowUp' ? -1 : 1)
+      if (next >= 0 && next < rows) caretToEnd(wrap.querySelector('table')!.rows[next].cells[c] as HTMLElement)
+      else {
+        view.focus()
+        const anchor = next < 0 ? Math.max(t.from - 1, 0) : Math.min(t.to + 1, view.state.doc.length)
+        view.dispatch({ selection: { anchor }, scrollIntoView: true })
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      view.focus()
+      view.dispatch({ selection: { anchor: Math.min(t.to + 1, view.state.doc.length) } })
+    }
   }
 }
 
@@ -448,6 +667,12 @@ export function liveDecorations(state: EditorState): DecorationSet {
           lineClass(node.from, node.to, 'cm-lp-codeblock')
           return false
         case 'Table': {
+          const t = parseTable(doc, node.from)
+          if (t) {
+            const editable = !state.readOnly && state.facet(canToggleTasks)()
+            out.push(Decoration.replace({ widget: new TableWidget(doc.sliceString(t.from, t.to), editable), block: true }).range(t.from, t.to))
+            return false
+          }
           if (touchesBlock(node.from, node.to)) {
             lineClass(node.from, node.to, 'cm-lp-table-src')
             return false
@@ -510,7 +735,8 @@ export const refreshLive = StateEffect.define<null>()
 const liveField = StateField.define<DecorationSet>({
   create: (state) => liveDecorations(state),
   update(deco, tr) {
-    if (tr.startState.facet(liveStyle) !== tr.state.facet(liveStyle)) return liveDecorations(tr.state)
+    if (tr.startState.facet(liveStyle) !== tr.state.facet(liveStyle) || tr.startState.readOnly !== tr.state.readOnly)
+      return liveDecorations(tr.state)
     if (
       tr.docChanged ||
       tr.selection ||
@@ -605,6 +831,21 @@ const liveTheme = EditorView.theme({
   '.cm-lp-mermaid': { textAlign: 'center', color: 'rgb(var(--muted-foreground))', fontSize: '0.85em' },
   '.cm-lp-mermaid svg': { margin: '0 auto', display: 'block' },
   '.cm-lp-table table': { margin: '0' },
+  // The grid sizes to its content. The shared block containment would collapse the columns.
+  '.cm-lp-grid-wrap': {
+    position: 'relative', cursor: 'default', width: 'fit-content', maxWidth: '100%', contain: 'none',
+    padding: '0 22px 22px 0', margin: '0 0 -6px',
+  },
+  '.cm-lp-grid-wrap table.cm-lp-grid': { margin: '0' },
+  '.cm-lp-grid td, .cm-lp-grid th': { cursor: 'text', outline: 'none', minWidth: '3em' },
+  '.cm-lp-grid td:focus, .cm-lp-grid th:focus': { boxShadow: 'inset 0 0 0 2px rgb(var(--primary))' },
+  '.cm-lp-grid-add': {
+    position: 'absolute', opacity: '0', border: '1px dashed rgb(var(--border))', borderRadius: '4px', color: 'rgb(var(--muted-foreground))',
+    backgroundColor: 'rgb(var(--card))', fontSize: '13px', lineHeight: '1', cursor: 'pointer',
+  },
+  '.cm-lp-grid-wrap:hover .cm-lp-grid-add, .cm-lp-grid-active .cm-lp-grid-add': { opacity: '1' },
+  '.cm-lp-grid-add-row': { left: '0', right: '22px', bottom: '2px', height: '16px' },
+  '.cm-lp-grid-add-col': { top: '0', bottom: '22px', right: '2px', width: '16px' },
   '.cm-lp-math': { textAlign: 'center' },
 })
 
