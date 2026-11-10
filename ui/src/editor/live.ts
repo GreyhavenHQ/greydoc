@@ -1,4 +1,5 @@
-import { ensureSyntaxTree, syntaxTree } from '@codemirror/language'
+import { ensureSyntaxTree, syntaxHighlighting, syntaxTree } from '@codemirror/language'
+import { tagHighlighter, tags } from '@lezer/highlight'
 import { EditorState, Facet, StateEffect, StateField, type Extension, type Range } from '@codemirror/state'
 import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemirror/view'
 import katex from 'katex'
@@ -121,13 +122,34 @@ class ImageWidget extends WidgetType {
 }
 
 class BulletWidget extends WidgetType {
-  eq() {
-    return true
+  constructor(readonly label: string) {
+    super()
+  }
+  eq(o: BulletWidget) {
+    return o.label === this.label
   }
   toDOM() {
     const el = document.createElement('span')
-    el.className = 'cm-lp-bullet'
-    el.textContent = '•'
+    el.className = this.label === '•' ? 'cm-lp-bullet' : 'cm-lp-bullet cm-lp-number'
+    el.textContent = this.label
+    return el
+  }
+}
+
+class LabelWidget extends WidgetType {
+  constructor(
+    readonly text: string,
+    readonly cls: string,
+  ) {
+    super()
+  }
+  eq(o: LabelWidget) {
+    return o.text === this.text && o.cls === this.cls
+  }
+  toDOM() {
+    const el = document.createElement('span')
+    el.className = this.cls
+    el.textContent = this.text
     return el
   }
 }
@@ -254,6 +276,7 @@ export function liveDecorations(state: EditorState): DecorationSet {
     }
   }
   const code: [number, number][] = []
+  let alertTo = -1
 
   const fmEnd = frontMatterEnd(state)
   if (fmEnd > 0) {
@@ -342,11 +365,20 @@ export function liveDecorations(state: EditorState): DecorationSet {
           return false
         }
         case 'Blockquote': {
-          const alert = /^>\s*\[!(note|tip|important|warning|caution)\]/i.exec(doc.lineAt(node.from).text)
+          const first = doc.lineAt(node.from)
+          const alert = /^>\s*\[!(note|tip|important|warning|caution)\]/i.exec(first.text)
           lineClass(node.from, node.to, 'cm-lp-quote' + (alert ? ' cm-lp-alert cm-lp-alert-' + alert[1].toLowerCase() : ''))
+          out.push(Decoration.line({ class: 'cm-lp-first' }).range(first.from))
+          out.push(Decoration.line({ class: 'cm-lp-last' }).range(doc.lineAt(node.to).from))
+          if (alert && !lineActive(first.from)) {
+            const name = alert[1][0].toUpperCase() + alert[1].slice(1).toLowerCase()
+            out.push(Decoration.replace({ widget: new LabelWidget(name, 'cm-lp-alert-title') }).range(first.from, first.from + alert[0].length))
+            alertTo = first.from + alert[0].length
+          }
           return
         }
         case 'QuoteMark':
+          if (node.to <= alertTo && node.from >= doc.lineAt(alertTo).from) return
           if (!lineActive(node.from)) {
             const end = doc.sliceString(node.to, node.to + 1) === ' ' ? node.to + 1 : node.to
             out.push(hide.range(node.from, end))
@@ -355,12 +387,17 @@ export function liveDecorations(state: EditorState): DecorationSet {
         case 'ListMark': {
           const mark = doc.sliceString(node.from, node.to)
           const task = node.node.nextSibling?.name === 'Task'
+          const line = doc.lineAt(node.from)
+          if (line.from !== doc.lineAt(node.node.parent!.from).from) return
+          let depth = 0
+          for (let p = node.node.parent; p; p = p.parent) if (p.name === 'BulletList' || p.name === 'OrderedList') depth++
+          // A hanging indent, like the view: wrapped lines start under the text, not under the bullet.
+          const gap = depth > 1 || node.node.parent!.prevSibling ? '; padding-top: 0.2em' : ''
+          out.push(Decoration.line({ attributes: { style: `padding-left: ${depth * 1.6}em; text-indent: -1.6em${gap}` } }).range(line.from))
           if (lineActive(node.from)) return
-          if (task) {
-            out.push(hide.range(node.from, Math.min(node.to + 1, doc.lineAt(node.from).to)))
-          } else if (/^[-*+]$/.test(mark)) {
-            out.push(Decoration.replace({ widget: new BulletWidget() }).range(node.from, node.to))
-          }
+          const end = Math.min(node.to + 1, line.to)
+          if (task) out.push(hide.range(line.from, end))
+          else out.push(Decoration.replace({ widget: new BulletWidget(/^[-*+]$/.test(mark) ? '•' : mark) }).range(line.from, end))
           return
         }
         case 'TaskMarker':
@@ -388,7 +425,15 @@ export function liveDecorations(state: EditorState): DecorationSet {
             return false
           }
           lineClass(node.from, node.to, 'cm-lp-codeblock')
-          for (const m of node.node.getChildren('CodeMark')) lineClass(m.from, m.from, 'cm-lp-fence')
+          out.push(Decoration.line({ class: 'cm-lp-first' }).range(doc.lineAt(node.from).from))
+          out.push(Decoration.line({ class: 'cm-lp-last' }).range(doc.lineAt(node.to).from))
+          for (const m of node.node.getChildren('CodeMark')) {
+            lineClass(m.from, m.from, 'cm-lp-fence')
+            const l = doc.lineAt(m.from)
+            if (!touches(node.from, node.to) && l.length) {
+              out.push(Decoration.replace({ widget: new LabelWidget(l.from === node.from ? lang : '', 'cm-lp-lang') }).range(l.from, l.to))
+            }
+          }
           return false
         }
         case 'CodeBlock':
@@ -407,6 +452,13 @@ export function liveDecorations(state: EditorState): DecorationSet {
       }
     },
   })
+
+  // The view separates blocks with a 1em margin. A full blank line is taller, so it is shrunk.
+  for (let n = 1; n <= doc.lines; n++) {
+    const l = doc.line(n)
+    if (l.from > fmEnd && l.length === 0 && !touches(l.from, l.to) && !code.some(([a, b]) => l.from > a && l.from < b))
+      out.push(Decoration.line({ class: 'cm-lp-blank' }).range(l.from))
+  }
 
   // Math is not in the Markdown grammar: find $$ blocks and $…$ spans outside code.
   const inCode = (pos: number) => code.some(([a, b]) => pos >= a && pos <= b)
@@ -463,27 +515,40 @@ const liveField = StateField.define<DecorationSet>({
   provide: (f) => EditorView.decorations.from(f),
 })
 
+// The values copy render/markdown.css, so live mode looks like the view. parity.spec.ts checks them.
 const liveTheme = EditorView.theme({
-  '&.cm-live .cm-scroller': { fontFamily: 'var(--font-sans)', lineHeight: '1.7' },
+  '&.cm-live': { backgroundColor: 'rgb(var(--background))' },
+  '&.cm-live .cm-scroller': { fontFamily: 'var(--font-sans)', lineHeight: '1.65' },
   '&.cm-live .cm-content': { maxWidth: 'calc(var(--doc-width, 728px) + 64px)', margin: '0 auto', padding: '40px 32px 30vh', fontSize: '16px' },
   '&.cm-live .cm-line': { padding: '0' },
-  '.cm-lp-h': { fontWeight: '650', lineHeight: '1.3' },
-  '.cm-lp-h1': { fontSize: '2em', paddingTop: '0.6em !important', letterSpacing: '-0.01em' },
-  '.cm-lp-h2': { fontSize: '1.5em', paddingTop: '0.5em !important' },
-  '.cm-lp-h3': { fontSize: '1.25em', paddingTop: '0.4em !important' },
-  '.cm-lp-h4, .cm-lp-h5, .cm-lp-h6': { fontSize: '1.05em' },
+  '.cm-lp-h': { fontWeight: '600', lineHeight: '1.25', paddingTop: '0.9em !important' },
+  '.cm-lp-h1': { fontSize: '2em', letterSpacing: '-0.01em', paddingTop: '0.4em !important' },
+  '.cm-lp-h2': { fontSize: '1.5em', paddingBottom: '0.3em !important', borderBottom: '1px solid rgb(var(--border) / 0.7)', marginBottom: '0.3em' },
+  '.cm-lp-h3': { fontSize: '1.25em' },
+  '.cm-lp-h4': { fontSize: '1em' },
+  '.cm-lp-h5': { fontSize: '0.9em' },
+  '.cm-lp-h6': { fontSize: '0.85em', color: 'rgb(var(--muted-foreground))' },
+  '.cm-lp-blank': { fontSize: '0.55em' },
   '.cm-lp-em': { fontStyle: 'italic' },
   '.cm-lp-strong': { fontWeight: '700' },
   '.cm-lp-strike': { textDecoration: 'line-through' },
   '.cm-lp-done': { textDecoration: 'line-through', color: 'rgb(var(--muted-foreground))' },
   '.cm-lp-code': {
-    fontFamily: 'var(--font-mono)', fontSize: '0.875em', backgroundColor: 'rgb(var(--muted))', borderRadius: '4px', padding: '0.1em 0.3em',
+    fontFamily: 'var(--font-mono)', fontSize: '0.875em', backgroundColor: 'rgb(var(--muted))', border: '1px solid rgb(var(--border) / 0.6)',
+    borderRadius: '4px', padding: '0.1em 0.35em',
   },
   '.cm-lp-link': { color: 'rgb(var(--primary))', textDecoration: 'underline', textUnderlineOffset: '2px' },
-  '.cm-lp-quote': { borderLeft: '3px solid rgb(var(--border))', paddingLeft: '0.9em !important', color: 'rgb(var(--muted-foreground))' },
-  '.cm-lp-codeblock': { fontFamily: 'var(--font-mono)', fontSize: '0.85em', backgroundColor: 'rgb(var(--muted))', padding: '0 0.9em !important' },
+  '.cm-lp-quote': { borderLeft: '3px solid rgb(var(--border))', paddingLeft: '1em !important', color: 'rgb(var(--muted-foreground))' },
+  '.cm-lp-codeblock': {
+    fontFamily: 'var(--font-mono)', fontSize: '0.85em', lineHeight: '1.55', backgroundColor: 'rgb(var(--card))',
+    padding: '0 1.1765em !important', borderLeft: '1px solid rgb(var(--border) / 0.7)', borderRight: '1px solid rgb(var(--border) / 0.7)',
+  },
+  '.cm-lp-codeblock.cm-lp-first': { borderTop: '1px solid rgb(var(--border) / 0.7)', borderTopLeftRadius: 'var(--radius)', borderTopRightRadius: 'var(--radius)' },
+  '.cm-lp-codeblock.cm-lp-last': {
+    borderBottom: '1px solid rgb(var(--border) / 0.7)', borderBottomLeftRadius: 'var(--radius)', borderBottomRightRadius: 'var(--radius)',
+  },
   '.cm-lp-fence': { color: 'rgb(var(--muted-foreground) / 0.7)' },
-  '.cm-lp-table-src': { fontFamily: 'var(--font-mono)', fontSize: '0.85em' },
+  '.cm-lp-lang': { float: 'right', fontFamily: 'var(--font-sans)', fontSize: '0.8em', color: 'rgb(var(--muted-foreground))' },
   '.cm-lp-props': {
     display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px', padding: '4px 0 10px', cursor: 'pointer',
     fontSize: '12px', color: 'rgb(var(--muted-foreground))', whiteSpace: 'normal',
@@ -493,25 +558,49 @@ const liveTheme = EditorView.theme({
   '.cm-lp-props-more': { fontStyle: 'italic' },
   '.cm-lp-props:hover .cm-lp-props-tag': { borderColor: 'rgb(var(--primary) / 0.5)' },
   '.cm-lp-fm': { fontFamily: 'var(--font-mono)', fontSize: '0.8em', color: 'rgb(var(--muted-foreground))' },
-  '.cm-lp-bullet': { color: 'rgb(var(--muted-foreground))', display: 'inline-block', width: '0.9em' },
-  '.cm-lp-check': { margin: '0 0.45em 0 0', verticalAlign: '-0.1em', accentColor: 'rgb(var(--primary))', cursor: 'pointer' },
+  '.cm-lp-bullet': { color: 'rgb(var(--muted-foreground))', display: 'inline-block', width: '1.6em', textIndent: '0', textAlign: 'center' },
+  '.cm-lp-number': { textAlign: 'right', paddingRight: '0.4em' },
+  '.cm-lp-check': { margin: '0 0.6em 0 0.1em', verticalAlign: '-0.1em', accentColor: 'rgb(var(--primary))', cursor: 'pointer' },
   '.cm-lp-check:disabled': { cursor: 'default' },
   '.cm-lp-hr': { display: 'inline-block', width: '100%', borderTop: '1px solid rgb(var(--border))', verticalAlign: 'middle' },
   '.cm-lp-img': { maxWidth: '100%', borderRadius: 'var(--radius)', verticalAlign: 'top' },
   '.cm-lp-block': { cursor: 'pointer', margin: '0.4em 0', whiteSpace: 'normal', contain: 'inline-size' },
-  '.cm-lp-mark': { backgroundColor: 'rgb(var(--primary) / 0.22)', borderRadius: '2px' },
-  '.cm-lp-alert': { fontStyle: 'normal', color: 'rgb(var(--foreground))', borderLeftWidth: '4px !important' },
-  '.cm-lp-alert-note': { borderLeftColor: 'rgb(42 127 217 / 0.7) !important', backgroundColor: 'rgb(42 127 217 / 0.07)' },
-  '.cm-lp-alert-tip': { borderLeftColor: 'rgb(42 168 118 / 0.7) !important', backgroundColor: 'rgb(42 168 118 / 0.07)' },
-  '.cm-lp-alert-important': { borderLeftColor: 'rgb(166 42 217 / 0.6) !important', backgroundColor: 'rgb(166 42 217 / 0.06)' },
-  '.cm-lp-alert-warning': { borderLeftColor: 'rgb(196 154 0 / 0.7) !important', backgroundColor: 'rgb(196 154 0 / 0.08)' },
-  '.cm-lp-alert-caution': { borderLeftColor: 'rgb(var(--destructive) / 0.7) !important', backgroundColor: 'rgb(var(--destructive) / 0.07)' },
+  '.cm-lp-mark': { backgroundColor: 'rgb(var(--primary) / 0.22)', borderRadius: '2px', padding: '0 0.15em' },
+  '.cm-lp-alert': {
+    color: 'rgb(var(--foreground))', borderStyle: 'solid', borderWidth: '0 1px 0 4px !important',
+    paddingLeft: '1em !important', paddingRight: '1em !important',
+  },
+  '.cm-lp-alert.cm-lp-first': {
+    borderTopWidth: '1px !important', borderTopLeftRadius: 'var(--radius)', borderTopRightRadius: 'var(--radius)', paddingTop: '0.7em !important',
+  },
+  '.cm-lp-alert.cm-lp-last': {
+    borderBottomWidth: '1px !important', borderBottomLeftRadius: 'var(--radius)', borderBottomRightRadius: 'var(--radius)',
+    paddingBottom: '0.7em !important',
+  },
+  '.cm-lp-alert-title': { fontWeight: '600' },
+  '.cm-lp-alert-note': { borderColor: 'rgb(42 127 217 / 0.5) !important', backgroundColor: 'rgb(42 127 217 / 0.07)' },
+  '.cm-lp-alert-tip': { borderColor: 'rgb(42 168 118 / 0.5) !important', backgroundColor: 'rgb(42 168 118 / 0.07)' },
+  '.cm-lp-alert-important': { borderColor: 'rgb(166 42 217 / 0.45) !important', backgroundColor: 'rgb(166 42 217 / 0.06)' },
+  '.cm-lp-alert-warning': { borderColor: 'rgb(196 154 0 / 0.55) !important', backgroundColor: 'rgb(196 154 0 / 0.08)' },
+  '.cm-lp-alert-caution': { borderColor: 'rgb(var(--destructive) / 0.5) !important', backgroundColor: 'rgb(var(--destructive) / 0.07)' },
   '.cm-lp-mermaid': { textAlign: 'center', color: 'rgb(var(--muted-foreground))', fontSize: '0.85em' },
   '.cm-lp-mermaid svg': { margin: '0 auto', display: 'block' },
   '.cm-lp-table table': { margin: '0' },
   '.cm-lp-math': { textAlign: 'center' },
 })
 
+// Code inside fenced blocks takes the classes of the view's highlight.js colors. Markdown itself gets no style.
+const liveHighlight = tagHighlighter([
+  { tag: [tags.keyword, tags.operatorKeyword, tags.controlKeyword, tags.definitionKeyword, tags.moduleKeyword, tags.modifier, tags.self], class: 'hljs-keyword' },
+  { tag: [tags.string, tags.special(tags.string), tags.regexp, tags.attributeValue], class: 'hljs-string' },
+  { tag: [tags.number, tags.bool, tags.null, tags.atom, tags.typeName, tags.className, tags.standard(tags.variableName)], class: 'hljs-number' },
+  { tag: [tags.lineComment, tags.blockComment, tags.docComment], class: 'hljs-comment' },
+  { tag: [tags.function(tags.variableName), tags.function(tags.propertyName), tags.tagName], class: 'hljs-title' },
+  { tag: [tags.propertyName, tags.attributeName], class: 'hljs-attr' },
+  { tag: tags.deleted, class: 'hljs-deletion' },
+  { tag: tags.inserted, class: 'hljs-addition' },
+])
+
 export function livePreview(): Extension {
-  return [liveField, liveTheme, EditorView.editorAttributes.of({ class: 'cm-live' })]
+  return [liveField, liveTheme, syntaxHighlighting(liveHighlight), EditorView.editorAttributes.of({ class: 'cm-live' })]
 }

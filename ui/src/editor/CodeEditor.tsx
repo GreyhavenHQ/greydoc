@@ -74,7 +74,8 @@ export interface CodeEditorProps {
   autoFocus?: boolean
 }
 
-const sourceView = () => [lineNumbers(), highlightActiveLineGutter(), highlightActiveLine()]
+// The source style also sizes headings. It MUST NOT apply in live mode, which has the sizes of the view.
+const sourceView = () => [lineNumbers(), highlightActiveLineGutter(), highlightActiveLine(), syntaxHighlighting(markdownStyle)]
 
 export function CodeEditor({ ytext, awareness, readOnly, extensions = [], overlay = [], live = false, onView, autoFocus }: CodeEditorProps) {
   const host = useRef<HTMLDivElement>(null)
@@ -94,7 +95,6 @@ export function CodeEditor({ ytext, awareness, readOnly, extensions = [], overla
         dropCursor(),
         EditorState.allowMultipleSelections.of(true),
         indentOnInput(),
-        syntaxHighlighting(markdownStyle),
         syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
         bracketMatching(),
         closeBrackets(),
