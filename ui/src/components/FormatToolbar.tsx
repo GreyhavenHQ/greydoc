@@ -21,7 +21,7 @@ import {
   Undo2,
 } from 'lucide-react'
 import { formatState, insertBlock, setHeading, toggleList, toggleQuote, toggleWrap, type FormatState } from '@/editor/format'
-import { focusCell } from '@/editor/live'
+import { activeCell, cellHistory, focusCell, toggleCellMark } from '@/editor/live'
 import { uploadFiles } from '@/editor/upload'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
@@ -31,7 +31,21 @@ const redo = yUndoManagerKeymap.find((k) => k.key === 'Mod-Shift-z')!.run!
 
 const mod = typeof navigator !== 'undefined' && /Mac|iP(hone|ad)/.test(navigator.platform) ? '⌘' : 'Ctrl+'
 
-function Btn({ label, keys, on, onClick, children }: { label: string; keys?: string; on?: boolean; onClick: () => void; children: ReactNode }) {
+function Btn({
+  label,
+  keys,
+  on,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string
+  keys?: string
+  on?: boolean
+  disabled?: boolean
+  onClick: () => void
+  children: ReactNode
+}) {
   const title = keys ? `${label} (${keys.replace('Mod-', mod)})` : label
   return (
     <button
@@ -39,10 +53,11 @@ function Btn({ label, keys, on, onClick, children }: { label: string; keys?: str
       aria-label={title}
       title={title}
       aria-pressed={on === undefined ? undefined : on}
+      disabled={disabled}
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
       className={cn(
-        'flex size-8 shrink-0 items-center justify-center rounded-md text-foreground/80 hover:bg-muted hover:text-foreground [&_svg]:size-4',
+        'flex size-8 shrink-0 items-center justify-center rounded-md text-foreground/80 hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-35 [&_svg]:size-4',
         on && 'bg-primary/12 text-primary hover:bg-primary/15 hover:text-primary',
       )}
     >
@@ -83,6 +98,30 @@ export function FormatToolbar({
       sink.current = null
     }
   }, [view, sink])
+  // A grid cell holds one line of text: marks and history apply to it, line and block commands do not.
+  const [inCell, setInCell] = useState(false)
+  useEffect(() => {
+    if (!view) return
+    const update = () => setInCell(!!activeCell(view))
+    const later = () => setTimeout(update)
+    const dom = view.contentDOM
+    dom.addEventListener('focusin', update)
+    dom.addEventListener('focusout', later)
+    return () => {
+      dom.removeEventListener('focusin', update)
+      dom.removeEventListener('focusout', later)
+    }
+  }, [view])
+  const mark = (m: string) => () => {
+    const cell = view && activeCell(view)
+    if (cell) toggleCellMark(view, cell, m)
+    else run(toggleWrap(m))()
+  }
+  const history = (which: 'undo' | 'redo') => () => {
+    const cell = view && activeCell(view)
+    if (cell) cellHistory(view, cell, which)
+    else run(which === 'undo' ? undo : redo)()
+  }
   const run = (cmd: StateCommand | ((v: EditorView) => boolean)) => () => {
     if (!view) return
     ;(cmd as (v: EditorView) => boolean)(view)
@@ -91,14 +130,15 @@ export function FormatToolbar({
   const block = fmt?.block === 'h5' || fmt?.block === 'h6' ? 'h4' : (fmt?.block ?? 'p')
   return (
     <div className="flex h-11 shrink-0 items-center gap-0.5 overflow-x-auto border-b bg-background px-3" data-testid="format-toolbar" role="toolbar" aria-label="Formatting">
-      <Btn label="Undo" keys="Mod-Z" onClick={run(undo)}>
+      <Btn label="Undo" keys="Mod-Z" onClick={history('undo')}>
         <Undo2 />
       </Btn>
-      <Btn label="Redo" keys="Mod-Shift-Z" onClick={run(redo)}>
+      <Btn label="Redo" keys="Mod-Shift-Z" onClick={history('redo')}>
         <Redo2 />
       </Btn>
       <Sep />
       <Select
+        disabled={inCell}
         value={block}
         onValueChange={(v) => {
           if (!view) return
@@ -118,39 +158,40 @@ export function FormatToolbar({
         </SelectContent>
       </Select>
       <Sep />
-      <Btn label="Bold" keys="Mod-B" on={!!fmt?.bold} onClick={run(toggleWrap('**'))}>
+      <Btn label="Bold" keys="Mod-B" on={!inCell && !!fmt?.bold} onClick={mark('**')}>
         <Bold />
       </Btn>
-      <Btn label="Italic" keys="Mod-I" on={!!fmt?.italic} onClick={run(toggleWrap('*'))}>
+      <Btn label="Italic" keys="Mod-I" on={!inCell && !!fmt?.italic} onClick={mark('*')}>
         <Italic />
       </Btn>
-      <Btn label="Strikethrough" keys="Mod-Shift-X" on={!!fmt?.strike} onClick={run(toggleWrap('~~'))}>
+      <Btn label="Strikethrough" keys="Mod-Shift-X" on={!inCell && !!fmt?.strike} onClick={mark('~~')}>
         <Strikethrough />
       </Btn>
-      <Btn label="Highlight" keys="Mod-Shift-H" onClick={run(toggleWrap('=='))}>
+      <Btn label="Highlight" keys="Mod-Shift-H" onClick={mark('==')}>
         <Highlighter />
       </Btn>
-      <Btn label="Inline code" keys="Mod-E" on={!!fmt?.code} onClick={run(toggleWrap('`'))}>
+      <Btn label="Inline code" keys="Mod-E" on={!inCell && !!fmt?.code} onClick={mark('`')}>
         <Code />
       </Btn>
-      <Btn label="Link" keys="Mod-K" on={!!fmt?.link} onClick={() => view && onLink(view)}>
+      <Btn disabled={inCell} label="Link" keys="Mod-K" on={!inCell && !!fmt?.link} onClick={() => view && onLink(view)}>
         <Link />
       </Btn>
       <Sep />
-      <Btn label="Bulleted list" keys="Mod-Shift-8" on={fmt?.list === 'bullet'} onClick={run(toggleList('bullet'))}>
+      <Btn disabled={inCell} label="Bulleted list" keys="Mod-Shift-8" on={!inCell && fmt?.list === 'bullet'} onClick={run(toggleList('bullet'))}>
         <List />
       </Btn>
-      <Btn label="Numbered list" keys="Mod-Shift-7" on={fmt?.list === 'ordered'} onClick={run(toggleList('ordered'))}>
+      <Btn disabled={inCell} label="Numbered list" keys="Mod-Shift-7" on={!inCell && fmt?.list === 'ordered'} onClick={run(toggleList('ordered'))}>
         <ListOrdered />
       </Btn>
-      <Btn label="Checklist" keys="Mod-Shift-9" on={fmt?.list === 'task'} onClick={run(toggleList('task'))}>
+      <Btn disabled={inCell} label="Checklist" keys="Mod-Shift-9" on={!inCell && fmt?.list === 'task'} onClick={run(toggleList('task'))}>
         <ListChecks />
       </Btn>
-      <Btn label="Quote" on={!!fmt?.quote} onClick={run(toggleQuote)}>
+      <Btn disabled={inCell} label="Quote" on={!inCell && !!fmt?.quote} onClick={run(toggleQuote)}>
         <Quote />
       </Btn>
       <Sep />
       <Btn
+        disabled={inCell}
         label="Insert table"
         onClick={() => {
           if (!view) return
@@ -161,13 +202,13 @@ export function FormatToolbar({
       >
         <Table />
       </Btn>
-      <Btn label="Insert image" onClick={() => file.current?.click()}>
+      <Btn disabled={inCell} label="Insert image" onClick={() => file.current?.click()}>
         <ImagePlus />
       </Btn>
-      <Btn label="Code block" onClick={run(insertBlock('```\n§\n```\n'))}>
+      <Btn disabled={inCell} label="Code block" onClick={run(insertBlock('```\n§\n```\n'))}>
         <SquareCode />
       </Btn>
-      <Btn label="Divider" onClick={run(insertBlock('---\n§'))}>
+      <Btn disabled={inCell} label="Divider" onClick={run(insertBlock('---\n§'))}>
         <Minus />
       </Btn>
       <input

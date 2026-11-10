@@ -358,6 +358,51 @@ class TableWidget extends WidgetType {
 
 const tableAt = (view: EditorView, wrap: HTMLElement) => parseTable(view.state.doc, view.posAtDOM(wrap))
 
+// activeCell is the grid cell of this editor that has the focus.
+export function activeCell(view: EditorView): HTMLElement | null {
+  const el = document.activeElement as HTMLElement | null
+  return el && (el.tagName === 'TD' || el.tagName === 'TH') && el.closest('.cm-lp-grid') && view.contentDOM.contains(el) ? el : null
+}
+
+function cellAt(view: EditorView, el: HTMLElement) {
+  const wrap = el.closest<HTMLElement>('.cm-lp-grid-wrap')!
+  return { t: tableAt(view, wrap), row: (el.parentElement as HTMLTableRowElement).rowIndex, col: (el as HTMLTableCellElement).cellIndex }
+}
+
+// toggleCellMark wraps the selection of a cell in marker, or removes marker when it surrounds the selection.
+export function toggleCellMark(view: EditorView, el: HTMLElement, m: string) {
+  const { t, row, col } = cellAt(view, el)
+  if (!t) return
+  const text = el.textContent ?? ''
+  const [a, b] = textOffsets(el)
+  const n = m.length
+  let next: string
+  let sel: [number, number]
+  if (text.slice(a - n, a) === m && text.slice(b, b + n) === m) {
+    next = text.slice(0, a - n) + text.slice(a, b) + text.slice(b + n)
+    sel = [a - n, b - n]
+  } else if (b - a >= 2 * n && text.slice(a, a + n) === m && text.slice(b - n, b) === m) {
+    next = text.slice(0, a) + text.slice(a + n, b - n) + text.slice(b)
+    sel = [a, b - 2 * n]
+  } else {
+    next = text.slice(0, a) + m + text.slice(a, b) + m + text.slice(b)
+    sel = [a + n, b + n]
+  }
+  el.textContent = next
+  el.dataset.src = next
+  view.dispatch({ changes: setCell(t, row, col, next), userEvent: 'input.format' })
+  selectText(el, ...sel)
+}
+
+// cellHistory runs undo or redo from a cell, then shows the new text of the cell.
+export function cellHistory(view: EditorView, el: HTMLElement, which: 'undo' | 'redo') {
+  ;(which === 'undo' ? undo : redo)(view)
+  const { t, row, col } = cellAt(view, el)
+  el.textContent = t ? cellText(t, row, col) : ''
+  el.dataset.src = el.textContent
+  caretToEnd(el)
+}
+
 // focusCell finds the grid of the table at from after an update and puts the caret at the end of a cell.
 export function focusCell(view: EditorView, from: number, row: number, col: number) {
   for (const w of view.contentDOM.querySelectorAll<HTMLElement>('.cm-lp-grid-wrap')) {
@@ -433,23 +478,12 @@ function editableCell(view: EditorView, wrap: HTMLElement, el: HTMLElement) {
     const cols = t.header.cells.length
     const mod = e.ctrlKey || e.metaKey
     const key = e.key.toLowerCase()
-    const refresh = () => {
-      const now = tableAt(view, wrap)
-      el.textContent = now ? cellText(now, r, c) : ''
-      caretToEnd(el)
-    }
     if (mod && cellWraps[key] && !e.shiftKey && !e.altKey) {
       e.preventDefault()
-      const m = cellWraps[key]
-      const text = el.textContent ?? ''
-      const [a, b] = textOffsets(el)
-      el.textContent = text.slice(0, a) + m + text.slice(a, b) + m + text.slice(b)
-      write(el.textContent)
-      selectText(el, a + m.length, b + m.length)
+      toggleCellMark(view, el, cellWraps[key])
     } else if (mod && (key === 'z' || key === 'y')) {
       e.preventDefault()
-      ;(key === 'y' || e.shiftKey ? redo : undo)(view)
-      refresh()
+      cellHistory(view, el, key === 'y' || e.shiftKey ? 'redo' : 'undo')
     } else if (e.key === 'Tab') {
       e.preventDefault()
       const i = r * cols + c + (e.shiftKey ? -1 : 1)
