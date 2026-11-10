@@ -70,7 +70,7 @@ const shortcuts: { label: string; rows: [string[], string][] }[] = [
       [['Ctrl', 'E'], 'Inline code'],
       [['Ctrl', '.'], 'Superscript'],
       [['Ctrl', ','], 'Subscript'],
-      [['Ctrl', 'K'], 'Link'],
+      [['Ctrl', 'K'], 'Link: edit its text and address'],
     ],
   },
   {
@@ -87,11 +87,13 @@ const shortcuts: { label: string; rows: [string[], string][] }[] = [
     label: 'Document',
     rows: [
       [['Ctrl', 'Alt', 'M'], 'Comment on the selection'],
-      [['Ctrl', 'Alt', 'L'], 'Live mode: Markdown renders as you type'],
+      [['Ctrl', 'Alt', 'L'], 'Live mode: the document as it reads, edited in place'],
       [['Ctrl', 'Alt', 'E'], 'Editor only'],
       [['Ctrl', 'Alt', 'B'], 'Editor and preview side by side'],
       [['Ctrl', 'Alt', 'V'], 'Preview only'],
       [['Select text'], 'Comment, suggest a change or ask the AI'],
+      [['Tab', 'Enter'], 'In a live table: next cell, cell below. On the last row, a new row'],
+      [['Right click'], 'In a live table: rows, columns, alignment, tidy'],
       [['Esc'], 'In slide mode: show all slides'],
       [['D'], 'In slide mode: switch between light and dark'],
     ],
@@ -171,7 +173,7 @@ export function SyntaxHelp({ open, onOpenChange }: { open: boolean; onOpenChange
                 </section>
               ))}
               <p className="pt-3 text-xs text-muted-foreground">
-                Formatting and line keys work while the editor has focus. Press the same key again to remove the formatting. On a Mac, Cmd works in place of Ctrl.
+                Formatting and line keys work while the editor has focus, and the toolbar above the editor runs the same commands. Press the same key again to remove the formatting. On a Mac, Cmd works in place of Ctrl.
               </p>
             </TabsContent>
           </div>

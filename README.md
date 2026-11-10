@@ -40,7 +40,10 @@ docker compose up -d greydoc
 | New document | Press "New document", or open `/new`. `/new?alias=standup` picks the address. |
 | Short address | `/<alias>` opens `/n/<alias>`. HedgeDoc 1 links work for imported documents; see [docs/import-hedgedoc.md](docs/import-hedgedoc.md). |
 | Change the address | Menu, "Address", for the owner. A new custom address replaces the previous one, which stops working. `/n/<document id>` always opens the document, and older generated or imported addresses keep working. `PUT /api/notes/<alias>/slug` with `{"slug": "<name>"}` does the same. |
-| Read and edit in one view | Documents open in split view: editor and preview side by side, as in HedgeDoc. Live mode (the notebook button, Ctrl+Alt+L) renders the document in place: the line you edit shows its Markdown, and a click on a diagram, table or formula edits its source. The pencil and eye buttons give the editor alone and the preview alone. Your browser remembers the last mode you chose. |
+| Read and edit in one view | Documents open in split view: editor and preview side by side, as in HedgeDoc. Live mode (the notebook button, Ctrl+Alt+L) shows the document as the preview does and lets you edit it in place. A click on a diagram or formula edits its source. The pencil and eye buttons give the editor alone and the preview alone. The buttons change the open document in this tab only. |
+| Choose how documents open | Settings, "Editor". "Open documents in" sets the starting mode: Live, Editor, Split or Preview. "Live style" sets what live mode shows: Document never shows Markdown, Obsidian shows the Markdown of the line you edit. Both choices are stored on your account. |
+| Format without Markdown | The toolbar above the editor has undo, redo, the paragraph style, bold, italic, strikethrough, highlight, inline code, link, the three list types, quote, table, image, code block and divider. Each button writes Markdown, as its keyboard shortcut does. The link button edits the text and the address of the link under the cursor. People with comment access get no toolbar. |
+| Edit a table | In live mode a table is a grid. Type in a cell. Tab and Shift+Tab move to the next and the previous cell, Enter moves down. On the last row, Tab and Enter add a row. The "⋯" button on a cell, or a right click, adds and deletes rows and columns, sets the alignment, pads the columns ("Tidy table"), and shows the table as Markdown until the cursor leaves it. |
 | Tags | Add `tags: [design, q4]` to the front matter. Click a tag on the home page to filter. |
 | Link to a document | Type `[[` in the editor and pick a document. It inserts `[[alias|Title]]`: the address, then the link text, which you can edit. `[[alias]]` alone shows the current title of the document. |
 | Table of contents | On wide screens, the view page and the preview-only mode show the headings on the right, as in HedgeDoc: top-level headings, the open section, and "Expand all". `[toc]` in the text inserts a table of contents too. |
@@ -69,7 +72,7 @@ docker compose up -d greydoc
 |---|---|---|
 | `/new` | Same | `/new?alias=<name>` picks the address. |
 | `/<id>` (alias, document ID or short ID) | Same | IDs are case-insensitive. Import documents with all their IDs, see [import](docs/import-hedgedoc.md). |
-| `?edit`, `?view`, `?both` | Same | greydoc adds a live mode and remembers the last mode. |
+| `?edit`, `?view`, `?both` | Same | greydoc adds a live mode. Without a parameter, a document opens in the mode chosen in Settings. |
 | `/<id>/publish`, `/s/<shortid>` | Same | |
 | `/<id>/slide`, `/p/<shortid>` | Same | |
 | `/<id>/download` | Same | |
