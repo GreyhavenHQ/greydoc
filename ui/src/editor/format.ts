@@ -1,5 +1,6 @@
 import { EditorSelection, Prec, type ChangeSpec, type EditorState, type Extension, type StateCommand, type Transaction } from '@codemirror/state'
 import { syntaxTree } from '@codemirror/language'
+import { slugify } from '@/render/plugins'
 import { keymap, type EditorView, type KeyBinding } from '@codemirror/view'
 
 const userEvent = 'input.format'
@@ -262,6 +263,38 @@ export function linkAt(state: EditorState): LinkInfo | null {
 export function linkMarkdown(text: string, url: string): string {
   const label = text.replace(/[[\]]/g, '') || url
   return url ? `[${label}](${url.replace(/[()\s]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0'))})` : label
+}
+
+export interface LinkTargetInfo {
+  from: number
+  to: number
+  url: string
+  // note is a link to another document. editable says whether the link popover can change it.
+  note: boolean
+  editable: boolean
+}
+
+// linkInfoAt finds what a click at pos would open: a link, a bare address or a [[link]] to a document.
+export function linkInfoAt(state: EditorState, pos: number): LinkTargetInfo | null {
+  const line = state.doc.lineAt(pos)
+  for (const m of line.text.matchAll(/\[\[([A-Za-z0-9_-]{1,64})(?:#([^\]|\n]+))?(?:\|[^\]\n]+)?\]\]/g)) {
+    const from = line.from + m.index!
+    const to = from + m[0].length
+    if (pos < from || pos > to || m[1].toLowerCase() === 'toc') continue
+    return { from, to, url: '/n/' + m[1].toLowerCase() + (m[2] ? '#' + slugify(m[2]) : ''), note: true, editable: false }
+  }
+  for (const side of [-1, 1] as const) {
+    for (let n: ReturnType<typeof syntaxTree>['topNode'] | null = syntaxTree(state).resolveInner(pos, side); n; n = n.parent) {
+      if (n.name === 'Link') {
+        const url = n.getChild('URL')
+        if (url) return { from: n.from, to: n.to, url: state.sliceDoc(url.from, url.to), note: false, editable: true }
+      }
+      if (n.name === 'Autolink' || (n.name === 'URL' && !['Link', 'Image', 'Autolink'].includes(n.parent?.name ?? ''))) {
+        return { from: n.from, to: n.to, url: state.sliceDoc(n.from, n.to).replace(/^<|>$/g, ''), note: false, editable: false }
+      }
+    }
+  }
+  return null
 }
 
 // linkChange sets the link at the cursor, or makes one of the selection. An empty url removes the link and keeps its text.

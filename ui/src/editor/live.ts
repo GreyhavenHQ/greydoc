@@ -282,6 +282,10 @@ class LabelWidget extends WidgetType {
     el.textContent = this.text
     return el
   }
+  // A click on a link to a document puts the cursor there, so its card shows.
+  ignoreEvent() {
+    return this.cls !== 'cm-lp-notelink'
+  }
 }
 
 const undo = yUndoManagerKeymap.find((k) => k.key === 'Mod-z')!.run!
@@ -654,6 +658,15 @@ function editableCell(view: EditorView, wrap: HTMLElement, el: HTMLElement) {
     el.dataset.src = text
     if (t) view.dispatch({ changes: setCell(t, r, c, text), userEvent: 'input.type' })
   }
+  // Ctrl or Cmd and a click opens a link of the cell. A plain click edits the cell.
+  el.addEventListener('mousedown', (e) => {
+    const a = (e.target as HTMLElement).closest('a')
+    if (!(e.ctrlKey || e.metaKey) || !a || !el.contains(a)) return
+    e.preventDefault()
+    const href = a.getAttribute('href') ?? ''
+    if (href.startsWith('/')) location.assign(href)
+    else window.open(href, '_blank', 'noopener,noreferrer')
+  })
   el.oncontextmenu = (e) => {
     const open = view.state.facet(tableMenu)
     const t = tableAt(view, wrap)

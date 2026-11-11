@@ -54,6 +54,8 @@ import { activeCell, canToggleTasks, tableMenu, type TableMenuRequest } from '@/
 import { TableMenu } from '@/components/TableMenu'
 import { FormatToolbar } from '@/components/FormatToolbar'
 import { cellLinkTarget, LinkPopover, linkTarget, type LinkTarget } from '@/components/LinkPopover'
+import { LinkCard } from '@/components/LinkCard'
+import { linkAt, linkChange, linkInfoAt, type LinkTargetInfo } from '@/editor/format'
 import { taskToggle } from '@/lib/tasks'
 import { captureEdits, setSuggestionRanges, suggestionDecorations, type SuggestionAction } from '@/editor/suggestions'
 import { anchorRange, resolvePoint, resolveRange } from '@/editor/anchors'
@@ -643,6 +645,51 @@ export default function Editor() {
     setLinkEdit(cell ? cellLinkTarget(v, cell) : linkTarget(v))
     return true
   }, [])
+  // linkCard is the link under the cursor, shown in a card that opens it.
+  const [linkCard, setLinkCard] = useState<{ info: LinkTargetInfo; label: string; top: number; left: number } | null>(null)
+  const openTarget = useCallback(
+    (info: LinkTargetInfo) => {
+      if (info.note || info.url.startsWith('/')) navigate(info.url)
+      else window.open(info.url, '_blank', 'noopener,noreferrer')
+    },
+    [navigate],
+  )
+  const openTargetRef = useRef(openTarget)
+  openTargetRef.current = openTarget
+  const linkCards = useMemo(() => {
+    let frame = 0
+    const place = (v: CMView) => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const sel = v.state.selection.main
+        const info = sel.empty && v.hasFocus ? linkInfoAt(v.state, sel.head) : null
+        const at = info && v.coordsAtPos(info.from, 1)
+        if (!info || !at) return setLinkCard(null)
+        const host = v.dom.getBoundingClientRect()
+        const text = v.state.sliceDoc(info.from, info.to)
+        const label = info.note ? (/\|([^\]]+)\]\]$/.exec(text)?.[1] ?? /^\[\[([^\]|#]+)/.exec(text)?.[1] ?? '') : ''
+        setLinkCard({ info, label, top: at.bottom - host.top + 6, left: Math.max(4, Math.min(at.left - host.left, host.width - 390)) })
+      })
+    }
+    return [
+      CMView.updateListener.of((u) => {
+        if (u.selectionSet || u.docChanged || u.geometryChanged || u.focusChanged || u.viewportChanged) place(u.view)
+      }),
+      CMView.domEventHandlers({
+        scroll: (_e, v) => place(v),
+        // Ctrl or Cmd and a click opens the link, as in a word processor.
+        mousedown(e, v) {
+          if (e.button !== 0 || !(e.ctrlKey || e.metaKey)) return false
+          const pos = v.posAtCoords({ x: e.clientX, y: e.clientY })
+          const info = pos === null ? null : linkInfoAt(v.state, pos)
+          if (!info) return false
+          e.preventDefault()
+          openTargetRef.current(info)
+          return true
+        },
+      }),
+    ]
+  }, [])
   // selMenu is where a right click on a selection opened Comment and Suggest. Writers see them only then.
   const [selMenu, setSelMenu] = useState<{ top: number; left: number } | null>(null)
   const selectionMenu = useMemo(
@@ -692,6 +739,7 @@ export default function Editor() {
       }),
       selectionListener(onSelection),
       selectionMenu,
+      linkCards,
       noteLinkCompletion(searchNotes, () => aliasRef.current, (a) => noteInfo(a).then((i) => i?.headings ?? [])),
       mentionsEnabled
         ? mentions(
@@ -735,7 +783,7 @@ export default function Editor() {
         },
       ),
     ],
-    [commentOn, openLink, onSelection, selectionMenu, mentionsEnabled],
+    [commentOn, openLink, onSelection, selectionMenu, linkCards, mentionsEnabled],
   )
 
   const toggleTask = useCallback(
@@ -1144,6 +1192,21 @@ export default function Editor() {
                       </span>
                     ))}
                   </div>
+                )}
+                {linkCard && !linkEdit && view && (
+                  <LinkCard
+                    {...linkCard}
+                    onOpen={openTarget}
+                    onEdit={canEdit && linkCard.info.editable ? () => openLink(view) : undefined}
+                    onRemove={
+                      canEdit && linkCard.info.editable
+                        ? () => {
+                            const l = linkAt(view.state)
+                            if (l) view.dispatch(linkChange(view.state, l.text, ''))
+                          }
+                        : undefined
+                    }
+                  />
                 )}
                 {linkEdit && view && <LinkPopover view={view} target={linkEdit} onClose={() => setLinkEdit(null)} />}
                 {tableMenuReq && <TableMenu request={tableMenuReq} onClose={() => setTableMenuReq(null)} />}

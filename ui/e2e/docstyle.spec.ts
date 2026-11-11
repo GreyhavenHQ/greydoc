@@ -102,3 +102,41 @@ test('boxes, callouts, definitions and collapsible sections are edited in place'
   await type('Hidden text', ' Shown here.')
   await expect.poll(md).toContain(':::spoiler Click to open now\nHidden text. Shown here.\n:::')
 })
+
+test('a link under the cursor shows a card that opens, edits or removes it', async ({ page, context }) => {
+  const alias = (await (await page.request.post('/api/notes', { data: { content: sample } })).json()).alias
+  await page.goto('/n/' + alias)
+  const editor = page.getByTestId('editor')
+  const card = page.getByTestId('link-card')
+  await expect(card).toHaveCount(0)
+  await editor.locator('.cm-lp-link').click()
+  await expect(card.getByRole('link', { name: 'https://example.com' })).toHaveAttribute('target', '_blank')
+  const popup = context.waitForEvent('page')
+  await card.getByRole('link', { name: 'https://example.com' }).click()
+  expect((await popup).url()).toContain('example.com')
+  await (await popup).close()
+
+  await editor.locator('.cm-line', { hasText: 'Quarterly review' }).click()
+  await expect(card).toHaveCount(0)
+  const direct = context.waitForEvent('page')
+  await editor.locator('.cm-lp-link').click({ modifiers: ['ControlOrMeta'] })
+  expect((await direct).url()).toContain('example.com')
+  await (await direct).close()
+
+  await editor.locator('.cm-lp-link').click()
+  await card.getByRole('button', { name: 'Edit link' }).click()
+  await expect(page.getByTestId('link-popover').getByLabel('Address')).toHaveValue('https://example.com')
+  await page.keyboard.press('Escape')
+  await editor.locator('.cm-lp-link').click()
+  await card.getByRole('button', { name: 'Remove link' }).click()
+  await expect.poll(async () => (await page.request.get(`/api/notes/${alias}/download.md`)).text()).toContain('for the Q4 review.')
+})
+
+test('a link to a document opens it from its card', async ({ page }) => {
+  const target = (await (await page.request.post('/api/notes', { data: { content: '# Target doc\n' } })).json()).alias
+  const alias = (await (await page.request.post('/api/notes', { data: { content: `See [[${target}|Target doc]] here.\n` } })).json()).alias
+  await page.goto('/n/' + alias)
+  await page.getByTestId('editor').locator('.cm-lp-notelink').click()
+  await page.getByTestId('link-card').getByRole('link', { name: 'Open Target doc' }).click()
+  await expect(page).toHaveURL(new RegExp('/n/' + target + '$'))
+})

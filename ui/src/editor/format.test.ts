@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { EditorSelection, EditorState, type StateCommand, type Transaction } from '@codemirror/state'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { ensureSyntaxTree } from '@codemirror/language'
-import { formatState, insertBlock, insertFootnote, insertLink, linkAt, linkChange, setHeading, toggleList, toggleQuote, toggleWrap } from '@/editor/format'
+import { formatState, insertBlock, insertFootnote, insertLink, linkAt, linkChange, linkInfoAt, setHeading, toggleList, toggleQuote, toggleWrap } from '@/editor/format'
 import { captureEdits, type PendingEdit } from '@/editor/suggestions'
 
 // Text notation: | is a cursor, « and » are the anchor and the head of a selection.
@@ -212,5 +212,21 @@ describe('insertFootnote', () => {
   it('adds the next free number at the cursor and its note at the end', () => {
     expect(fmt(insertFootnote, 'A claim|.')).toBe('A claim[^1].\n\n[^1]: |')
     expect(fmt(insertFootnote, 'One[^1] two|.\n\n[^1]: First.\n')).toBe('One[^1] two[^2].\n\n[^1]: First.\n[^2]: |')
+  })
+})
+
+describe('linkInfoAt', () => {
+  const at = (doc: string, needle: string) => {
+    const st = EditorState.create({ doc, extensions: markdown({ base: markdownLanguage }) })
+    ensureSyntaxTree(st, st.doc.length, 1000)
+    return linkInfoAt(st, doc.indexOf(needle) + 1)
+  }
+  it('finds the address of a link, a bare address and a link to a document', () => {
+    expect(at('See [Q4 review](https://example.com).', 'review')).toEqual({ from: 4, to: 36, url: 'https://example.com', note: false, editable: true })
+    expect(at('Go to https://x.example/a now', 'example')).toEqual({ from: 6, to: 25, url: 'https://x.example/a', note: false, editable: false })
+    expect(at('Go to <https://x.example> now', 'example')).toEqual({ from: 6, to: 25, url: 'https://x.example', note: false, editable: false })
+    expect(at('See [[zz-target|Target]] here', 'target')).toEqual({ from: 4, to: 24, url: '/n/zz-target', note: true, editable: false })
+    expect(at('See [[zz-target#Release plan|Plan]] here', 'Plan]')?.url).toBe('/n/zz-target#release-plan')
+    expect(at('Plain text', 'text')).toBeNull()
   })
 })
