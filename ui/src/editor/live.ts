@@ -189,6 +189,83 @@ class BulletWidget extends WidgetType {
   }
 }
 
+export const boxKinds = ['info', 'success', 'warning', 'danger', 'spoiler']
+const alertKinds = ['note', 'tip', 'important', 'warning', 'caution']
+const title = (k: string) => k[0].toUpperCase() + k.slice(1)
+
+// blockKindChange changes the kind of the box or the alert that starts on the line at pos.
+export function blockKindChange(state: EditorState, pos: number, kind: string): ChangeSpec | null {
+  const line = state.doc.lineAt(pos)
+  const box = /^:::\s*(\w+)/.exec(line.text)
+  if (box) {
+    const at = line.from + box[0].length - box[1].length
+    return { from: at, to: at + box[1].length, insert: kind }
+  }
+  const alert = /^>\s*\[!(\w+)\]/.exec(line.text)
+  if (alert) {
+    const at = line.from + alert[0].length - alert[1].length - 1
+    return { from: at, to: at + alert[1].length, insert: kind.toUpperCase() }
+  }
+  return null
+}
+
+// KindWidget names a box or an alert and lets a writer change its kind.
+class KindWidget extends WidgetType {
+  constructor(
+    readonly kind: string,
+    readonly cls: string,
+    readonly block: boolean,
+  ) {
+    super()
+  }
+  get label() {
+    return title(this.kind)
+  }
+  eq(o: KindWidget) {
+    return o.kind === this.kind && o.cls === this.cls && o.block === this.block
+  }
+  toDOM(view: EditorView) {
+    const el = document.createElement(this.block ? 'div' : 'span')
+    el.className = 'cm-lp-kind ' + this.cls
+    const name = document.createElement('span')
+    name.className = 'cm-lp-kind-name'
+    name.textContent = this.label
+    el.appendChild(name)
+    if (!view.state.readOnly && view.state.facet(canToggleTasks)()) {
+      const kinds = alertKinds.includes(this.kind) && this.cls.includes('alert') ? alertKinds : boxKinds
+      const select = document.createElement('select')
+      select.className = 'cm-lp-kind-select'
+      select.setAttribute('aria-label', this.cls.includes('alert') ? 'Callout type' : 'Box type')
+      for (const k of kinds) select.add(new Option(title(k), k, false, k === this.kind))
+      select.onmousedown = (e) => e.stopPropagation()
+      select.onchange = () => {
+        const change = blockKindChange(view.state, view.posAtDOM(el), select.value)
+        if (change) view.dispatch({ changes: change, userEvent: 'input.format' })
+        view.focus()
+      }
+      el.appendChild(select)
+    }
+    return el
+  }
+  ignoreEvent() {
+    return true
+  }
+}
+
+class BoxEdgeWidget extends WidgetType {
+  constructor(readonly cls: string) {
+    super()
+  }
+  eq(o: BoxEdgeWidget) {
+    return o.cls === this.cls
+  }
+  toDOM() {
+    const el = document.createElement('div')
+    el.className = 'cm-lp-box-bottom ' + this.cls
+    return el
+  }
+}
+
 class LabelWidget extends WidgetType {
   constructor(
     readonly text: string,
@@ -755,6 +832,7 @@ export function liveDecorations(state: EditorState): DecorationSet {
   const rendered: [number, number][] = []
   const headings: string[] = []
   const blocks: { from: number; to: number; kind: string }[] = []
+  const boxes: { open: { from: number; to: number; text: string }; close: { from: number; to: number }; kind: string }[] = []
   let fence = ''
   for (let n = 1; n <= doc.lines; n++) {
     const line = doc.line(n)
@@ -768,17 +846,38 @@ export function liveDecorations(state: EditorState): DecorationSet {
     if (/^ {0,3}#{1,6}\s/.test(line.text)) headings.push(line.text)
     if (/^\[\[?toc\]?\]$/i.test(line.text.trim())) blocks.push({ from: line.from, to: line.to, kind: 'toc' })
     else if (/^:::\s*\w/.test(line.text)) {
+      const kind = /^:::\s*(\w+)/.exec(line.text)![1].toLowerCase()
       let m = n + 1
       while (m <= doc.lines && !/^:::\s*$/.test(doc.line(m).text)) m++
-      if (m > doc.lines) continue
-      blocks.push({ from: line.from, to: doc.line(m).to, kind: 'container' })
+      if (m > doc.lines || !boxKinds.includes(kind)) continue
+      boxes.push({ open: line, close: doc.line(m), kind })
       n = m
     } else if (/^:\s/.test(line.text) && n > 1 && doc.line(n - 1).text.trim() && !/^:\s/.test(doc.line(n - 1).text)) {
-      let m = n
-      while (m < doc.lines && /^(:\s|\s{2,}\S)/.test(doc.line(m + 1).text)) m++
-      blocks.push({ from: doc.line(n - 1).from, to: doc.line(m).to, kind: 'deflist' })
-      n = m
+      out.push(Decoration.line({ class: 'cm-lp-dt' }).range(doc.line(n - 1).from))
+      for (; n <= doc.lines && /^:\s/.test(doc.line(n).text); n++) {
+        const l = doc.line(n)
+        out.push(Decoration.line({ class: 'cm-lp-dd' }).range(l.from))
+        if (!lineActive(l.from)) out.push(hide.range(l.from, l.from + 2))
+      }
+      n--
     }
+  }
+  // A box is edited in place: its lines take the box style, and its marker lines become its top and bottom edges.
+  for (const b of boxes) {
+    const cls = 'cm-lp-box cm-lp-box-' + b.kind
+    if (b.kind === 'spoiler') {
+      const prefix = /^:::\s*spoiler\s*/i.exec(b.open.text)![0]
+      out.push(Decoration.line({ class: cls + ' cm-lp-first cm-lp-box-title' }).range(b.open.from))
+      out.push(Decoration.replace({ widget: new KindWidget('spoiler', 'cm-lp-kind-spoiler', false) }).range(b.open.from, b.open.from + prefix.length))
+    } else {
+      out.push(Decoration.replace({ widget: new KindWidget(b.kind, 'cm-lp-box-top ' + cls, true), block: true }).range(b.open.from, b.open.to))
+    }
+    for (let pos = b.open.to + 1; pos < b.close.from; ) {
+      const l = doc.lineAt(pos)
+      out.push(Decoration.line({ class: cls }).range(l.from))
+      pos = l.to + 1
+    }
+    out.push(Decoration.replace({ widget: new BoxEdgeWidget(cls), block: true }).range(b.close.from, b.close.to))
   }
   for (const b of blocks) {
     if (touchesBlock(b.from, b.to)) continue
@@ -896,7 +995,7 @@ export function liveDecorations(state: EditorState): DecorationSet {
           out.push(Decoration.line({ class: 'cm-lp-last' }).range(doc.lineAt(node.to).from))
           if (alert && !lineActive(first.from)) {
             const name = alert[1][0].toUpperCase() + alert[1].slice(1).toLowerCase()
-            out.push(Decoration.replace({ widget: new LabelWidget(name, 'cm-lp-alert-title') }).range(first.from, first.from + alert[0].length))
+            out.push(Decoration.replace({ widget: new KindWidget(alert[1].toLowerCase(), 'cm-lp-alert-title', false) }).range(first.from, first.from + alert[0].length))
             alertTo = first.from + alert[0].length
           }
           return
@@ -1162,6 +1261,33 @@ const liveTheme = EditorView.theme({
     paddingBottom: '0.7em !important',
   },
   '.cm-lp-alert-title': { fontWeight: '600' },
+  // The kind of a box or an alert. A transparent select over its name opens the list of kinds.
+  '.cm-lp-kind': { position: 'relative' },
+  '.cm-lp-kind-select': { position: 'absolute', inset: '0', opacity: '0', cursor: 'pointer', width: '100%', fontSize: '14px' },
+  '.cm-lp-alert-title .cm-lp-kind-name::after, .cm-lp-kind-spoiler .cm-lp-kind-name::after': { content: '" ▾"', fontSize: '0.7em', opacity: '0', fontWeight: '400' },
+  '.cm-lp-alert-title:hover .cm-lp-kind-name::after, .cm-lp-kind-spoiler:hover .cm-lp-kind-name::after': { opacity: '0.7' },
+  '.cm-lp-box': {
+    color: 'rgb(var(--foreground))', borderStyle: 'solid', borderWidth: '0 1px 0 4px !important', paddingLeft: '1em !important', paddingRight: '1em !important',
+  },
+  '.cm-lp-box-top': { display: 'flex', justifyContent: 'flex-end', height: '0.7em', borderTopWidth: '1px !important', borderTopLeftRadius: 'var(--radius)', borderTopRightRadius: 'var(--radius)', overflow: 'visible' },
+  '.cm-lp-box-top .cm-lp-kind-name': {
+    position: 'relative', top: '2px', fontSize: '11px', lineHeight: '16px', padding: '0 6px', borderRadius: '9999px', color: 'rgb(var(--muted-foreground))', opacity: '0.45',
+  },
+  '.cm-lp-box-top .cm-lp-kind-name::after': { content: '" ▾"' },
+  '.cm-lp-box-top:hover .cm-lp-kind-name': { opacity: '1', backgroundColor: 'rgb(var(--card))' },
+  '.cm-lp-box-top .cm-lp-kind-select': { left: 'auto', width: '80px', height: '18px' },
+  '.cm-lp-box-bottom': { height: '0.7em', borderBottomWidth: '1px !important', borderBottomLeftRadius: 'var(--radius)', borderBottomRightRadius: 'var(--radius)', marginBottom: '0.2em' },
+  '.cm-lp-box-info': { borderColor: 'rgb(42 127 217 / 0.5) !important', backgroundColor: 'rgb(42 127 217 / 0.07)' },
+  '.cm-lp-box-success': { borderColor: 'rgb(42 168 118 / 0.5) !important', backgroundColor: 'rgb(42 168 118 / 0.07)' },
+  '.cm-lp-box-warning': { borderColor: 'rgb(196 154 0 / 0.55) !important', backgroundColor: 'rgb(196 154 0 / 0.08)' },
+  '.cm-lp-box-danger': { borderColor: 'rgb(var(--destructive) / 0.5) !important', backgroundColor: 'rgb(var(--destructive) / 0.07)' },
+  '.cm-lp-box-spoiler': { borderColor: 'rgb(var(--border)) !important', borderLeftWidth: '1px !important', paddingLeft: '0.9em !important' },
+  '.cm-lp-box-spoiler.cm-lp-first': { borderTopWidth: '1px !important', borderTopLeftRadius: 'var(--radius)', borderTopRightRadius: 'var(--radius)', paddingTop: '0.4em !important', fontWeight: '500' },
+  '.cm-lp-kind-spoiler .cm-lp-kind-name': { fontSize: '0', marginRight: '6px' },
+  '.cm-lp-kind-spoiler .cm-lp-kind-name::before': { content: '"▾"', fontSize: '12px' },
+  '.cm-lp-kind-spoiler .cm-lp-kind-select': { width: '1.2em' },
+  '.cm-lp-dt': { fontWeight: '600' },
+  '.cm-lp-dd': { paddingLeft: '1.5em !important' },
   '.cm-lp-alert-note': { borderColor: 'rgb(42 127 217 / 0.5) !important', backgroundColor: 'rgb(42 127 217 / 0.07)' },
   '.cm-lp-alert-tip': { borderColor: 'rgb(42 168 118 / 0.5) !important', backgroundColor: 'rgb(42 168 118 / 0.07)' },
   '.cm-lp-alert-important': { borderColor: 'rgb(166 42 217 / 0.45) !important', backgroundColor: 'rgb(166 42 217 / 0.06)' },

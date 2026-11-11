@@ -68,3 +68,37 @@ test('a grid cell is edited as rendered text in the document style', async ({ pa
   await expect(owner.locator('em')).toHaveText('Chen')
   await expect.poll(async () => (await page.request.get(`/api/notes/${alias}/download.md`)).text()).toContain('| **Asia Pacific** | *Chen* |')
 })
+
+test('boxes, callouts, definitions and collapsible sections are edited in place', async ({ page }) => {
+  const content = ':::info\nAlso success.\n:::\n\n> [!NOTE]\n> Good to know.\n\nTerm\n: What it means.\n\n:::spoiler Click to open\nHidden text.\n:::\n'
+  const alias = (await (await page.request.post('/api/notes', { data: { content } })).json()).alias
+  await page.goto('/n/' + alias)
+  const editor = page.getByTestId('editor')
+  const md = async () => (await page.request.get(`/api/notes/${alias}/download.md`)).text()
+  const type = async (line: string, text: string) => {
+    await editor.locator('.cm-line', { hasText: line }).click()
+    await page.keyboard.press('End')
+    await page.keyboard.type(text)
+  }
+
+  await type('Also success', ' More.')
+  await expect.poll(md).toContain(':::info\nAlso success. More.\n:::')
+  await expect(editor.locator('.cm-line.cm-lp-box-info', { hasText: 'Also success. More.' })).toHaveCount(1)
+  await expect(editor).not.toContainText(':::')
+  await editor.getByLabel('Box type').first().selectOption('warning')
+  await expect.poll(md).toContain(':::warning\nAlso success. More.\n:::')
+  await expect(editor.locator('.cm-line.cm-lp-box-warning')).not.toHaveCount(0)
+
+  await type('Good to know', ' Really.')
+  await expect.poll(md).toContain('> [!NOTE]\n> Good to know. Really.')
+  await editor.getByLabel('Callout type').selectOption('tip')
+  await expect.poll(md).toContain('> [!TIP]\n> Good to know. Really.')
+
+  await type('What it means', ' Exactly.')
+  await expect.poll(md).toContain('Term\n: What it means. Exactly.')
+  await expect(editor.locator('.cm-line.cm-lp-dd')).toHaveText('What it means. Exactly.')
+
+  await type('Click to open', ' now')
+  await type('Hidden text', ' Shown here.')
+  await expect.poll(md).toContain(':::spoiler Click to open now\nHidden text. Shown here.\n:::')
+})

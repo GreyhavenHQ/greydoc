@@ -94,7 +94,7 @@ test('live mode uses the styles of the view', async ({ browser }) => {
 
   const h2 = editor.locator('.cm-lp-h2')
   expect(await h2.evaluate((el) => getComputedStyle(el).borderBottomStyle)).toBe('solid')
-  await expect(editor.locator('.cm-lp-alert-title')).toHaveText('Note')
+  await expect(editor.locator('.cm-lp-alert-title .cm-lp-kind-name')).toHaveText('Note')
   await expect(editor).not.toContainText('[!NOTE]')
   await expect(editor).not.toContainText('```')
   await ctx.close()

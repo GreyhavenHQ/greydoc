@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { EditorSelection, EditorState } from '@codemirror/state'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
-import { liveDecorations, liveStyle, type LiveStyle } from '@/editor/live'
+import { blockKindChange, liveDecorations, liveStyle, type LiveStyle } from '@/editor/live'
 
 const doc = [
   '---',
@@ -46,8 +46,8 @@ const at = (needle: string) => doc.indexOf(needle)
 
 type Deco = { from: number; to: number; text: string; cls: string; style: string; widget: string; label: string }
 
-function decos(src: string, cursor = src.length): Deco[] {
-  const state = EditorState.create({ doc: src, selection: EditorSelection.cursor(cursor), extensions: [markdown({ base: markdownLanguage })] })
+function decos(src: string, cursor = src.length, style: LiveStyle = 'obsidian'): Deco[] {
+  const state = EditorState.create({ doc: src, selection: EditorSelection.cursor(cursor), extensions: [markdown({ base: markdownLanguage }), liveStyle.of(style)] })
   const out: Deco[] = []
   liveDecorations(state).between(0, src.length, (from, to, d) => {
     const spec = d.spec as { class?: string; attributes?: { style?: string }; widget?: { constructor: { name: string }; text?: string; label?: string } }
@@ -101,7 +101,7 @@ describe('live preview', () => {
   it('renders an alert title instead of its marker', () => {
     const src = '> [!NOTE]\n> Figures are unaudited.\n\nend'
     const ds = decos(src)
-    const title = ds.find((d) => d.widget === 'LabelWidget')
+    const title = ds.find((d) => d.widget === 'KindWidget')
     expect(title?.label).toBe('Note')
     expect(title?.text).toBe('> [!NOTE]')
     expect(lineOf(src, ds, '> [!NOTE]').map((d) => d.cls).join(' ')).toContain('cm-lp-first')
@@ -176,16 +176,44 @@ describe('live preview', () => {
 
     it('renders the blocks as the view does', () => {
       expect(widget('HTMLBlockWidget', '[toc]')).toBeTruthy()
-      expect(widget('HTMLBlockWidget', ':::info')?.text).toBe(':::info\nAlso success.\n:::')
-      expect(widget('HTMLBlockWidget', ':::spoiler')).toBeTruthy()
-      expect(widget('HTMLBlockWidget', 'Term')?.text).toBe('Term\n: What it means.')
       expect(widget('HTMLBlockWidget', '```csvpreview')).toBeTruthy()
       expect(widget('HTMLBlockWidget', '<details>')).toBeTruthy()
     })
 
-    it('shows the source of a block under the cursor', () => {
-      const at = src.indexOf('Also success')
-      expect(decos(src, at).some((d) => d.widget === 'HTMLBlockWidget' && d.text.startsWith(':::info'))).toBe(false)
+    it('shows the source of a rendered block under the cursor', () => {
+      const at = src.indexOf('<details>') + 3
+      expect(decos(src, at).some((d) => d.widget === 'HTMLBlockWidget' && d.text.startsWith('<details>'))).toBe(false)
+    })
+
+    it('edits a box in place: its lines are styled and its markers hidden', () => {
+      for (const style of ['obsidian', 'document'] as const) {
+        const at = src.indexOf('Also success') + 2
+        const ds2 = decos(src, at, style)
+        expect(ds2.some((d) => d.widget === 'HTMLBlockWidget' && d.text.startsWith(':::'))).toBe(false)
+        expect(lineOf(src, ds2, 'Also success').map((d) => d.cls).join(' ')).toContain('cm-lp-box cm-lp-box-info')
+        const kind = ds2.find((d) => d.widget === 'KindWidget' && d.text === ':::info')
+        expect(kind?.label).toBe('Info')
+        expect(ds2.some((d) => d.text === ':::' && !d.cls)).toBe(true)
+        const spoiler = ds2.find((d) => d.widget === 'KindWidget' && d.text === ':::spoiler ')
+        expect(spoiler?.label).toBe('Spoiler')
+      }
+    })
+
+    it('edits a definition in place', () => {
+      const at = src.indexOf('What it') + 2
+      for (const style of ['obsidian', 'document'] as const) {
+        const ds2 = decos(src, style === 'obsidian' ? src.length : at, style)
+        expect(lineOf(src, ds2, 'Term').map((d) => d.cls).join(' ')).toContain('cm-lp-dt')
+        expect(lineOf(src, ds2, ': What').map((d) => d.cls).join(' ')).toContain('cm-lp-dd')
+        expect(ds2.some((d) => d.text === ': ' && !d.cls)).toBe(true)
+      }
+    })
+
+    it('changes the kind of a box or an alert', () => {
+      const state = EditorState.create({ doc: ':::info\nx\n:::\n\n> [!NOTE]\n> y' })
+      expect(state.update({ changes: blockKindChange(state, 0, 'warning')! }).state.doc.toString()).toBe(':::warning\nx\n:::\n\n> [!NOTE]\n> y')
+      const alert = ':::info\nx\n:::\n\n'.length
+      expect(state.update({ changes: blockKindChange(state, alert, 'caution')! }).state.doc.toString()).toBe(':::info\nx\n:::\n\n> [!CAUTION]\n> y')
     })
 
     it('renders the inline marks of the view', () => {
