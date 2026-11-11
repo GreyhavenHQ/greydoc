@@ -47,3 +47,24 @@ test('edit the text and address of a link without Markdown', async ({ page }) =>
   await pop.getByRole('button', { name: 'Remove link' }).click()
   await expect.poll(async () => (await page.request.get(`/api/notes/${alias}/download.md`)).text()).toContain('for the Q4 plan.')
 })
+
+test('a grid cell is edited as rendered text in the document style', async ({ page }) => {
+  const content = '| Region | Owner |\n|---|---|\n| **Asia** | Chen |\n'
+  const alias = (await (await page.request.post('/api/notes', { data: { content } })).json()).alias
+  await page.goto('/n/' + alias)
+  const cell = page.getByTestId('editor').locator('.cm-lp-grid td').filter({ hasText: 'Asia' })
+  await cell.click()
+  await expect(cell).toBeFocused()
+  await expect(cell).toHaveText('Asia')
+  await expect(cell.locator('strong')).toHaveText('Asia')
+  await page.keyboard.press('End')
+  await page.keyboard.type(' Pacific')
+  await expect.poll(async () => (await page.request.get(`/api/notes/${alias}/download.md`)).text()).toContain('| **Asia Pacific** | Chen |')
+
+  const owner = page.getByTestId('editor').locator('.cm-lp-grid td').filter({ hasText: 'Chen' })
+  await owner.dblclick()
+  await page.getByTestId('format-toolbar').getByRole('button', { name: /^Italic/ }).click()
+  await expect(owner).toHaveText('Chen')
+  await expect(owner.locator('em')).toHaveText('Chen')
+  await expect.poll(async () => (await page.request.get(`/api/notes/${alias}/download.md`)).text()).toContain('| **Asia Pacific** | *Chen* |')
+})

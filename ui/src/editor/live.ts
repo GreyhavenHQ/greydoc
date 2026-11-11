@@ -5,6 +5,7 @@ import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemir
 import katex from 'katex'
 import { yUndoManagerKeymap } from 'y-codemirror.next'
 import { renderInline, renderMarkdown } from '@/render/markdown'
+import { cellMarkdown, richCell } from '@/editor/cellhtml'
 import { addColumn, addRow, cellText, parseTable, removeColumn, removeRow, setAlign, setCell, tidy, type Align, type Table } from '@/editor/table'
 import { naturalSize, renderMermaid, themeMode } from '@/render/mermaid'
 import { splitFrontMatter } from '@/lib/meta'
@@ -369,10 +370,49 @@ function cellAt(view: EditorView, el: HTMLElement) {
   return { t: tableAt(view, wrap), row: (el.parentElement as HTMLTableRowElement).rowIndex, col: (el as HTMLTableCellElement).cellIndex }
 }
 
+// cellSource is the Markdown of a cell under edit.
+const cellSource = (el: HTMLElement) => (el.dataset.rich ? (cellMarkdown(el) ?? el.textContent ?? '') : (el.textContent ?? ''))
+
+const markTags: Record<string, string[]> = { '**': ['STRONG', 'B'], '*': ['EM', 'I'], '~~': ['S', 'DEL', 'STRIKE'], '`': ['CODE'], '==': ['MARK'] }
+
+function unwrapNode(n: Node) {
+  const parent = n.parentNode!
+  while (n.firstChild) parent.insertBefore(n.firstChild, n)
+  parent.removeChild(n)
+}
+
+// toggleRichMark sets a mark on the selection of a rendered cell, or removes the mark around it.
+function toggleRichMark(el: HTMLElement, m: string) {
+  const sel = getSelection()
+  if (!sel?.rangeCount) return
+  const range = sel.getRangeAt(0)
+  if (!el.contains(range.commonAncestorContainer)) return
+  const tags = markTags[m]
+  for (let n: Node | null = range.commonAncestorContainer; n && n !== el; n = n.parentNode) {
+    if (tags.includes((n as Element).tagName)) return unwrapNode(n)
+  }
+  if (range.collapsed) return
+  const node = document.createElement(tags[0].toLowerCase())
+  node.appendChild(range.extractContents())
+  for (const inner of node.querySelectorAll(tags.join(','))) unwrapNode(inner)
+  range.insertNode(node)
+  const r = document.createRange()
+  r.selectNodeContents(node)
+  sel.removeAllRanges()
+  sel.addRange(r)
+}
+
 // toggleCellMark wraps the selection of a cell in marker, or removes marker when it surrounds the selection.
 export function toggleCellMark(view: EditorView, el: HTMLElement, m: string) {
   const { t, row, col } = cellAt(view, el)
   if (!t) return
+  if (el.dataset.rich) {
+    toggleRichMark(el, m)
+    const next = cellSource(el)
+    el.dataset.src = next
+    view.dispatch({ changes: setCell(t, row, col, next), userEvent: 'input.format' })
+    return
+  }
   const text = el.textContent ?? ''
   const [a, b] = textOffsets(el)
   const n = m.length
@@ -398,8 +438,10 @@ export function toggleCellMark(view: EditorView, el: HTMLElement, m: string) {
 export function cellHistory(view: EditorView, el: HTMLElement, which: 'undo' | 'redo') {
   ;(which === 'undo' ? undo : redo)(view)
   const { t, row, col } = cellAt(view, el)
-  el.textContent = t ? cellText(t, row, col) : ''
-  el.dataset.src = el.textContent
+  const text = t ? cellText(t, row, col) : ''
+  if (el.dataset.rich) el.innerHTML = renderInline(text)
+  else el.textContent = text
+  el.dataset.src = text
   caretToEnd(el)
 }
 
@@ -440,9 +482,16 @@ function editableCell(view: EditorView, wrap: HTMLElement, el: HTMLElement) {
       menu.style.left = a.right - w.left - 22 + 'px'
       menu.style.top = a.top - w.top + 4 + 'px'
     }
-    // The focused cell shows its Markdown source, as plain text. Equal text stays, so a selection stays.
+    // The document style edits the rendered cell when its Markdown comes back unchanged. Otherwise the cell shows
+    // its source as plain text. Equal content stays, so a selection stays.
     const src = t ? cellText(t, r, c) : ''
-    if (el.textContent !== src || el.childElementCount) el.textContent = src
+    if (view.state.facet(liveStyle) === 'document' && richCell(src)) {
+      el.dataset.rich = '1'
+      if (el.dataset.src !== src) el.innerHTML = renderInline(src)
+    } else {
+      delete el.dataset.rich
+      if (el.textContent !== src || el.childElementCount) el.textContent = src
+    }
   }
   el.onblur = () => {
     const t = tableAt(view, wrap)
@@ -451,7 +500,7 @@ function editableCell(view: EditorView, wrap: HTMLElement, el: HTMLElement) {
     el.dataset.src = text
     el.innerHTML = renderInline(text)
   }
-  el.oninput = () => write(el.textContent ?? '')
+  el.oninput = () => write(cellSource(el))
   // Chromium and WebKit do not select a word on double click in an editable cell inside the editor, so the cell does it.
   el.ondblclick = (e) => {
     const sel = getSelection()
