@@ -83,10 +83,27 @@ const linkDocument = (view: EditorView) => {
 const callouts = ['Note', 'Tip', 'Important', 'Warning', 'Caution']
 const boxes = ['Info', 'Success', 'Warning', 'Danger']
 
-// MoreMenu holds the syntax beyond the common buttons. Like the toolbar buttons, its items never take the focus,
-// so the editor keeps its cursor and the next keys typed go into the text.
-function MoreMenu({ view, disabled }: { view: EditorView | null; disabled: boolean }) {
-  // open holds where the panel goes. It is in a portal: the toolbar scrolls sideways, which would clip it.
+// Action is one toolbar command. It shows as a button when it fits, and as a menu item otherwise.
+interface Action {
+  label: string
+  keys?: string
+  icon: ReactNode
+  on?: boolean
+  disabled?: boolean
+  act: () => void
+}
+
+interface Group {
+  title: string
+  // width is what the group takes in the bar, in pixels, with its separator.
+  width: number
+  actions: Action[]
+}
+
+// MoreMenu holds what the bar cannot show: the groups that do not fit, then the syntax beyond the common buttons.
+// Like the toolbar buttons, its items never take the focus, so the editor keeps its cursor and typing goes on.
+function MoreMenu({ view, inCell, groups }: { view: EditorView | null; inCell: boolean; groups: Group[] }) {
+  // open holds where the panel goes. It is in a portal, so the bar does not clip it.
   const [open, setOpen] = useState<{ top: number; right: number } | null>(null)
   const button = useRef<HTMLButtonElement>(null)
   const panel = useRef<HTMLDivElement>(null)
@@ -109,9 +126,10 @@ function MoreMenu({ view, disabled }: { view: EditorView | null; disabled: boole
       document.removeEventListener('keydown', key, true)
     }
   }, [open])
+  const usable = !inCell || groups.some((g) => g.actions.some((a) => !a.disabled))
   useEffect(() => {
-    if (disabled) setOpen(null)
-  }, [disabled])
+    if (!usable) setOpen(null)
+  }, [usable])
   const run = (cmd: Command) => {
     setOpen(null)
     if (!view) return
@@ -122,19 +140,28 @@ function MoreMenu({ view, disabled }: { view: EditorView | null; disabled: boole
     const r = button.current!.getBoundingClientRect()
     setOpen((o) => (o ? null : { top: r.bottom + 8, right: window.innerWidth - r.right }))
   }
-  const item = (label: string, cmd: Command, keys?: string) => (
+  const entry = (label: string, act: () => void, keys?: string, disabled?: boolean, on?: boolean) => (
     <button
       key={label}
       type="button"
       role="menuitem"
+      disabled={disabled}
+      aria-pressed={on}
       onMouseDown={(e) => e.preventDefault()}
-      onClick={() => run(cmd)}
-      className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
+      onClick={() => {
+        setOpen(null)
+        act()
+      }}
+      className={cn(
+        'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40',
+        on && 'text-primary',
+      )}
     >
       {label}
       {keys && <span className="ml-auto text-xs tracking-widest text-muted-foreground">{keys.replace('Mod-', mod)}</span>}
     </button>
   )
+  const item = (label: string, cmd: Command, keys?: string) => entry(label, () => run(cmd), keys, inCell)
   const chips = (label: string, names: string[], cmd: (name: string) => Command) => (
     <div className="flex items-center gap-1 px-2 py-1 text-sm" role="group" aria-label={label}>
       <span className="w-14 shrink-0">{label}</span>
@@ -145,9 +172,10 @@ function MoreMenu({ view, disabled }: { view: EditorView | null; disabled: boole
             type="button"
             role="menuitem"
             aria-label={`${label} ${n}`}
+            disabled={inCell}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => run(cmd(n))}
-            className="rounded-full border px-2 py-0.5 text-xs hover:bg-accent hover:text-accent-foreground"
+            className="rounded-full border px-2 py-0.5 text-xs hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40"
           >
             {n}
           </button>
@@ -156,6 +184,7 @@ function MoreMenu({ view, disabled }: { view: EditorView | null; disabled: boole
     </div>
   )
   const heading = (text: string) => <div className="px-2 pt-1.5 pb-1 text-xs font-medium text-muted-foreground">{text}</div>
+  const line = <div className="-mx-1 my-1 h-px bg-border" />
   return (
     <>
       <button
@@ -165,7 +194,7 @@ function MoreMenu({ view, disabled }: { view: EditorView | null; disabled: boole
         title="Other formats"
         aria-haspopup="menu"
         aria-expanded={!!open}
-        disabled={disabled}
+        disabled={!usable}
         onMouseDown={(e) => e.preventDefault()}
         onClick={toggle}
         className={cn(
@@ -184,12 +213,19 @@ function MoreMenu({ view, disabled }: { view: EditorView | null; disabled: boole
             style={{ top: open.top, right: open.right }}
             className="fixed z-50 max-h-[70vh] w-64 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
           >
+            {groups.map((g) => (
+              <div key={g.title}>
+                {heading(g.title)}
+                {g.actions.map((a) => entry(a.label, a.act, a.keys, a.disabled, a.on))}
+                {line}
+              </div>
+            ))}
             {heading('Text')}
             {item('Underline', toggleWrap('++'), 'Mod-U')}
             {item('Superscript', toggleWrap('^'), 'Mod-.')}
             {item('Subscript', toggleWrap('~'), 'Mod-,')}
             {item('Inline formula', toggleWrap('$'))}
-            <div className="-mx-1 my-1 h-px bg-border" />
+            {line}
             {heading('Blocks')}
             {chips('Callout', callouts, (c) => insertBlock(`> [!${c.toUpperCase()}]\n> §\n`))}
             {chips('Box', boxes, (b) => insertBlock(`:::${b.toLowerCase()}\n§\n:::\n`))}
@@ -200,11 +236,11 @@ function MoreMenu({ view, disabled }: { view: EditorView | null; disabled: boole
             {item('Definition', insertBlock('Term\n: §\n'))}
             {item('Table of contents', insertBlock('[toc]\n§'))}
             {item('Footnote', insertFootnote)}
-            <div className="-mx-1 my-1 h-px bg-border" />
+            {line}
             {item('Link to a document', linkDocument)}
           </div>,
-        document.body,
-      )}
+          document.body,
+        )}
     </>
   )
 }
@@ -218,6 +254,13 @@ const styles = [
   ['h3', 'Heading 3', 'font-semibold'],
   ['h4', 'Heading 4', 'text-sm font-semibold'],
 ] as const
+
+// Pixel widths of the bar: a button with its gap, a separator with its margins and gap, the paragraph style menu.
+const BTN = 34
+const SEP = 11
+const STYLE = 146
+// The bar always shows its padding, undo, redo, bold, italic and the menu button.
+const FIXED = 24 + 2 * BTN + SEP + 2 * BTN + SEP + BTN
 
 // FormatToolbar is the bar above the editor. Every button runs an editor command on the Markdown text.
 // sink receives the editor state after each change, so only the bar re-renders.
@@ -247,6 +290,15 @@ export function FormatToolbar({
   }, [undoManager])
   const [fmt, setFmt] = useState<FormatState | null>(() => (view ? formatState(view.state) : null))
   const file = useRef<HTMLInputElement>(null)
+  const bar = useRef<HTMLDivElement>(null)
+  const [width, setWidth] = useState(Infinity)
+  useEffect(() => {
+    const el = bar.current
+    if (!el) return
+    const ro = new ResizeObserver(() => setWidth(el.clientWidth))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
   useEffect(() => {
     sink.current = (s) => setFmt(formatState(s))
     if (view) setFmt(formatState(view.state))
@@ -268,6 +320,11 @@ export function FormatToolbar({
       dom.removeEventListener('focusout', later)
     }
   }, [view])
+  const run = (cmd: StateCommand | ((v: EditorView) => boolean)) => () => {
+    if (!view) return
+    ;(cmd as (v: EditorView) => boolean)(view)
+    view.focus()
+  }
   const mark = (m: string) => () => {
     const cell = view && activeCell(view)
     if (cell) toggleCellMark(view, cell, m)
@@ -278,97 +335,120 @@ export function FormatToolbar({
     if (cell) cellHistory(view, cell, which)
     else run(which === 'undo' ? undo : redo)()
   }
-  const run = (cmd: StateCommand | ((v: EditorView) => boolean)) => () => {
+  const setStyle = (v: string) => {
     if (!view) return
-    ;(cmd as (v: EditorView) => boolean)(view)
+    setHeading(v === 'p' ? 0 : Number(v[1]))(view)
     view.focus()
   }
   const block = fmt?.block === 'h5' || fmt?.block === 'h6' ? 'h4' : (fmt?.block ?? 'p')
+  const off = !inCell
+  const groups: Group[] = [
+    {
+      title: 'Paragraph style',
+      width: SEP + STYLE,
+      actions: styles.map(([v, label]) => ({ label, icon: null, on: off && block === v, disabled: inCell, act: () => setStyle(v) })),
+    },
+    {
+      title: 'Marks',
+      width: 4 * BTN,
+      actions: [
+        { label: 'Strikethrough', keys: 'Mod-Shift-X', icon: <Strikethrough />, on: off && !!fmt?.strike, act: mark('~~') },
+        { label: 'Highlight', keys: 'Mod-Shift-H', icon: <Highlighter />, act: mark('==') },
+        { label: 'Inline code', keys: 'Mod-E', icon: <Code />, on: off && !!fmt?.code, act: mark('`') },
+        { label: 'Link', keys: 'Mod-K', icon: <Link />, on: off && !!fmt?.link, disabled: inCell, act: () => view && onLink(view) },
+      ],
+    },
+    {
+      title: 'Lists',
+      width: SEP + 4 * BTN,
+      actions: [
+        { label: 'Bulleted list', keys: 'Mod-Shift-8', icon: <List />, on: off && fmt?.list === 'bullet', disabled: inCell, act: run(toggleList('bullet')) },
+        { label: 'Numbered list', keys: 'Mod-Shift-7', icon: <ListOrdered />, on: off && fmt?.list === 'ordered', disabled: inCell, act: run(toggleList('ordered')) },
+        { label: 'Checklist', keys: 'Mod-Shift-9', icon: <ListChecks />, on: off && fmt?.list === 'task', disabled: inCell, act: run(toggleList('task')) },
+        { label: 'Quote', icon: <Quote />, on: off && !!fmt?.quote, disabled: inCell, act: run(toggleQuote) },
+      ],
+    },
+    {
+      title: 'Insert',
+      width: SEP + 4 * BTN,
+      actions: [
+        {
+          label: 'Insert table',
+          icon: <Table />,
+          disabled: inCell,
+          act: () => {
+            if (!view) return
+            run(insertBlock('| § | Column 2 |\n| --- | --- |\n|  |  |\n'))()
+            // In live mode the table is a grid: the caret goes into its first cell.
+            focusCell(view, view.state.doc.lineAt(view.state.selection.main.head).from, 0, 0)
+          },
+        },
+        { label: 'Insert image', icon: <ImagePlus />, disabled: inCell, act: () => file.current?.click() },
+        { label: 'Code block', icon: <SquareCode />, disabled: inCell, act: run(insertBlock('```\n§\n```\n')) },
+        { label: 'Divider', icon: <Minus />, disabled: inCell, act: run(insertBlock('---\n§')) },
+      ],
+    },
+  ]
+  // The groups that fit stay in the bar, in this order. The others go into the menu.
+  let room = width - FIXED
+  let fits = 0
+  while (fits < groups.length && room >= groups[fits].width) room -= groups[fits++].width
+  const shown = new Set(groups.slice(0, fits).map((g) => g.title))
+  const buttons = (title: string) =>
+    groups
+      .find((g) => g.title === title)!
+      .actions.map((a) => (
+        <Btn key={a.label} label={a.label} keys={a.keys} on={a.on} disabled={a.disabled} onClick={a.act}>
+          {a.icon}
+        </Btn>
+      ))
   return (
-    <div className="flex h-11 shrink-0 items-center gap-0.5 overflow-x-auto border-b bg-background px-3" data-testid="format-toolbar" role="toolbar" aria-label="Formatting">
+    <div ref={bar} className="flex h-11 shrink-0 items-center gap-0.5 overflow-hidden border-b bg-background px-3" data-testid="format-toolbar" role="toolbar" aria-label="Formatting">
       <Btn label="Undo" keys="Mod-Z" disabled={!history.undo} onClick={step('undo')}>
         <Undo2 />
       </Btn>
       <Btn label="Redo" keys="Mod-Shift-Z" disabled={!history.redo} onClick={step('redo')}>
         <Redo2 />
       </Btn>
+      {shown.has('Paragraph style') && (
+        <>
+          <Sep />
+          <Select disabled={inCell} value={block} onValueChange={setStyle}>
+            <SelectTrigger size="sm" aria-label="Paragraph style" className="h-8 w-36 shrink-0 border-none shadow-none hover:bg-muted" onMouseDown={(e) => e.preventDefault()}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent onCloseAutoFocus={(e) => e.preventDefault()}>
+              {styles.map(([v, label, cls]) => (
+                <SelectItem key={v} value={v}>
+                  <span className={cls}>{label}</span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </>
+      )}
       <Sep />
-      <Select
-        disabled={inCell}
-        value={block}
-        onValueChange={(v) => {
-          if (!view) return
-          setHeading(v === 'p' ? 0 : Number(v[1]))(view)
-          view.focus()
-        }}
-      >
-        <SelectTrigger size="sm" aria-label="Paragraph style" className="h-8 w-36 shrink-0 border-none shadow-none hover:bg-muted" onMouseDown={(e) => e.preventDefault()}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent onCloseAutoFocus={(e) => e.preventDefault()}>
-          {styles.map(([v, label, cls]) => (
-            <SelectItem key={v} value={v}>
-              <span className={cls}>{label}</span>
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Sep />
-      <Btn label="Bold" keys="Mod-B" on={!inCell && !!fmt?.bold} onClick={mark('**')}>
+      <Btn label="Bold" keys="Mod-B" on={off && !!fmt?.bold} onClick={mark('**')}>
         <Bold />
       </Btn>
-      <Btn label="Italic" keys="Mod-I" on={!inCell && !!fmt?.italic} onClick={mark('*')}>
+      <Btn label="Italic" keys="Mod-I" on={off && !!fmt?.italic} onClick={mark('*')}>
         <Italic />
       </Btn>
-      <Btn label="Strikethrough" keys="Mod-Shift-X" on={!inCell && !!fmt?.strike} onClick={mark('~~')}>
-        <Strikethrough />
-      </Btn>
-      <Btn label="Highlight" keys="Mod-Shift-H" onClick={mark('==')}>
-        <Highlighter />
-      </Btn>
-      <Btn label="Inline code" keys="Mod-E" on={!inCell && !!fmt?.code} onClick={mark('`')}>
-        <Code />
-      </Btn>
-      <Btn disabled={inCell} label="Link" keys="Mod-K" on={!inCell && !!fmt?.link} onClick={() => view && onLink(view)}>
-        <Link />
-      </Btn>
+      {shown.has('Marks') && buttons('Marks')}
+      {shown.has('Lists') && (
+        <>
+          <Sep />
+          {buttons('Lists')}
+        </>
+      )}
+      {shown.has('Insert') && (
+        <>
+          <Sep />
+          {buttons('Insert')}
+        </>
+      )}
       <Sep />
-      <Btn disabled={inCell} label="Bulleted list" keys="Mod-Shift-8" on={!inCell && fmt?.list === 'bullet'} onClick={run(toggleList('bullet'))}>
-        <List />
-      </Btn>
-      <Btn disabled={inCell} label="Numbered list" keys="Mod-Shift-7" on={!inCell && fmt?.list === 'ordered'} onClick={run(toggleList('ordered'))}>
-        <ListOrdered />
-      </Btn>
-      <Btn disabled={inCell} label="Checklist" keys="Mod-Shift-9" on={!inCell && fmt?.list === 'task'} onClick={run(toggleList('task'))}>
-        <ListChecks />
-      </Btn>
-      <Btn disabled={inCell} label="Quote" on={!inCell && !!fmt?.quote} onClick={run(toggleQuote)}>
-        <Quote />
-      </Btn>
-      <Sep />
-      <Btn
-        disabled={inCell}
-        label="Insert table"
-        onClick={() => {
-          if (!view) return
-          run(insertBlock('| § | Column 2 |\n| --- | --- |\n|  |  |\n'))()
-          // In live mode the table is a grid: the caret goes into its first cell.
-          focusCell(view, view.state.doc.lineAt(view.state.selection.main.head).from, 0, 0)
-        }}
-      >
-        <Table />
-      </Btn>
-      <Btn disabled={inCell} label="Insert image" onClick={() => file.current?.click()}>
-        <ImagePlus />
-      </Btn>
-      <Btn disabled={inCell} label="Code block" onClick={run(insertBlock('```\n§\n```\n'))}>
-        <SquareCode />
-      </Btn>
-      <Btn disabled={inCell} label="Divider" onClick={run(insertBlock('---\n§'))}>
-        <Minus />
-      </Btn>
-      <Sep />
-      <MoreMenu view={view} disabled={inCell} />
+      <MoreMenu view={view} inCell={inCell} groups={groups.filter((g) => !shown.has(g.title))} />
       <input
         ref={file}
         type="file"

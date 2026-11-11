@@ -175,3 +175,25 @@ test('undo and redo are greyed out when there is nothing to undo, and keep their
   await redo.click()
   await expect.poll(() => markdown(page, alias)).toBe('alpha beta\n')
 })
+
+test('a narrow toolbar moves the buttons that do not fit into the Other formats menu', async ({ page }) => {
+  await page.setViewportSize({ width: 560, height: 800 })
+  const alias = await open(page, 'one\n')
+  const toolbar = bar(page)
+  for (const w of [380, 470, 560, 640, 720, 800, 880, 960]) {
+    await page.setViewportSize({ width: w, height: 800 })
+    await expect.poll(() => toolbar.evaluate((el) => el.scrollWidth <= el.clientWidth), `width ${w}`).toBe(true)
+  }
+  await page.setViewportSize({ width: 560, height: 800 })
+  await expect(toolbar.getByRole('button', { name: /^Bold/ })).toBeVisible()
+  await expect(toolbar.getByRole('button', { name: 'Insert table' })).toHaveCount(0)
+  await page.getByTestId('editor').locator('.cm-line', { hasText: 'one' }).click()
+  await toolbar.getByRole('button', { name: 'Other formats' }).click()
+  await page.getByRole('menuitem', { name: /^Bulleted list/ }).click()
+  await expect.poll(() => markdown(page, alias)).toBe('- one\n')
+
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await expect(toolbar.getByRole('button', { name: 'Insert table' })).toBeVisible()
+  await toolbar.getByRole('button', { name: 'Other formats' }).click()
+  await expect(page.getByRole('menuitem', { name: /^Bulleted list/ })).toHaveCount(0)
+})
