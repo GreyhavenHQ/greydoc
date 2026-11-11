@@ -157,4 +157,47 @@ describe('live preview', () => {
     expect(hidden(at('A-->B'), 'document').some((x) => x.widget === 'MermaidWidget')).toBe(false)
     expect(hidden(at('tags'), 'document').some((x) => x.widget === 'FrontMatterWidget')).toBe(false)
   })
+
+  describe('the extra syntax of the view', () => {
+    const src = [
+      '[toc]',
+      '# Syntax',
+      '++inserted++ H~2~O x^2^ :smile: [[zz-target|Target]] [[other]] claim[^1]',
+      ':::info\nAlso success.\n:::',
+      ':::spoiler Click\nHidden.\n:::',
+      'Term\n: What it means.',
+      '```csvpreview header="true"\nname,team\nAna,Search\n```',
+      '<details><summary>More</summary>Inside</details>',
+      '[^1]: The source.',
+      'end',
+    ].join('\n\n')
+    const ds = decos(src)
+    const widget = (name: string, text: string) => ds.find((d) => d.widget === name && d.text.startsWith(text))
+
+    it('renders the blocks as the view does', () => {
+      expect(widget('HTMLBlockWidget', '[toc]')).toBeTruthy()
+      expect(widget('HTMLBlockWidget', ':::info')?.text).toBe(':::info\nAlso success.\n:::')
+      expect(widget('HTMLBlockWidget', ':::spoiler')).toBeTruthy()
+      expect(widget('HTMLBlockWidget', 'Term')?.text).toBe('Term\n: What it means.')
+      expect(widget('HTMLBlockWidget', '```csvpreview')).toBeTruthy()
+      expect(widget('HTMLBlockWidget', '<details>')).toBeTruthy()
+    })
+
+    it('shows the source of a block under the cursor', () => {
+      const at = src.indexOf('Also success')
+      expect(decos(src, at).some((d) => d.widget === 'HTMLBlockWidget' && d.text.startsWith(':::info'))).toBe(false)
+    })
+
+    it('renders the inline marks of the view', () => {
+      const cls = (name: string) => ds.filter((d) => d.cls.includes(name)).map((d) => d.text)
+      expect(cls('cm-lp-ins')).toEqual(['inserted'])
+      expect(cls('cm-lp-sub')).toEqual(['2'])
+      expect(cls('cm-lp-sup')).toEqual(['2'])
+      expect(ds.find((d) => d.text === ':smile:')?.label).toBe('😄')
+      expect(ds.find((d) => d.text === '[[zz-target|Target]]')?.label).toBe('Target')
+      expect(ds.find((d) => d.text === '[[other]]')?.label).toBe('other')
+      expect(ds.find((d) => d.text === '[^1]')?.label).toBe('1')
+      expect(ds.find((d) => d.text === '[^1]:')?.label).toBe('1.')
+    })
+  })
 })

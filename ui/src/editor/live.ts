@@ -8,6 +8,7 @@ import { renderInline, renderMarkdown } from '@/render/markdown'
 import { cellMarkdown, richCell } from '@/editor/cellhtml'
 import { addColumn, addRow, cellText, parseTable, removeColumn, removeRow, setAlign, setCell, tidy, type Align, type Table } from '@/editor/table'
 import { naturalSize, renderMermaid, themeMode } from '@/render/mermaid'
+import { slugify } from '@/render/plugins'
 import { splitFrontMatter } from '@/lib/meta'
 import { mentionsOn } from '@/lib/mentions'
 
@@ -73,15 +74,60 @@ class HTMLBlockWidget extends WidgetType {
     el.className = 'cm-lp-block markdown-body ' + this.cls
     el.innerHTML = this.html
     el.onmousedown = (e) => {
-      if ((e.target as HTMLElement).closest('a')) return
+      const a = (e.target as HTMLElement).closest('a')
+      const href = a?.getAttribute('href') ?? ''
+      // A link of a table of contents goes to its heading in the editor.
+      if (href.startsWith('#')) {
+        e.preventDefault()
+        const line = headingLine(view, decodeURIComponent(href.slice(1)))
+        if (line !== null) view.dispatch({ selection: { anchor: line }, effects: EditorView.scrollIntoView(line, { y: 'start' }) })
+        view.focus()
+        return
+      }
+      if (a || (e.target as HTMLElement).closest('summary')) return
       e.preventDefault()
       revealAt(view, el)
+    }
+    el.onclick = (e) => {
+      if ((e.target as HTMLElement).closest('a[href^="#"]')) e.preventDefault()
     }
     return el
   }
   ignoreEvent() {
     return false
   }
+}
+
+function headingLine(view: EditorView, id: string): number | null {
+  const doc = view.state.doc
+  for (let n = 1; n <= doc.lines; n++) {
+    const m = /^ {0,3}#{1,6}\s+(.*?)\s*#*\s*$/.exec(doc.line(n).text)
+    if (m && slugify(m[1]) === id) return doc.line(n).from
+  }
+  return null
+}
+
+let tocCache = { key: '', html: '' }
+
+// tocHtml renders the table of contents of the view from the headings of the document.
+function tocHtml(headings: string[]): string {
+  const key = headings.join('\n')
+  if (tocCache.key !== key) {
+    const html = renderMarkdown('[toc]\n\n' + headings.join('\n\n')).html
+    tocCache = { key, html: /<nav class="toc">[\s\S]*?<\/nav>/.exec(html)?.[0] ?? '' }
+  }
+  return tocCache.html
+}
+
+const emojiCache = new Map<string, string>()
+// emojiOf gives the character the view shows for :name:, or the text itself when there is none.
+function emojiOf(code: string): string {
+  let e = emojiCache.get(code)
+  if (e === undefined) {
+    e = renderInline(code)
+    emojiCache.set(code, e)
+  }
+  return e
 }
 
 class MathWidget extends WidgetType {
@@ -705,9 +751,48 @@ export function liveDecorations(state: EditorState): DecorationSet {
     }
   }
 
+  // The Markdown grammar does not know boxes, definitions and [toc]. They render as in the view until the cursor enters them.
+  const rendered: [number, number][] = []
+  const headings: string[] = []
+  const blocks: { from: number; to: number; kind: string }[] = []
+  let fence = ''
+  for (let n = 1; n <= doc.lines; n++) {
+    const line = doc.line(n)
+    if (line.from < fmEnd) continue
+    const f = /^ {0,3}(`{3,}|~{3,})/.exec(line.text)
+    if (f && (!fence || f[1].startsWith(fence))) {
+      fence = fence ? '' : f[1]
+      continue
+    }
+    if (fence) continue
+    if (/^ {0,3}#{1,6}\s/.test(line.text)) headings.push(line.text)
+    if (/^\[\[?toc\]?\]$/i.test(line.text.trim())) blocks.push({ from: line.from, to: line.to, kind: 'toc' })
+    else if (/^:::\s*\w/.test(line.text)) {
+      let m = n + 1
+      while (m <= doc.lines && !/^:::\s*$/.test(doc.line(m).text)) m++
+      if (m > doc.lines) continue
+      blocks.push({ from: line.from, to: doc.line(m).to, kind: 'container' })
+      n = m
+    } else if (/^:\s/.test(line.text) && n > 1 && doc.line(n - 1).text.trim() && !/^:\s/.test(doc.line(n - 1).text)) {
+      let m = n
+      while (m < doc.lines && /^(:\s|\s{2,}\S)/.test(doc.line(m + 1).text)) m++
+      blocks.push({ from: doc.line(n - 1).from, to: doc.line(m).to, kind: 'deflist' })
+      n = m
+    }
+  }
+  for (const b of blocks) {
+    if (touchesBlock(b.from, b.to)) continue
+    const html = b.kind === 'toc' ? tocHtml(headings) : renderMarkdown(doc.sliceString(b.from, b.to)).html
+    if (!html.trim()) continue
+    rendered.push([b.from, b.to])
+    out.push(Decoration.replace({ widget: new HTMLBlockWidget(html, 'cm-lp-' + b.kind), block: true }).range(b.from, b.to))
+  }
+  const inRendered = (pos: number) => rendered.some(([a, b]) => pos >= a && pos <= b)
+
   tree.iterate({
     enter(node) {
       if (node.from < fmEnd) return node.to <= fmEnd ? false : undefined
+      if (rendered.some(([a, b]) => node.from >= a && node.to <= b)) return false
       const name = node.name
       const parent = node.node.parent?.name ?? ''
       const heading = /^ATXHeading(\d)$/.exec(name) ?? /^SetextHeading(\d)$/.exec(name)
@@ -742,9 +827,34 @@ export function liveDecorations(state: EditorState): DecorationSet {
         case 'CodeMark':
           if (parent === 'InlineCode' && !lineActive(node.from)) out.push(hide.range(node.from, node.to))
           return
+        case 'Subscript':
+        case 'Superscript':
+          out.push(Decoration.mark({ class: name === 'Subscript' ? 'cm-lp-sub' : 'cm-lp-sup' }).range(node.from + 1, node.to - 1))
+          if (!lineActive(node.from)) {
+            out.push(hide.range(node.from, node.from + 1))
+            out.push(hide.range(node.to - 1, node.to))
+          }
+          return false
+        case 'Emoji': {
+          const code = doc.sliceString(node.from, node.to)
+          const e = emojiOf(code)
+          if (e !== code && !lineActive(node.from)) out.push(Decoration.replace({ widget: new LabelWidget(e, 'cm-lp-emoji') }).range(node.from, node.to))
+          return false
+        }
         case 'Link': {
           const cur = node.node
           const marks = cur.getChildren('LinkMark')
+          const fn = /^\[\^([^\]\s]+)\]$/.exec(doc.sliceString(node.from, node.to))
+          if (fn && !cur.getChild('URL')) {
+            const line = doc.lineAt(node.from)
+            const def = node.from === line.from && doc.sliceString(node.to, node.to + 1) === ':'
+            if (def) out.push(Decoration.line({ class: 'cm-lp-fndef' }).range(line.from))
+            if (!lineActive(node.from)) {
+              const widget = def ? new LabelWidget(fn[1] + '.', 'cm-lp-fnlabel') : new LabelWidget(fn[1], 'cm-lp-fnref')
+              out.push(Decoration.replace({ widget }).range(node.from, def ? node.to + 1 : node.to))
+            }
+            return false
+          }
           // [toc] and [!NOTE] parse as links without a target. They are not links.
           if (!cur.getChild('URL') && marks.length < 3) return false
           if (doc.sliceString(node.from, node.from + 2) === '[@' && /\]\(@[^)]*\)$/.test(doc.sliceString(node.from, node.to))) {
@@ -834,6 +944,11 @@ export function liveDecorations(state: EditorState): DecorationSet {
           const textNode = node.node.getChild('CodeText')
           const src = textNode ? doc.sliceString(textNode.from, textNode.to) : ''
           const closed = node.node.getChildren('CodeMark').length >= 2
+          if (lang === 'csvpreview' && closed && !touchesBlock(node.from, node.to)) {
+            const html = renderMarkdown(doc.sliceString(node.from, node.to)).html
+            out.push(Decoration.replace({ widget: new HTMLBlockWidget(html, 'cm-lp-csv'), block: true }).range(node.from, node.to))
+            return false
+          }
           if (lang === 'mermaid' && closed && !touchesBlock(node.from, node.to)) {
             out.push(Decoration.replace({ widget: new MermaidWidget(src, mode), block: true }).range(node.from, node.to))
             return false
@@ -848,6 +963,12 @@ export function liveDecorations(state: EditorState): DecorationSet {
               out.push(Decoration.replace({ widget: new LabelWidget(l.from === node.from ? lang : '', 'cm-lp-lang') }).range(l.from, l.to))
             }
           }
+          return false
+        }
+        case 'HTMLBlock': {
+          if (touchesBlock(node.from, node.to)) return false
+          const html = renderMarkdown(doc.sliceString(node.from, node.to)).html
+          if (html.trim()) out.push(Decoration.replace({ widget: new HTMLBlockWidget(html, 'cm-lp-html'), block: true }).range(node.from, node.to))
           return false
         }
         case 'CodeBlock':
@@ -890,7 +1011,8 @@ export function liveDecorations(state: EditorState): DecorationSet {
   const inCode = (pos: number) => code.some(([a, b]) => pos >= a && pos <= b)
   for (let n = 1; n <= doc.lines; n++) {
     const line = doc.line(n)
-    if (line.from < fmEnd || inCode(line.from)) continue
+    if (line.from < fmEnd || inCode(line.from) || inRendered(line.from)) continue
+    if (/^\*\[[^\]]+\]:/.test(line.text)) out.push(Decoration.line({ class: 'cm-lp-fndef' }).range(line.from))
     if (line.text.trim() === '$$') {
       let m = n + 1
       while (m <= doc.lines && doc.line(m).text.trim() !== '$$') m++
@@ -904,6 +1026,19 @@ export function liveDecorations(state: EditorState): DecorationSet {
       continue
     }
     if (touchesBlock(line.from, line.to) && !docStyle) continue
+    for (const m of line.text.matchAll(/\+\+(?=\S)(.+?)(?<=\S)\+\+/g)) {
+      const from = line.from + m.index!
+      if (inCode(from)) continue
+      out.push(hide.range(from, from + 2))
+      out.push(Decoration.mark({ class: 'cm-lp-ins' }).range(from + 2, from + m[0].length - 2))
+      out.push(hide.range(from + m[0].length - 2, from + m[0].length))
+    }
+    for (const m of line.text.matchAll(/\[\[([^\]|#\n]+)(#[^\]|\n]*)?(?:\|([^\]\n]+))?\]\]/g)) {
+      const from = line.from + m.index!
+      if (inCode(from) || m[1].toLowerCase() === 'toc') continue
+      const label = m[3] ?? m[1] + (m[2] ?? '')
+      out.push(Decoration.replace({ widget: new LabelWidget(label, 'cm-lp-notelink') }).range(from, from + m[0].length))
+    }
     for (const m of line.text.matchAll(/==(?=\S)(.+?)(?<=\S)==/g)) {
       const from = line.from + m.index!
       if (inCode(from)) continue
@@ -1004,6 +1139,16 @@ const liveTheme = EditorView.theme({
   '.cm-lp-hr': { display: 'inline-block', width: '100%', borderTop: '1px solid rgb(var(--border))', verticalAlign: 'middle' },
   '.cm-lp-img': { maxWidth: '100%', borderRadius: 'var(--radius)', verticalAlign: 'top' },
   '.cm-lp-block': { cursor: 'pointer', margin: '0.4em 0', whiteSpace: 'normal', contain: 'inline-size' },
+  '.cm-lp-ins': { textDecoration: 'underline' },
+  '.cm-lp-sub': { verticalAlign: 'sub', fontSize: '0.75em' },
+  '.cm-lp-sup': { verticalAlign: 'super', fontSize: '0.75em' },
+  '.cm-lp-fnref': { verticalAlign: 'super', fontSize: '0.75em', color: 'rgb(var(--primary))' },
+  '.cm-lp-fnref::before': { content: '"["' },
+  '.cm-lp-fnref::after': { content: '"]"' },
+  '.cm-lp-fndef': { fontSize: '0.875em', color: 'rgb(var(--muted-foreground))' },
+  '.cm-lp-fnlabel': { paddingRight: '0.4em' },
+  '.cm-lp-notelink': { color: 'rgb(var(--primary))', borderBottom: '1px solid rgb(var(--primary) / 0.4)', cursor: 'text' },
+  '.cm-lp-notelink::before': { content: '"↗ "', fontSize: '0.8em', opacity: '0.6' },
   '.cm-lp-mark': { backgroundColor: 'rgb(var(--primary) / 0.22)', borderRadius: '2px', padding: '0 0.15em' },
   '.cm-lp-alert': {
     color: 'rgb(var(--foreground))', borderStyle: 'solid', borderWidth: '0 1px 0 4px !important',
