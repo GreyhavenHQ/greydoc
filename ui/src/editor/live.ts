@@ -5,8 +5,8 @@ import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemir
 import katex from 'katex'
 import { yUndoManagerKeymap } from 'y-codemirror.next'
 import { renderInline, renderMarkdown } from '@/render/markdown'
-import { cellMarkdown, richCell } from '@/editor/cellhtml'
-import { addColumn, addRow, cellText, parseTable, removeColumn, removeRow, setAlign, setCell, tidy, type Align, type Table } from '@/editor/table'
+import { cellMarkdown, markdownSelection, richCell } from '@/editor/cellhtml'
+import { addColumn, addRow, cellText, parseTable, unescapeCell, removeColumn, removeRow, setAlign, setCell, tidy, type Align, type Table } from '@/editor/table'
 import { naturalSize, renderMermaid, themeMode } from '@/render/mermaid'
 import { slugify } from '@/render/plugins'
 import { splitFrontMatter } from '@/lib/meta'
@@ -555,6 +555,75 @@ export function toggleCellMark(view: EditorView, el: HTMLElement, m: string) {
   el.dataset.src = next
   view.dispatch({ changes: setCell(t, row, col, next), userEvent: 'input.format' })
   selectText(el, ...sel)
+}
+
+// CellSelection is a part of a grid cell, as offsets in its Markdown. It stays valid while the cell loses the focus.
+export interface CellSelection {
+  from: number
+  row: number
+  col: number
+  start: number
+  end: number
+  // text is the selected text as it reads. link is the link the selection is in, which start and end then cover.
+  text: string
+  link: { text: string; url: string } | null
+  rect: DOMRect
+}
+
+export function cellSelection(view: EditorView, el: HTMLElement): CellSelection | null {
+  const { t, row, col } = cellAt(view, el)
+  const sel = getSelection()
+  if (!t || !sel?.rangeCount) return null
+  const range = sel.getRangeAt(0)
+  if (!el.contains(range.commonAncestorContainer)) range.selectNodeContents(el)
+  let link: CellSelection['link'] = null
+  let start: number
+  let end: number
+  if (el.dataset.rich) {
+    const a = (range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE ? (range.commonAncestorContainer as Element) : range.commonAncestorContainer.parentElement)?.closest('a')
+    if (a && el.contains(a) && !a.classList.contains('note-link')) {
+      link = { text: a.textContent ?? '', url: a.getAttribute('href') ?? '' }
+      range.selectNode(a)
+    }
+    const m = markdownSelection(el, range)
+    if (!m) return null
+    ;[start, end] = [m.from, m.to]
+  } else {
+    ;[start, end] = textOffsets(el)
+    const src = el.textContent ?? ''
+    for (const m of src.matchAll(/\[([^\]]*)\]\(([^)\s]*)\)/g)) {
+      if (m.index! <= start && end <= m.index! + m[0].length && src[m.index! - 1] !== '!') {
+        link = { text: m[1], url: m[2] }
+        ;[start, end] = [m.index!, m.index! + m[0].length]
+      }
+    }
+  }
+  return { from: t.from, row, col, start, end, text: link?.text ?? range.toString(), link, rect: el.getBoundingClientRect() }
+}
+
+// cellReplace puts Markdown in place of a cell selection, then puts the caret back in the cell.
+export function cellReplace(view: EditorView, sel: CellSelection, insert: string) {
+  const t = parseTable(view.state.doc, sel.from)
+  if (!t) return
+  // The raw text keeps a space typed at the end of the cell, which the offsets count.
+  const c = (sel.row === 0 ? t.header : t.body[sel.row - 1])?.cells[sel.col]
+  const text = c ? unescapeCell(c.raw) : ''
+  const next = text.slice(0, sel.start) + insert + text.slice(sel.end)
+  view.dispatch({ changes: setCell(t, sel.row, sel.col, next), userEvent: 'input.format' })
+  // The grid leaves a focused cell alone, and the cell can keep the focus while a dialog is open.
+  for (const w of view.contentDOM.querySelectorAll<HTMLElement>('.cm-lp-grid-wrap')) {
+    const el = view.posAtDOM(w) === t.from ? (w.querySelector('table')!.rows[sel.row]?.cells[sel.col] as HTMLElement | undefined) : undefined
+    if (!el) continue
+    el.dataset.src = next
+    if (view.state.facet(liveStyle) === 'document' && richCell(next)) {
+      el.dataset.rich = '1'
+      el.innerHTML = renderInline(next)
+    } else {
+      delete el.dataset.rich
+      el.textContent = next
+    }
+  }
+  focusCell(view, t.from, sel.row, sel.col)
 }
 
 // cellHistory runs undo or redo from a cell, then shows the new text of the cell.

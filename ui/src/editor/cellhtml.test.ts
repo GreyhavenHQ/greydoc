@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cellMarkdown, richCell } from '@/editor/cellhtml'
+import { cellMarkdown, markdownSelection, richCell } from '@/editor/cellhtml'
 
 const md = (html: string) => {
   const el = document.createElement('td')
@@ -21,9 +21,34 @@ describe('cell HTML to Markdown', () => {
     expect(md('<br>')).toBe('')
     expect(md('x<br>')).toBe('x')
   })
+  it('writes images, links to documents and mentions', () => {
+    expect(md('<img src="/uploads/0123456789abcdef0123456789abcdef.png?w=1600" alt="dot">')).toBe('![dot](/uploads/0123456789abcdef0123456789abcdef.png)')
+    expect(md('<a href="/n/xy" class="note-link" data-alias="xy" data-label="1">Title</a>')).toBe('[[xy|Title]]')
+    expect(md('<a href="/n/xy" class="note-link" data-alias="xy">xy</a>')).toBe('[[xy]]')
+    expect(md('<span class="mention" data-user="ana">@Ana M</span>')).toBe('[@Ana M](@ana)')
+  })
   it('gives null for content it cannot write back', () => {
-    expect(md('<img src="a.png">')).toBeNull()
+    expect(md('<img src="a.png" width="20">')).toBeNull()
     expect(md('<span class="katex">x</span>')).toBeNull()
+  })
+})
+
+describe('markdownSelection', () => {
+  it('gives the selection of a rendered cell as offsets in its Markdown', () => {
+    const el = document.createElement('td')
+    el.innerHTML = 'a <strong>bold</strong> c'
+    document.body.appendChild(el)
+    const r = document.createRange()
+    r.setStart(el.querySelector('strong')!.firstChild!, 1)
+    r.setEnd(el.lastChild!, 2)
+    expect(markdownSelection(el, r)).toEqual({ markdown: 'a **bold** c', from: 5, to: 12 })
+    expect(el.innerHTML).toBe('a <strong>bold</strong> c')
+    const caret = document.createRange()
+    caret.setStart(el.lastChild!, 2)
+    expect(markdownSelection(el, caret)).toEqual({ markdown: 'a **bold** c', from: 12, to: 12 })
+    caret.setStart(el.firstChild!, 1)
+    caret.collapse(true)
+    expect(markdownSelection(el, caret)).toEqual({ markdown: 'a **bold** c', from: 1, to: 1 })
   })
 })
 
@@ -32,11 +57,12 @@ describe('richCell', () => {
     expect(richCell('Europe')).toBe(true)
     expect(richCell('**Asia** and *open*')).toBe(true)
     expect(richCell('[Q4](https://example.com)')).toBe(true)
+    expect(richCell('[[xy|Title]] ![dot](/uploads/0123456789abcdef0123456789abcdef.png)')).toBe(true)
     expect(richCell('')).toBe(true)
   })
   it('refuses a cell whose source would change', () => {
     expect(richCell('__bold__')).toBe(false)
-    expect(richCell('![img](a.png)')).toBe(false)
+    expect(richCell('![img](a.png =20x)')).toBe(false)
     expect(richCell('$x^2$')).toBe(false)
   })
 })

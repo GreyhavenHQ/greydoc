@@ -258,12 +258,17 @@ export function linkAt(state: EditorState): LinkInfo | null {
   return null
 }
 
+// linkMarkdown is [text](url), or the text alone without an address.
+export function linkMarkdown(text: string, url: string): string {
+  const label = text.replace(/[[\]]/g, '') || url
+  return url ? `[${label}](${url.replace(/[()\s]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0'))})` : label
+}
+
 // linkChange sets the link at the cursor, or makes one of the selection. An empty url removes the link and keeps its text.
 export function linkChange(state: EditorState, text: string, url: string) {
   const link = linkAt(state)
   const { from, to } = link ?? state.selection.main
-  const label = text.replace(/[[\]]/g, '') || url
-  const insert = url ? `[${label}](${url.replace(/[()\s]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0'))})` : label
+  const insert = linkMarkdown(text, url)
   return { changes: { from, to, insert }, selection: { anchor: from + insert.length }, scrollIntoView: true, userEvent }
 }
 

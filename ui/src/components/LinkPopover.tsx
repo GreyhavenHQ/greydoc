@@ -3,7 +3,8 @@ import type { EditorView } from '@codemirror/view'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { linkAt, linkChange } from '@/editor/format'
+import { linkAt, linkChange, linkMarkdown } from '@/editor/format'
+import { cellReplace, cellSelection, focusCell, type CellSelection } from '@/editor/live'
 
 export interface LinkTarget {
   text: string
@@ -12,6 +13,23 @@ export interface LinkTarget {
   // top and left are relative to the editor.
   top: number
   left: number
+  // cell is the part of a grid cell the link goes into, when the cursor is in a table.
+  cell?: CellSelection
+}
+
+// cellLinkTarget reads the link or the selection in a grid cell.
+export function cellLinkTarget(view: EditorView, el: HTMLElement): LinkTarget | null {
+  const cell = cellSelection(view, el)
+  if (!cell) return null
+  const host = view.dom.getBoundingClientRect()
+  return {
+    text: cell.text,
+    url: cell.link?.url ?? '',
+    existing: !!cell.link,
+    top: cell.rect.bottom - host.top + 6,
+    left: Math.max(4, Math.min(cell.rect.left - host.left, host.width - 330)),
+    cell,
+  }
 }
 
 // linkTarget reads the link at the cursor, or the selection that becomes a link.
@@ -39,8 +57,14 @@ export function LinkPopover({ view, target, onClose }: { view: EditorView; targe
   const address = useRef<HTMLInputElement>(null)
   useEffect(() => address.current?.focus(), [])
   const done = (apply?: string) => {
-    if (apply !== undefined && (apply || target.existing)) view.dispatch(linkChange(view.state, text, apply))
     onClose()
+    const cell = target.cell
+    if (cell) {
+      if (apply !== undefined && (apply || target.existing)) cellReplace(view, cell, linkMarkdown(text, apply))
+      else focusCell(view, cell.from, cell.row, cell.col)
+      return
+    }
+    if (apply !== undefined && (apply || target.existing)) view.dispatch(linkChange(view.state, text, apply))
     view.focus()
   }
   return (

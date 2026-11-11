@@ -1,4 +1,4 @@
-import { renderInline } from '@/render/markdown'
+import { originalSrc, renderInline } from '@/render/markdown'
 
 // A grid cell in the document style is edited as rendered text. These functions write its HTML back to Markdown.
 
@@ -40,13 +40,23 @@ function walk(n: Node): string | null {
       const t = el.textContent ?? ''
       return t.includes('`') ? null : t ? '`' + t + '`' : ''
     }
+    case 'IMG': {
+      if (el.hasAttribute('width') || el.hasAttribute('height')) return null
+      return `![${el.getAttribute('alt') ?? ''}](${originalSrc(el.getAttribute('src') ?? '')})`
+    }
     case 'A': {
+      if (el.classList.contains('note-link')) {
+        const alias = el.dataset.alias
+        if (!alias || el.dataset.section) return null
+        return el.dataset.label ? `[[${alias}|${el.textContent}]]` : `[[${alias}]]`
+      }
       const href = el.getAttribute('href') ?? ''
       const inner = children(el)
       if (inner === null || !href) return null
       return el.textContent === href ? href : `[${inner}](${href})`
     }
     case 'SPAN':
+      if (el.classList.contains('mention') && el.dataset.user) return `[@${(el.textContent ?? '').replace(/^@/, '')}](@${el.dataset.user})`
       return el.attributes.length ? null : children(el)
   }
   const m = marks[el.tagName]
@@ -63,4 +73,28 @@ export function richCell(src: string): boolean {
   const el = document.createElement('div')
   el.innerHTML = renderInline(src)
   return cellMarkdown(el) === src
+}
+
+const START = '\uE000'
+const END = '\uE001'
+
+// markdownSelection gives a selection inside a rendered cell as offsets in the cell's Markdown.
+// It marks both ends with private characters, writes the cell, then takes the marks out again.
+export function markdownSelection(el: HTMLElement, range: Range): { markdown: string; from: number; to: number } | null {
+  const start = document.createTextNode(START)
+  const end = document.createTextNode(END)
+  const r = range.cloneRange()
+  r.collapse(false)
+  r.insertNode(end)
+  const l = range.cloneRange()
+  l.collapse(true)
+  l.insertNode(start)
+  const md = cellMarkdown(el)
+  start.remove()
+  end.remove()
+  el.normalize()
+  if (md === null) return null
+  const from = md.indexOf(START)
+  const to = md.indexOf(END) - 1
+  return { markdown: md.replace(START, '').replace(END, ''), from, to }
 }
