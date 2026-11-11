@@ -10,6 +10,9 @@ export function startWith(prefs: Prefs) {
     if (resp.status() !== 200) throw new Error('set prefs: ' + resp.status())
   })
   test.afterEach(async ({ request }) => {
-    await request.patch('/api/me/prefs', { data: { default_mode: '', live_style: '' } })
+    await request.patch('/api/me/prefs', { data: baseline })
   })
 }
+
+// baseline is what most specs expect: the split view of HedgeDoc. global-setup.ts sets it before the first test.
+export const baseline = { default_mode: 'split', live_style: 'obsidian' } as const

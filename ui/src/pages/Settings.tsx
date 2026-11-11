@@ -107,7 +107,7 @@ function EditorPrefs() {
         <Choice
           label="Open documents in"
           hint="Live shows the document as it reads and lets you edit it in place."
-          value={prefs.default_mode ?? 'split'}
+          value={prefs.default_mode ?? 'live'}
           options={[
             ['live', 'Live'],
             ['editor', 'Editor'],
@@ -119,7 +119,7 @@ function EditorPrefs() {
         <Choice
           label="Live style"
           hint="Document never shows Markdown. Obsidian shows the Markdown of the line you edit."
-          value={prefs.live_style ?? 'obsidian'}
+          value={prefs.live_style ?? 'document'}
           options={[
             ['document', 'Document'],
             ['obsidian', 'Obsidian'],

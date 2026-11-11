@@ -152,8 +152,8 @@ test('front matter collapses to one line in live mode', async ({ page }) => {
   await expect(editor.locator('.cm-line', { hasText: 'tags: [design, q4]' })).toHaveCount(1)
 })
 
-test('a new note opens in split view, and a mode chosen in the header holds for that note only', async ({ browser, request }) => {
-  await request.patch('/api/me/prefs', { data: { default_mode: '' } })
+test('a new note opens in the default mode, and a mode chosen in the header holds for that note only', async ({ browser, request }) => {
+  await request.patch('/api/me/prefs', { data: { default_mode: 'split' } })
   const ctx = await browser.newContext()
   const page = await ctx.newPage()
   await page.goto('/new')

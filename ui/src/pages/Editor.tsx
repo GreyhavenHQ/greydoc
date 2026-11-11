@@ -88,8 +88,8 @@ interface PreviewSelection extends SourceSelection {
 
 // The mode chosen with the header buttons holds for one note in one tab.
 const MODE_KEY = 'greydoc-mode:'
-// Split view, as in HedgeDoc, until the user picks another mode in Settings.
-const defaultEditMode: Mode = 'both'
+// Live mode until the user picks another mode in Settings.
+const defaultEditMode: Mode = 'live'
 const prefModes: Record<NonNullable<Prefs['default_mode']>, Mode> = { live: 'live', editor: 'edit', split: 'both', preview: 'view' }
 
 // startMode reads HedgeDoc 1's ?view, ?edit and ?both first, then the mode of this note in this tab, then the account preference.
@@ -1093,7 +1093,7 @@ export default function Editor() {
                     readOnly={!atLeast(level, 'comment')}
                     overlay={authorsOverlay}
                     live={mode === 'live'}
-                    liveStyle={me?.prefs?.live_style ?? 'obsidian'}
+                    liveStyle={me?.prefs?.live_style ?? 'document'}
                     undoManager={undoManager ?? undefined}
                     extensions={editorExtensions}
                     onView={onView}
