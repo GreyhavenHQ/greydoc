@@ -127,6 +127,20 @@ describe('live preview', () => {
     ])
   })
 
+  it('keeps blank lines small under a selection, and full height under the cursor', () => {
+    const src = 'a\n\nb\n\nc'
+    const state = (sel: EditorSelection) => EditorState.create({ doc: src, selection: sel, extensions: [markdown({ base: markdownLanguage })] })
+    const blanks = (sel: EditorSelection) => {
+      const out: number[] = []
+      liveDecorations(state(sel)).between(0, src.length, (from, _to, d) => {
+        if (d.spec.class === 'cm-lp-blank') out.push(src.slice(0, from).split('\n').length)
+      })
+      return out
+    }
+    expect(blanks(EditorSelection.single(0, src.length))).toEqual([2, 4])
+    expect(blanks(EditorSelection.single(2))).toEqual([4])
+  })
+
   it('marks blank lines outside code', () => {
     const src = 'a\n\n```\n\n```\n\nb'
     const blank = decos(src, 0).filter((d) => d.cls === 'cm-lp-blank').map((d) => src.slice(0, d.from).split('\n').length)

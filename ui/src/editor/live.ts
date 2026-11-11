@@ -878,9 +878,11 @@ export function liveDecorations(state: EditorState): DecorationSet {
   })
 
   // The view separates blocks with a 1em margin. A full blank line is taller, so it is shrunk.
+  // Only a cursor on the line gives it full height: a selection over it MUST NOT move the text.
+  const cursorOn = (pos: number) => ranges.some((r) => r.empty && r.head === pos)
   for (let n = 1; n <= doc.lines; n++) {
     const l = doc.line(n)
-    if (l.from > fmEnd && l.length === 0 && !touchesBlock(l.from, l.to) && !code.some(([a, b]) => l.from > a && l.from < b))
+    if (l.from > fmEnd && l.length === 0 && !cursorOn(l.from) && !code.some(([a, b]) => l.from > a && l.from < b))
       out.push(Decoration.line({ class: 'cm-lp-blank' }).range(l.from))
   }
 
