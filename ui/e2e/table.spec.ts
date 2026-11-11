@@ -169,3 +169,42 @@ test('empty cells keep the height of a line, and the menu button stays on the ce
   expect(menu.y + menu.height / 2).toBeLessThanOrEqual(box.y + 2)
   expect(menu.x + menu.width / 2).toBeGreaterThanOrEqual(box.x + box.width - 2)
 })
+
+test.describe('in the document style', () => {
+  startWith({ default_mode: 'live', live_style: 'document' })
+
+  test('a cell takes a link, an image and a link to a document', async ({ page }) => {
+    await page.request.post('/api/notes', { data: { content: '# Zebra target\n' } })
+    const alias = await openSample(page)
+    const toolbar = page.getByTestId('format-toolbar')
+    const row = async (n: number) => tableLines(await markdown(page, alias))[n]
+
+    await cell(page, 'Chen').dblclick()
+    await toolbar.getByRole('button', { name: /^Link/ }).click()
+    const pop = page.getByTestId('link-popover')
+    await expect(pop.getByLabel('Text')).toHaveValue('Chen')
+    await pop.getByLabel('Address').fill('https://chen.example')
+    await pop.getByLabel('Address').press('Enter')
+    await expect.poll(() => row(4)).toBe('| Asia | 0.9 M$ | +3 % | [Chen](https://chen.example) |')
+    await expect(cell(page, 'Chen').locator('a')).toHaveText('Chen')
+
+    await cell(page, 'Alice').click()
+    await page.keyboard.press('End')
+    const chooser = page.waitForEvent('filechooser')
+    await toolbar.getByRole('button', { name: 'Insert image' }).click()
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64')
+    await (await chooser).setFiles({ name: 'dot.png', mimeType: 'image/png', buffer: png })
+    await expect.poll(() => row(2)).toMatch(/^\| Europe \| 1\.2 M€ \| \+8 % \| Alice!\[dot\]\(\/[^)]+\) \|$/)
+    await expect(cell(page, 'Alice').locator('img')).toHaveCount(1)
+
+    await cell(page, 'Bob').click()
+    await page.keyboard.press('End')
+    await page.keyboard.type(' see ')
+    await toolbar.getByRole('button', { name: 'Other formats' }).click()
+    await page.getByRole('menuitem', { name: 'Link to a document' }).click()
+    await page.getByTestId('doc-picker').getByRole('textbox').fill('Zebra')
+    await page.getByTestId('doc-picker').getByRole('option', { name: /Zebra target/ }).click()
+    await expect.poll(() => row(3)).toMatch(/^\| North America \| 2\.4 M\$ \| \+12 % \| Bob see \[\[[a-z0-9]+\\\|Zebra target\]\] \|$/)
+    await expect(cell(page, 'Bob').locator('a.note-link')).toHaveText('Zebra target')
+  })
+})

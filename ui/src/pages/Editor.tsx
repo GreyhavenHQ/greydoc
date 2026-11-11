@@ -50,10 +50,10 @@ import { AiMenu } from '@/components/AiMenu'
 import { SelectionToolbar, toolbarButton } from '@/components/SelectionToolbar'
 import { imageUpload } from '@/editor/upload'
 import { formatKeymap } from '@/editor/format'
-import { canToggleTasks, tableMenu, type TableMenuRequest } from '@/editor/live'
+import { activeCell, canToggleTasks, tableMenu, type TableMenuRequest } from '@/editor/live'
 import { TableMenu } from '@/components/TableMenu'
 import { FormatToolbar } from '@/components/FormatToolbar'
-import { LinkPopover, linkTarget, type LinkTarget } from '@/components/LinkPopover'
+import { cellLinkTarget, LinkPopover, linkTarget, type LinkTarget } from '@/components/LinkPopover'
 import { taskToggle } from '@/lib/tasks'
 import { captureEdits, setSuggestionRanges, suggestionDecorations, type SuggestionAction } from '@/editor/suggestions'
 import { anchorRange, resolvePoint, resolveRange } from '@/editor/anchors'
@@ -639,9 +639,50 @@ export default function Editor() {
   useEffect(() => () => undoManager?.destroy(), [undoManager])
   const [linkEdit, setLinkEdit] = useState<LinkTarget | null>(null)
   const openLink = useCallback((v: CMView) => {
-    setLinkEdit(linkTarget(v))
+    const cell = activeCell(v)
+    setLinkEdit(cell ? cellLinkTarget(v, cell) : linkTarget(v))
     return true
   }, [])
+  // selMenu is where a right click on a selection opened Comment and Suggest. Writers see them only then.
+  const [selMenu, setSelMenu] = useState<{ top: number; left: number } | null>(null)
+  const selectionMenu = useMemo(
+    () =>
+      CMView.domEventHandlers({
+        mousedown(e, v) {
+          // A right click keeps the selection, so the menu acts on it.
+          if (e.button !== 2 || v.state.selection.main.empty) return false
+          e.preventDefault()
+          return true
+        },
+        contextmenu(e, v) {
+          if (v.state.selection.main.empty || activeCell(v)) return false
+          e.preventDefault()
+          const host = v.dom.getBoundingClientRect()
+          setSelMenu({ top: e.clientY - host.top + 8, left: e.clientX - host.left })
+          return true
+        },
+      }),
+    [],
+  )
+  const lastSel = useRef('')
+  const onSelection = useCallback((s: SelectionInfo | null) => {
+    setSelection(s)
+    const key = s ? s.from + ':' + s.to : ''
+    if (key !== lastSel.current) setSelMenu(null)
+    lastSel.current = key
+  }, [])
+  useEffect(() => {
+    if (!selMenu) return
+    // Escape closes the menu and keeps the selection, which the editor would drop.
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.preventDefault()
+      e.stopPropagation()
+      setSelMenu(null)
+    }
+    document.addEventListener('keydown', key, true)
+    return () => document.removeEventListener('keydown', key, true)
+  }, [selMenu])
   const editorExtensions = useMemo(
     () => [
       formatKeymap({ onComment: commentOn, onLink: openLink }),
@@ -649,7 +690,8 @@ export default function Editor() {
         setActiveThread(id)
         setCommentsOpen(true)
       }),
-      selectionListener(setSelection),
+      selectionListener(onSelection),
+      selectionMenu,
       noteLinkCompletion(searchNotes, () => aliasRef.current, (a) => noteInfo(a).then((i) => i?.headings ?? [])),
       mentionsEnabled
         ? mentions(
@@ -693,7 +735,7 @@ export default function Editor() {
         },
       ),
     ],
-    [commentOn, openLink, mentionsEnabled],
+    [commentOn, openLink, onSelection, selectionMenu, mentionsEnabled],
   )
 
   const toggleTask = useCallback(
@@ -726,7 +768,13 @@ export default function Editor() {
   }
 
   const startComment = () => {
+    setSelMenu(null)
     if (selection) commentOn(selection.from, selection.to)
+  }
+  const commentSelection = () => {
+    const v = viewRef.current
+    const sel = v?.state.selection.main
+    if (sel && !sel.empty) commentOn(sel.from, sel.to)
   }
 
   const loadClients = useCallback(() => {
@@ -1030,14 +1078,27 @@ export default function Editor() {
         <main className="flex min-h-0 flex-1">
           {showEditor && (
             <section className={cn('relative flex min-w-0 flex-col border-r', showPreview ? 'w-1/2' : 'w-full')}>
-              {canEdit && ready && <FormatToolbar view={view} alias={note.alias} sink={formatSink} onLink={openLink} undoManager={undoManager} />}
+              {canEdit && ready && (
+                <FormatToolbar
+                  view={view}
+                  alias={note.alias}
+                  sink={formatSink}
+                  onLink={openLink}
+                  onComment={commentSelection}
+                  searchNotes={searchNotes}
+                  undoManager={undoManager}
+                />
+              )}
               <div className="relative min-h-0 flex-1">
-                {selection && atLeast(level, 'comment') && (
+                {selection && atLeast(level, 'comment') && (!canEdit || selMenu) && (
                   <SelectionToolbar
-                    top={selection.top}
-                    left={selection.left}
+                    top={selMenu?.top ?? selection.top}
+                    left={selMenu?.left ?? selection.left}
                     onComment={startComment}
-                    onSuggest={() => startSuggest(selection.from, selection.to)}
+                    onSuggest={() => {
+                      setSelMenu(null)
+                      startSuggest(selection.from, selection.to)
+                    }}
                   >
                     {me?.ai_enabled && (
                       <AiMenu

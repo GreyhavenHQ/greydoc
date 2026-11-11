@@ -197,3 +197,20 @@ test('a narrow toolbar moves the buttons that do not fit into the Other formats 
   await toolbar.getByRole('button', { name: 'Other formats' }).click()
   await expect(page.getByRole('menuitem', { name: /^Bulleted list/ })).toHaveCount(0)
 })
+
+test('a selection opens Comment and Suggest on a right click only, and the toolbar has a Comment button', async ({ page }) => {
+  await open(page, 'Please review this.\n')
+  const line = page.getByTestId('editor').locator('.cm-line', { hasText: 'Please review' })
+  await line.click()
+  await page.keyboard.press('End')
+  await page.keyboard.press('Shift+Home')
+  await page.waitForTimeout(300)
+  await expect(page.getByTestId('selection-toolbar')).toHaveCount(0)
+  await page.getByTestId('editor').locator('.cm-content').click({ button: 'right' })
+  await expect(page.getByTestId('selection-toolbar').getByRole('button', { name: 'Suggest' })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByTestId('selection-toolbar')).toHaveCount(0)
+
+  await bar(page).getByRole('button', { name: /^Comment/ }).click()
+  await expect(page.getByTestId('comment-input')).toBeVisible()
+})

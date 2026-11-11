@@ -16,6 +16,7 @@ import {
   List,
   ListChecks,
   ListOrdered,
+  MessageSquarePlus,
   Minus,
   Quote,
   Redo2,
@@ -25,8 +26,10 @@ import {
   Undo2,
 } from 'lucide-react'
 import { formatState, insertBlock, insertFootnote, setHeading, toggleList, toggleQuote, toggleWrap, type FormatState } from '@/editor/format'
-import { activeCell, cellHistory, focusCell, toggleCellMark } from '@/editor/live'
-import { uploadFiles } from '@/editor/upload'
+import { activeCell, cellHistory, cellReplace, cellSelection, focusCell, toggleCellMark, type CellSelection } from '@/editor/live'
+import { noteLink, type NoteHit } from '@/editor/noteLinks'
+import { DocPicker } from '@/components/DocPicker'
+import { uploadFile, uploadFiles } from '@/editor/upload'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 
@@ -102,7 +105,7 @@ interface Group {
 
 // MoreMenu holds what the bar cannot show: the groups that do not fit, then the syntax beyond the common buttons.
 // Like the toolbar buttons, its items never take the focus, so the editor keeps its cursor and typing goes on.
-function MoreMenu({ view, inCell, groups }: { view: EditorView | null; inCell: boolean; groups: Group[] }) {
+function MoreMenu({ view, inCell, groups, cellDocLink }: { view: EditorView | null; inCell: boolean; groups: Group[]; cellDocLink: () => void }) {
   // open holds where the panel goes. It is in a portal, so the bar does not clip it.
   const [open, setOpen] = useState<{ top: number; right: number } | null>(null)
   const button = useRef<HTMLButtonElement>(null)
@@ -126,7 +129,7 @@ function MoreMenu({ view, inCell, groups }: { view: EditorView | null; inCell: b
       document.removeEventListener('keydown', key, true)
     }
   }, [open])
-  const usable = !inCell || groups.some((g) => g.actions.some((a) => !a.disabled))
+  const usable = true
   useEffect(() => {
     if (!usable) setOpen(null)
   }, [usable])
@@ -237,7 +240,7 @@ function MoreMenu({ view, inCell, groups }: { view: EditorView | null; inCell: b
             {item('Table of contents', insertBlock('[toc]\n§'))}
             {item('Footnote', insertFootnote)}
             {line}
-            {item('Link to a document', linkDocument)}
+            {entry('Link to a document', inCell ? cellDocLink : () => run(linkDocument))}
           </div>,
           document.body,
         )}
@@ -260,7 +263,7 @@ const BTN = 34
 const SEP = 11
 const STYLE = 146
 // The bar always shows its padding, undo, redo, bold, italic and the menu button.
-const FIXED = 24 + 2 * BTN + SEP + 2 * BTN + SEP + BTN
+const FIXED = 24 + 2 * BTN + SEP + 2 * BTN + SEP + BTN + SEP + BTN
 
 // FormatToolbar is the bar above the editor. Every button runs an editor command on the Markdown text.
 // sink receives the editor state after each change, so only the bar re-renders.
@@ -269,14 +272,22 @@ export function FormatToolbar({
   alias,
   sink,
   onLink,
+  onComment,
+  searchNotes,
   undoManager,
 }: {
   view: EditorView | null
   alias: string
   sink: RefObject<((s: EditorState) => void) | null>
   onLink: (view: EditorView) => void
+  onComment: () => void
+  searchNotes: (q: string) => Promise<NoteHit[]>
   undoManager: Y.UndoManager | null
 }) {
+  const [hasSel, setHasSel] = useState(false)
+  // cellTarget is the part of a grid cell an image or a document link goes into, kept while a dialog has the focus.
+  const imageCell = useRef<CellSelection | null>(null)
+  const [docPick, setDocPick] = useState<CellSelection | null>(null)
   const [history, setHistory] = useState({ undo: false, redo: false })
   useEffect(() => {
     if (!undoManager) return
@@ -300,7 +311,10 @@ export function FormatToolbar({
     return () => ro.disconnect()
   }, [])
   useEffect(() => {
-    sink.current = (s) => setFmt(formatState(s))
+    sink.current = (s) => {
+      setFmt(formatState(s))
+      setHasSel(!s.selection.main.empty)
+    }
     if (view) setFmt(formatState(view.state))
     return () => {
       sink.current = null
@@ -355,7 +369,7 @@ export function FormatToolbar({
         { label: 'Strikethrough', keys: 'Mod-Shift-X', icon: <Strikethrough />, on: off && !!fmt?.strike, act: mark('~~') },
         { label: 'Highlight', keys: 'Mod-Shift-H', icon: <Highlighter />, act: mark('==') },
         { label: 'Inline code', keys: 'Mod-E', icon: <Code />, on: off && !!fmt?.code, act: mark('`') },
-        { label: 'Link', keys: 'Mod-K', icon: <Link />, on: off && !!fmt?.link, disabled: inCell, act: () => view && onLink(view) },
+        { label: 'Link', keys: 'Mod-K', icon: <Link />, on: off && !!fmt?.link, act: () => view && onLink(view) },
       ],
     },
     {
@@ -383,7 +397,15 @@ export function FormatToolbar({
             focusCell(view, view.state.doc.lineAt(view.state.selection.main.head).from, 0, 0)
           },
         },
-        { label: 'Insert image', icon: <ImagePlus />, disabled: inCell, act: () => file.current?.click() },
+        {
+          label: 'Insert image',
+          icon: <ImagePlus />,
+          act: () => {
+            const cell = view && activeCell(view)
+            imageCell.current = cell ? cellSelection(view, cell) : null
+            file.current?.click()
+          },
+        },
         { label: 'Code block', icon: <SquareCode />, disabled: inCell, act: run(insertBlock('```\n§\n```\n')) },
         { label: 'Divider', icon: <Minus />, disabled: inCell, act: run(insertBlock('---\n§')) },
       ],
@@ -448,7 +470,32 @@ export function FormatToolbar({
         </>
       )}
       <Sep />
-      <MoreMenu view={view} inCell={inCell} groups={groups.filter((g) => !shown.has(g.title))} />
+      <Btn label="Comment" keys="Mod-Alt-M" disabled={inCell || !hasSel} onClick={onComment}>
+        <MessageSquarePlus />
+      </Btn>
+      <MoreMenu
+        view={view}
+        inCell={inCell}
+        groups={groups.filter((g) => !shown.has(g.title))}
+        cellDocLink={() => {
+          const cell = view && activeCell(view)
+          setDocPick(cell ? cellSelection(view, cell) : null)
+        }}
+      />
+      {docPick && view && (
+        <DocPicker
+          rect={docPick.rect}
+          search={searchNotes}
+          onClose={() => {
+            setDocPick(null)
+            focusCell(view, docPick.from, docPick.row, docPick.col)
+          }}
+          onPick={(n) => {
+            setDocPick(null)
+            cellReplace(view, docPick, noteLink(n))
+          }}
+        />
+      )}
       <input
         ref={file}
         type="file"
@@ -458,7 +505,11 @@ export function FormatToolbar({
         onChange={(e) => {
           const files = Array.from(e.target.files ?? [])
           e.target.value = ''
-          if (view && files.length) void uploadFiles(view, alias, files, view.state.selection.main.head).then(() => view.focus())
+          const cell = imageCell.current
+          imageCell.current = null
+          if (!view || !files.length) return
+          if (cell) void Promise.all(files.map((f) => uploadFile(alias, f))).then((mds) => cellReplace(view, cell, mds.filter(Boolean).join('')))
+          else void uploadFiles(view, alias, files, view.state.selection.main.head).then(() => view.focus())
         }}
       />
     </div>
