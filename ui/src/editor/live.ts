@@ -479,8 +479,9 @@ function editableCell(view: EditorView, wrap: HTMLElement, el: HTMLElement) {
     if (menu) {
       const a = el.getBoundingClientRect()
       const w = wrap.getBoundingClientRect()
-      menu.style.left = a.right - w.left - 22 + 'px'
-      menu.style.top = a.top - w.top + 4 + 'px'
+      // On the top right corner of the cell, so it covers no text.
+      menu.style.left = a.right - w.left - 9 + 'px'
+      menu.style.top = a.top - w.top - 9 + 'px'
     }
     // The document style edits the rendered cell when its Markdown comes back unchanged. Otherwise the cell shows
     // its source as plain text. Equal content stays, so a selection stays.
@@ -1028,7 +1029,9 @@ const liveTheme = EditorView.theme({
     padding: '0 22px 22px 0', margin: '0 0 -6px',
   },
   '.cm-lp-grid-wrap table.cm-lp-grid': { margin: '0' },
-  '.cm-lp-grid td, .cm-lp-grid th': { cursor: 'text', outline: 'none', minWidth: '3em' },
+  '.cm-lp-grid td, .cm-lp-grid th': { cursor: 'text', outline: 'none', minWidth: '5em' },
+  // An empty cell keeps the height of a line of text.
+  '.cm-lp-grid td:empty::before, .cm-lp-grid th:empty::before': { content: '"\\200b"' },
   '.cm-lp-grid td:focus, .cm-lp-grid th:focus': { boxShadow: 'inset 0 0 0 2px rgb(var(--primary))' },
   '.cm-lp-grid-add': {
     position: 'absolute', opacity: '0', border: '1px dashed rgb(var(--border))', borderRadius: '4px', color: 'rgb(var(--muted-foreground))',
@@ -1036,7 +1039,7 @@ const liveTheme = EditorView.theme({
   },
   '.cm-lp-grid-wrap:hover .cm-lp-grid-add, .cm-lp-grid-active .cm-lp-grid-add': { opacity: '1' },
   '.cm-lp-grid-menu': {
-    position: 'absolute', display: 'none', width: '18px', height: '18px', borderRadius: '4px', fontSize: '12px', lineHeight: '1',
+    position: 'absolute', zIndex: '1', display: 'none', width: '18px', height: '18px', padding: '0', borderRadius: '9999px', fontSize: '11px', lineHeight: '1',
     color: 'rgb(var(--muted-foreground))', backgroundColor: 'rgb(var(--card))', border: '1px solid rgb(var(--border))', cursor: 'pointer',
   },
   '.cm-lp-grid-active .cm-lp-grid-menu': { display: 'block' },

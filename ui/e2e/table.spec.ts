@@ -152,3 +152,20 @@ test('toolbar marks apply to the text of a grid cell', async ({ page }) => {
   await expect.poll(async () => tableLines(await markdown(page, alias))[4]).toBe('| Asia | 0.9 M$ | +3 % | Chen |')
   await expect(page.locator(':focus')).toHaveText('Asia')
 })
+
+test('empty cells keep the height of a line, and the menu button stays on the cell corner', async ({ page }) => {
+  await page.goto('/n/' + (await (await page.request.post('/api/notes', { data: { content: 'text\n' } })).json()).alias)
+  await page.getByTestId('editor').locator('.cm-line', { hasText: 'text' }).click()
+  await page.getByTestId('format-toolbar').getByRole('button', { name: 'Insert table' }).click()
+  const grid = page.getByTestId('editor').locator('.cm-lp-grid')
+  const full = (await grid.locator('th').nth(1).boundingBox())!
+  const empty = grid.locator('td').first()
+  const box = (await empty.boundingBox())!
+  expect(box.height).toBeGreaterThanOrEqual(full.height - 1)
+  expect(box.height, 'empty row height').toBeGreaterThanOrEqual(30)
+  expect(full.height, 'header height').toBeGreaterThanOrEqual(30)
+  await empty.click()
+  const menu = (await page.getByRole('button', { name: 'Table options' }).boundingBox())!
+  expect(menu.y + menu.height / 2).toBeLessThanOrEqual(box.y + 2)
+  expect(menu.x + menu.width / 2).toBeGreaterThanOrEqual(box.x + box.width - 2)
+})
