@@ -61,6 +61,7 @@ import { setThreadRanges, threadDecorations } from '@/editor/threads'
 import { selectionListener, type SelectionInfo } from '@/editor/selection'
 import { EditorView as CMView } from '@codemirror/view'
 import type { EditorState } from '@codemirror/state'
+import * as Y from 'yjs'
 import { attribution, setClients } from '@/editor/attribution'
 import { personColor, personSeed, sourceLabel, type NoteClient } from '@/lib/authors'
 import { PersonAvatar } from '@/components/PersonAvatar'
@@ -633,6 +634,9 @@ export default function Editor() {
 
   const [tableMenuReq, setTableMenuReq] = useState<TableMenuRequest | null>(null)
   const formatSink = useRef<((s: EditorState) => void) | null>(null)
+  // One undo history per note, so it survives a switch to the preview and back.
+  const undoManager = useMemo(() => (session ? new Y.UndoManager(session.text) : null), [session])
+  useEffect(() => () => undoManager?.destroy(), [undoManager])
   const [linkEdit, setLinkEdit] = useState<LinkTarget | null>(null)
   const openLink = useCallback((v: CMView) => {
     setLinkEdit(linkTarget(v))
@@ -1026,7 +1030,7 @@ export default function Editor() {
         <main className="flex min-h-0 flex-1">
           {showEditor && (
             <section className={cn('relative flex min-w-0 flex-col border-r', showPreview ? 'w-1/2' : 'w-full')}>
-              {canEdit && ready && <FormatToolbar view={view} alias={note.alias} sink={formatSink} onLink={openLink} />}
+              {canEdit && ready && <FormatToolbar view={view} alias={note.alias} sink={formatSink} onLink={openLink} undoManager={undoManager} />}
               <div className="relative min-h-0 flex-1">
                 {selection && atLeast(level, 'comment') && (
                   <SelectionToolbar
@@ -1090,6 +1094,7 @@ export default function Editor() {
                     overlay={authorsOverlay}
                     live={mode === 'live'}
                     liveStyle={me?.prefs?.live_style ?? 'obsidian'}
+                    undoManager={undoManager ?? undefined}
                     extensions={editorExtensions}
                     onView={onView}
                     autoFocus

@@ -4,6 +4,7 @@ import type { EditorState, StateCommand } from '@codemirror/state'
 import type { EditorView } from '@codemirror/view'
 import { yUndoManagerKeymap } from 'y-codemirror.next'
 import { startCompletion } from '@codemirror/autocomplete'
+import type * as Y from 'yjs'
 import {
   Bold,
   Code,
@@ -225,12 +226,25 @@ export function FormatToolbar({
   alias,
   sink,
   onLink,
+  undoManager,
 }: {
   view: EditorView | null
   alias: string
   sink: RefObject<((s: EditorState) => void) | null>
   onLink: (view: EditorView) => void
+  undoManager: Y.UndoManager | null
 }) {
+  const [history, setHistory] = useState({ undo: false, redo: false })
+  useEffect(() => {
+    if (!undoManager) return
+    const update = () => setHistory({ undo: undoManager.canUndo(), redo: undoManager.canRedo() })
+    update()
+    const events = ['stack-item-added', 'stack-item-popped', 'stack-cleared', 'stack-item-updated'] as const
+    for (const e of events) undoManager.on(e, update)
+    return () => {
+      for (const e of events) undoManager.off(e, update)
+    }
+  }, [undoManager])
   const [fmt, setFmt] = useState<FormatState | null>(() => (view ? formatState(view.state) : null))
   const file = useRef<HTMLInputElement>(null)
   useEffect(() => {
@@ -259,7 +273,7 @@ export function FormatToolbar({
     if (cell) toggleCellMark(view, cell, m)
     else run(toggleWrap(m))()
   }
-  const history = (which: 'undo' | 'redo') => () => {
+  const step = (which: 'undo' | 'redo') => () => {
     const cell = view && activeCell(view)
     if (cell) cellHistory(view, cell, which)
     else run(which === 'undo' ? undo : redo)()
@@ -272,10 +286,10 @@ export function FormatToolbar({
   const block = fmt?.block === 'h5' || fmt?.block === 'h6' ? 'h4' : (fmt?.block ?? 'p')
   return (
     <div className="flex h-11 shrink-0 items-center gap-0.5 overflow-x-auto border-b bg-background px-3" data-testid="format-toolbar" role="toolbar" aria-label="Formatting">
-      <Btn label="Undo" keys="Mod-Z" onClick={history('undo')}>
+      <Btn label="Undo" keys="Mod-Z" disabled={!history.undo} onClick={step('undo')}>
         <Undo2 />
       </Btn>
-      <Btn label="Redo" keys="Mod-Shift-Z" onClick={history('redo')}>
+      <Btn label="Redo" keys="Mod-Shift-Z" disabled={!history.redo} onClick={step('redo')}>
         <Redo2 />
       </Btn>
       <Sep />

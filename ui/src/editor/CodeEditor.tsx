@@ -71,6 +71,8 @@ export interface CodeEditorProps {
   // live renders Markdown in place instead of showing the source with line numbers.
   live?: boolean
   liveStyle?: LiveStyle
+  // undoManager outlives the editor, so the history stays when the mode changes.
+  undoManager?: Y.UndoManager
   onView?: (view: EditorView | null) => void
   autoFocus?: boolean
 }
@@ -78,7 +80,7 @@ export interface CodeEditorProps {
 // The source style also sizes headings. It MUST NOT apply in live mode, which has the sizes of the view.
 const sourceView = () => [lineNumbers(), highlightActiveLineGutter(), highlightActiveLine(), syntaxHighlighting(markdownStyle)]
 
-export function CodeEditor({ ytext, awareness, readOnly, extensions = [], overlay = [], live = false, liveStyle: style = 'obsidian', onView, autoFocus }: CodeEditorProps) {
+export function CodeEditor({ ytext, awareness, readOnly, extensions = [], overlay = [], live = false, liveStyle: style = 'obsidian', undoManager: shared, onView, autoFocus }: CodeEditorProps) {
   const host = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const readOnlyCompartment = useRef(new Compartment())
@@ -87,7 +89,7 @@ export function CodeEditor({ ytext, awareness, readOnly, extensions = [], overla
   const styleCompartment = useRef(new Compartment())
 
   useEffect(() => {
-    const undoManager = new Y.UndoManager(ytext)
+    const undoManager = shared ?? new Y.UndoManager(ytext)
     const state = EditorState.create({
       doc: ytext.toString(),
       extensions: [
@@ -132,12 +134,12 @@ export function CodeEditor({ ytext, awareness, readOnly, extensions = [], overla
     return () => {
       onView?.(null)
       view.destroy()
-      undoManager.destroy()
+      if (!shared) undoManager.destroy()
       viewRef.current = null
     }
     // Extensions and callbacks are fixed for the editor's lifetime.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ytext, awareness])
+  }, [ytext, awareness, shared])
 
   useEffect(() => {
     viewRef.current?.dispatch({
