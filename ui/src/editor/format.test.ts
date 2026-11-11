@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { EditorSelection, EditorState, type StateCommand, type Transaction } from '@codemirror/state'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { ensureSyntaxTree } from '@codemirror/language'
-import { formatState, insertBlock, insertLink, linkAt, linkChange, setHeading, toggleList, toggleQuote, toggleWrap } from '@/editor/format'
+import { formatState, insertBlock, insertFootnote, insertLink, linkAt, linkChange, setHeading, toggleList, toggleQuote, toggleWrap } from '@/editor/format'
 import { captureEdits, type PendingEdit } from '@/editor/suggestions'
 
 // Text notation: | is a cursor, « and » are the anchor and the head of a selection.
@@ -205,5 +205,12 @@ describe('links', () => {
     expect(apply('See «this» now.', 'this', 'https://x.example')).toBe('See [this](https://x.example)| now.')
     expect(apply('See | now.', '', 'https://x.example')).toBe('See [https://x.example](https://x.example)| now.')
     expect(apply('See «a» now.', 'a', 'https://x.example/a (b)')).toBe('See [a](https://x.example/a%20%28b%29)| now.')
+  })
+})
+
+describe('insertFootnote', () => {
+  it('adds the next free number at the cursor and its note at the end', () => {
+    expect(fmt(insertFootnote, 'A claim|.')).toBe('A claim[^1].\n\n[^1]: |')
+    expect(fmt(insertFootnote, 'One[^1] two|.\n\n[^1]: First.\n')).toBe('One[^1] two[^2].\n\n[^1]: First.\n[^2]: |')
   })
 })

@@ -104,3 +104,50 @@ test('a commenter gets no toolbar but keeps Comment and Suggest', async ({ brows
   await expect(alice.getByTestId('selection-toolbar').getByRole('button', { name: 'Comment' })).toBeVisible()
   await expect(alice.getByTestId('selection-toolbar').getByRole('button', { name: 'Suggest' })).toBeVisible()
 })
+
+const more = (page: Page) => bar(page).getByRole('button', { name: 'Other formats' }).click()
+
+test('the Other formats menu adds a footnote', async ({ page }) => {
+  const alias = await open(page, 'text\n')
+  await page.getByTestId('editor').locator('.cm-line', { hasText: 'text' }).click()
+  await page.keyboard.press('End')
+  await more(page)
+  // The panel shows in full, not clipped by the toolbar.
+  const menu = await page.getByRole('menu', { name: 'Other formats' }).boundingBox()
+  const toolbar = await bar(page).boundingBox()
+  expect(menu!.y).toBeGreaterThanOrEqual(toolbar!.y + toolbar!.height)
+  expect(await page.getByRole('menuitem', { name: 'Underline' }).evaluate((el) => {
+    const r = el.getBoundingClientRect()
+    return document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2) === el
+  })).toBe(true)
+  await page.getByRole('menuitem', { name: 'Footnote' }).click()
+  await page.keyboard.type('The source.')
+  await expect.poll(() => markdown(page, alias)).toBe('text[^1]\n\n[^1]: The source.')
+})
+
+test('the Other formats menu adds a callout', async ({ page }) => {
+  const alias = await open(page, 'text\n')
+  await page.getByTestId('editor').locator('.cm-line', { hasText: 'text' }).click()
+  await page.keyboard.press('End')
+  await more(page)
+  await page.getByRole('menuitem', { name: 'Callout Warning' }).click()
+  await page.keyboard.type('Check this first.')
+  await expect.poll(() => markdown(page, alias)).toBe('text\n\n> [!WARNING]\n> Check this first.\n')
+  await expect(page.getByTestId('editor').locator('.cm-lp-alert-warning')).not.toHaveCount(0)
+  // A second use of the menu opens it again.
+  await more(page)
+  await expect(page.getByRole('menuitem', { name: 'Footnote' })).toBeVisible()
+})
+
+test('the Other formats menu starts a link to a document', async ({ page }) => {
+  await page.request.post('/api/notes', { data: { content: '# Zebra target\n' } })
+  const alias = await open(page, 'text\n')
+  await page.getByTestId('editor').locator('.cm-line', { hasText: 'text' }).click()
+  await page.keyboard.press('End')
+  await page.keyboard.type(' see ')
+  await more(page)
+  await page.getByRole('menuitem', { name: 'Link to a document' }).click()
+  await page.keyboard.type('Zebra')
+  await expect(page.locator('.cm-tooltip-autocomplete')).toContainText('Zebra target')
+  await expect.poll(() => markdown(page, alias)).toContain('text see [[Zebra')
+})

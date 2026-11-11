@@ -175,6 +175,31 @@ export function insertBlock(text: string): StateCommand {
   }
 }
 
+// insertFootnote puts the next footnote number at the cursor and its note at the end, with the cursor in the note.
+export const insertFootnote: StateCommand = ({ state, dispatch }) => {
+  if (state.readOnly) return false
+  const text = state.doc.toString()
+  const used = [...text.matchAll(/\[\^(\d+)\]/g)].map((m) => Number(m[1]))
+  const n = Math.max(0, ...used) + 1
+  const at = state.selection.main.head
+  const notes = /\n\[\^\d+\]: /.test(text)
+  const end = text.endsWith('\n') ? '' : '\n'
+  const note = (notes ? end : end + '\n') + `[^${n}]: `
+  const ref = `[^${n}]`
+  dispatch(
+    state.update({
+      changes: [
+        { from: at, insert: ref },
+        { from: text.length, insert: note },
+      ],
+      selection: { anchor: text.length + ref.length + note.length },
+      scrollIntoView: true,
+      userEvent,
+    }),
+  )
+  return true
+}
+
 export interface FormatState {
   bold: boolean
   italic: boolean

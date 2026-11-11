@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { createPortal } from 'react-dom'
 import type { EditorState, StateCommand } from '@codemirror/state'
 import type { EditorView } from '@codemirror/view'
 import { yUndoManagerKeymap } from 'y-codemirror.next'
+import { startCompletion } from '@codemirror/autocomplete'
 import {
   Bold,
   Code,
+  Ellipsis,
   Highlighter,
   ImagePlus,
   Italic,
@@ -20,7 +23,7 @@ import {
   Table,
   Undo2,
 } from 'lucide-react'
-import { formatState, insertBlock, setHeading, toggleList, toggleQuote, toggleWrap, type FormatState } from '@/editor/format'
+import { formatState, insertBlock, insertFootnote, setHeading, toggleList, toggleQuote, toggleWrap, type FormatState } from '@/editor/format'
 import { activeCell, cellHistory, focusCell, toggleCellMark } from '@/editor/live'
 import { uploadFiles } from '@/editor/upload'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -63,6 +66,145 @@ function Btn({
     >
       {children}
     </button>
+  )
+}
+
+type Command = StateCommand | ((v: EditorView) => boolean)
+
+// linkDocument starts a [[ link and opens the list of documents.
+const linkDocument = (view: EditorView) => {
+  const at = view.state.selection.main.head
+  view.dispatch({ changes: { from: at, insert: '[[' }, selection: { anchor: at + 2 }, userEvent: 'input.type' })
+  startCompletion(view)
+  return true
+}
+
+const callouts = ['Note', 'Tip', 'Important', 'Warning', 'Caution']
+const boxes = ['Info', 'Success', 'Warning', 'Danger']
+
+// MoreMenu holds the syntax beyond the common buttons. Like the toolbar buttons, its items never take the focus,
+// so the editor keeps its cursor and the next keys typed go into the text.
+function MoreMenu({ view, disabled }: { view: EditorView | null; disabled: boolean }) {
+  // open holds where the panel goes. It is in a portal: the toolbar scrolls sideways, which would clip it.
+  const [open, setOpen] = useState<{ top: number; right: number } | null>(null)
+  const button = useRef<HTMLButtonElement>(null)
+  const panel = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const down = (e: MouseEvent) => {
+      const t = e.target as Node
+      if (!panel.current?.contains(t) && !button.current?.contains(t)) setOpen(null)
+    }
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.preventDefault()
+      e.stopPropagation()
+      setOpen(null)
+    }
+    document.addEventListener('mousedown', down, true)
+    document.addEventListener('keydown', key, true)
+    return () => {
+      document.removeEventListener('mousedown', down, true)
+      document.removeEventListener('keydown', key, true)
+    }
+  }, [open])
+  useEffect(() => {
+    if (disabled) setOpen(null)
+  }, [disabled])
+  const run = (cmd: Command) => {
+    setOpen(null)
+    if (!view) return
+    view.focus()
+    cmd(view)
+  }
+  const toggle = () => {
+    const r = button.current!.getBoundingClientRect()
+    setOpen((o) => (o ? null : { top: r.bottom + 8, right: window.innerWidth - r.right }))
+  }
+  const item = (label: string, cmd: Command, keys?: string) => (
+    <button
+      key={label}
+      type="button"
+      role="menuitem"
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={() => run(cmd)}
+      className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
+    >
+      {label}
+      {keys && <span className="ml-auto text-xs tracking-widest text-muted-foreground">{keys.replace('Mod-', mod)}</span>}
+    </button>
+  )
+  const chips = (label: string, names: string[], cmd: (name: string) => Command) => (
+    <div className="flex items-center gap-1 px-2 py-1 text-sm" role="group" aria-label={label}>
+      <span className="w-14 shrink-0">{label}</span>
+      <div className="flex flex-wrap gap-1">
+        {names.map((n) => (
+          <button
+            key={n}
+            type="button"
+            role="menuitem"
+            aria-label={`${label} ${n}`}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => run(cmd(n))}
+            className="rounded-full border px-2 py-0.5 text-xs hover:bg-accent hover:text-accent-foreground"
+          >
+            {n}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+  const heading = (text: string) => <div className="px-2 pt-1.5 pb-1 text-xs font-medium text-muted-foreground">{text}</div>
+  return (
+    <>
+      <button
+        ref={button}
+        type="button"
+        aria-label="Other formats"
+        title="Other formats"
+        aria-haspopup="menu"
+        aria-expanded={!!open}
+        disabled={disabled}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={toggle}
+        className={cn(
+          'flex size-8 shrink-0 items-center justify-center rounded-md text-foreground/80 hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-35 [&_svg]:size-4',
+          open && 'bg-muted',
+        )}
+      >
+        <Ellipsis />
+      </button>
+      {open &&
+        createPortal(
+          <div
+            ref={panel}
+            role="menu"
+            aria-label="Other formats"
+            style={{ top: open.top, right: open.right }}
+            className="fixed z-50 max-h-[70vh] w-64 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+          >
+            {heading('Text')}
+            {item('Underline', toggleWrap('++'), 'Mod-U')}
+            {item('Superscript', toggleWrap('^'), 'Mod-.')}
+            {item('Subscript', toggleWrap('~'), 'Mod-,')}
+            {item('Inline formula', toggleWrap('$'))}
+            <div className="-mx-1 my-1 h-px bg-border" />
+            {heading('Blocks')}
+            {chips('Callout', callouts, (c) => insertBlock(`> [!${c.toUpperCase()}]\n> §\n`))}
+            {chips('Box', boxes, (b) => insertBlock(`:::${b.toLowerCase()}\n§\n:::\n`))}
+            {item('Collapsible section', insertBlock(':::spoiler Details\n§\n:::\n'))}
+            {item('Formula', insertBlock('$$\n§\n$$\n'))}
+            {item('Diagram', insertBlock('```mermaid\nflowchart LR\n  Start --> §End\n```\n'))}
+            {item('CSV table', insertBlock('```csvpreview header="true"\nname,team\n§\n```\n'))}
+            {item('Definition', insertBlock('Term\n: §\n'))}
+            {item('Table of contents', insertBlock('[toc]\n§'))}
+            {item('Footnote', insertFootnote)}
+            <div className="-mx-1 my-1 h-px bg-border" />
+            {item('Link to a document', linkDocument)}
+          </div>,
+        document.body,
+      )}
+    </>
   )
 }
 
@@ -211,6 +353,8 @@ export function FormatToolbar({
       <Btn disabled={inCell} label="Divider" onClick={run(insertBlock('---\n§'))}>
         <Minus />
       </Btn>
+      <Sep />
+      <MoreMenu view={view} disabled={inCell} />
       <input
         ref={file}
         type="file"
