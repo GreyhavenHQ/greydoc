@@ -154,14 +154,10 @@ function usePresence(session: NoteSession | null): PresenceUser[] {
   return users
 }
 
-// searchNotes feeds the [[ note picker: recent notes first, search results once the user types.
+// searchNotes lists the documents to link to: titles holding every word typed, the ones opened last first.
 async function searchNotes(query: string): Promise<NoteHit[]> {
-  const q = query.trim()
-  const sp = new URLSearchParams({ scope: q ? 'all' : 'recent', limit: '20' })
-  if (q) sp.set('q', q)
-  let { notes } = await api.get<{ notes: NoteHit[] }>('/api/notes?' + sp)
-  if (!q && notes.length === 0) notes = (await api.get<{ notes: NoteHit[] }>('/api/notes?scope=all&limit=20')).notes
-  return notes
+  const sp = new URLSearchParams({ scope: 'all', title: query.trim(), sort: 'visited', limit: '20' })
+  return (await api.get<{ notes: NoteHit[] }>('/api/notes?' + sp)).notes
 }
 
 // scrollSource calls take when the user starts to scroll or type in el.

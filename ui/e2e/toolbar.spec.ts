@@ -214,3 +214,19 @@ test('a selection opens Comment and Suggest on a right click only, and the toolb
   await bar(page).getByRole('button', { name: /^Comment/ }).click()
   await expect(page.getByTestId('comment-input')).toBeVisible()
 })
+
+test('the document list matches titles only, the documents opened last first', async ({ page }) => {
+  const make = async (content: string) => (await (await page.request.post('/api/notes', { data: { content } })).json()).alias as string
+  const alpha = await make('# Yak alpha\n')
+  const beta = await make('# Yak beta\n')
+  await make('# Other\n\nA yak in the text only.\n')
+  for (const a of [alpha, beta]) await page.request.get(`/api/notes/${a}?visit=1`)
+  await open(page, 'text\n')
+  await page.getByTestId('editor').locator('.cm-line', { hasText: 'text' }).click()
+  await page.keyboard.press('End')
+  await page.keyboard.type(' [[yak')
+  const list = page.locator('.cm-tooltip-autocomplete li')
+  await expect(list).toHaveCount(2)
+  await expect(list.nth(0)).toContainText('Yak beta')
+  await expect(list.nth(1)).toContainText('Yak alpha')
+})
