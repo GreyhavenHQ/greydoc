@@ -878,9 +878,10 @@ export function liveDecorations(state: EditorState): DecorationSet {
   const tree = ensureSyntaxTree(state, doc.length, 100) ?? syntaxTree(state)
   const ranges = state.selection.ranges
   // touchesBlock reveals blocks that cannot be edited in place: diagrams, math and front matter.
-  const touchesBlock = (from: number, to: number) => ranges.some((r) => r.from <= to && r.to >= from)
+  // Only the end of a selection counts, so selecting across the document does not turn every block into source.
+  const touchesBlock = (from: number, to: number) => ranges.some((r) => r.head >= from && r.head <= to)
   const docStyle = state.facet(liveStyle) === 'document'
-  const touches = (from: number, to: number) => !docStyle && touchesBlock(from, to)
+  const touches = (from: number, to: number) => !docStyle && ranges.some((r) => r.from <= to && r.to >= from)
   const lineActive = (pos: number) => {
     const l = doc.lineAt(pos)
     return touches(l.from, l.to)
@@ -999,6 +1000,7 @@ export function liveDecorations(state: EditorState): DecorationSet {
           out.push(Decoration.mark({ class: 'cm-lp-strike' }).range(node.from, node.to))
           return
         case 'InlineCode':
+          code.push([node.from, node.to])
           out.push(Decoration.mark({ class: 'cm-lp-code' }).range(node.from, node.to))
           return
         case 'EmphasisMark':
@@ -1206,7 +1208,7 @@ export function liveDecorations(state: EditorState): DecorationSet {
       n = m
       continue
     }
-    if (touchesBlock(line.from, line.to) && !docStyle) continue
+    if (touches(line.from, line.to)) continue
     for (const m of line.text.matchAll(/\+\+(?=\S)(.+?)(?<=\S)\+\+/g)) {
       const from = line.from + m.index!
       if (inCode(from)) continue

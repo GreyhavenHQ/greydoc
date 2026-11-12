@@ -228,4 +228,27 @@ describe('live preview', () => {
       expect(ds.find((d) => d.text === '[^1]:')?.label).toBe('1.')
     })
   })
+
+  it('keeps blocks rendered under a selection that ends outside them', () => {
+    const src = '# T\n\n```mermaid\ngraph TD\nA-->B\n```\n\n$$\nx^2\n$$\n\nend'
+    const state = (sel: EditorSelection) => EditorState.create({ doc: src, selection: sel, extensions: [markdown({ base: markdownLanguage })] })
+    const widgets = (sel: EditorSelection) => {
+      const out: string[] = []
+      liveDecorations(state(sel)).between(0, src.length, (_f, _t, d) => {
+        const w = (d.spec as { widget?: { constructor: { name: string } } }).widget
+        if (w) out.push(w.constructor.name)
+      })
+      return out
+    }
+    expect(widgets(EditorSelection.single(0, src.length))).toEqual(expect.arrayContaining(['MermaidWidget', 'MathWidget']))
+    const inMath = src.indexOf('x^2')
+    expect(widgets(EditorSelection.single(inMath, inMath + 3))).not.toContain('MathWidget')
+  })
+
+  it('leaves the syntax inside inline code alone', () => {
+    const src = 'Code `a==b== $x$ [[xy]] ++y++` here\n\nend'
+    const ds = decos(src)
+    expect(ds.some((d) => /cm-lp-(mark|ins)/.test(d.cls))).toBe(false)
+    expect(ds.some((d) => d.widget === 'MathWidget' || d.label === 'xy')).toBe(false)
+  })
 })
