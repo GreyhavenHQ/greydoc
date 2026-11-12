@@ -34,10 +34,18 @@ type ListFilter struct {
 	// Folder lists one folder by id, or the top level with FolderRoot.
 	Folder string
 	// IDs restricts the list, for search results, and keeps their order.
-	IDs    []string
+	IDs []string
+	// Title keeps the notes whose title contains every word of it, in any case.
+	Title  string
+	Sort   Sort
 	Limit  int
 	Offset int
 }
+
+// Sort orders a list. SortVisited puts the notes the viewer opened last first, then the others by their last update.
+type Sort string
+
+const SortVisited Sort = "visited"
 
 // FolderRoot is the Folder filter for notes outside any folder.
 const FolderRoot = "root"
@@ -160,6 +168,13 @@ func (s *Store) ListNotes(ctx context.Context, f ListFilter) ([]NoteSummary, err
 	default:
 		where += " AND n.folder_id = ?"
 		args = append(args, f.Folder)
+	}
+	for _, w := range strings.Fields(strings.ToLower(f.Title)) {
+		where += ` AND LOWER(n.title) LIKE ? ESCAPE '\'`
+		args = append(args, "%"+strings.NewReplacer(`\`, `\\`, "%", `\%`, "_", `\_`).Replace(w)+"%")
+	}
+	if f.Sort == SortVisited {
+		order = "CASE WHEN v.visited_at IS NULL THEN 1 ELSE 0 END, v.visited_at DESC, n.updated_at DESC, n.id"
 	}
 	if f.IDs != nil {
 		if len(f.IDs) == 0 {
