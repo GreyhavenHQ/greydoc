@@ -60,6 +60,10 @@ func (s *Server) handleListNotes(w http.ResponseWriter, r *http.Request) {
 		}
 		f.Folder = folder
 	}
+	f.Title = q.Get("title")
+	if q.Get("sort") == string(store.SortVisited) {
+		f.Sort = store.SortVisited
+	}
 	f.Limit, _ = strconv.Atoi(q.Get("limit"))
 	f.Offset, _ = strconv.Atoi(q.Get("offset"))
 	if text := q.Get("q"); text != "" {
