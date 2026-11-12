@@ -94,6 +94,9 @@ export const unescapeCell = (s: string) => s.replace(/\\\|/g, '|')
 // cellText is the text a person edits: escaped pipes show as plain pipes.
 export const cellText = (t: Table, row: number, col: number) => unescapeCell(rowAt(t, row)?.cells[col]?.text ?? '')
 
+// cellRaw is cellText with the spaces typed at its end, which the source keeps until the next edit.
+export const cellRaw = (t: Table, row: number, col: number) => unescapeCell(rowAt(t, row)?.cells[col]?.raw ?? '')
+
 // setCell sets the text of one cell. Only the differing middle part of the cell changes.
 export function setCell(t: Table, row: number, col: number, text: string): ChangeSpec {
   const r = rowAt(t, row)

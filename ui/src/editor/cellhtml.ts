@@ -93,8 +93,17 @@ export function markdownSelection(el: HTMLElement, range: Range): { markdown: st
   start.remove()
   end.remove()
   el.normalize()
-  if (md === null) return null
+  // Content written from attributes, such as [[alias]], drops a mark that was inside it.
+  if (md === null || !md.includes(START) || !md.includes(END)) return null
   const from = md.indexOf(START)
   const to = md.indexOf(END) - 1
   return { markdown: md.replace(START, '').replace(END, ''), from, to }
+}
+
+// atomicAround widens a range that touches a link to a document, a mention, a link or an image to the whole element.
+// Their Markdown cannot be split, so an insert replaces them whole.
+export function atomicAround(el: HTMLElement, range: Range) {
+  const node = range.commonAncestorContainer
+  const atom = (node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement)?.closest('a, span.mention, img')
+  if (atom && el.contains(atom)) range.selectNode(atom)
 }

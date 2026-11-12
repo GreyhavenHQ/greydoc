@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cellMarkdown, markdownSelection, richCell } from '@/editor/cellhtml'
+import { atomicAround, cellMarkdown, markdownSelection, richCell } from '@/editor/cellhtml'
 
 const md = (html: string) => {
   const el = document.createElement('td')
@@ -49,6 +49,32 @@ describe('markdownSelection', () => {
     caret.setStart(el.firstChild!, 1)
     caret.collapse(true)
     expect(markdownSelection(el, caret)).toEqual({ markdown: 'a **bold** c', from: 1, to: 1 })
+  })
+})
+
+describe('atomic content in a cell', () => {
+  const cell = (html: string) => {
+    const el = document.createElement('td')
+    el.innerHTML = html
+    document.body.appendChild(el)
+    return el
+  }
+  it('gives no offsets when a mark is lost in content written from its attributes', () => {
+    const el = cell('see <a href="/n/xy" class="note-link" data-alias="xy">xy</a>')
+    const r = document.createRange()
+    r.setStart(el.querySelector('a')!.firstChild!, 1)
+    expect(markdownSelection(el, r)).toBeNull()
+  })
+  it('selects a whole link to a document, a mention or an image around the caret', () => {
+    const el = cell('see <a href="/n/xy" class="note-link" data-alias="xy">xy</a> and <span class="mention" data-user="ana">@Ana</span>')
+    const r = document.createRange()
+    r.setStart(el.querySelector('a')!.firstChild!, 1)
+    atomicAround(el, r)
+    expect(markdownSelection(el, r)).toEqual({ markdown: 'see [[xy]] and [@Ana](@ana)', from: 4, to: 10 })
+    r.setStart(el.querySelector('span')!.firstChild!, 2)
+    r.collapse(true)
+    atomicAround(el, r)
+    expect(markdownSelection(el, r)).toEqual({ markdown: 'see [[xy]] and [@Ana](@ana)', from: 15, to: 27 })
   })
 })
 
