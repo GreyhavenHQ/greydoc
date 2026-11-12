@@ -108,6 +108,8 @@ test('a link under the cursor shows a card that opens, edits or removes it', asy
   await page.goto('/n/' + alias)
   const editor = page.getByTestId('editor')
   const card = page.getByTestId('link-card')
+  // The new tabs MUST NOT need the network: CI runners have no internet access.
+  await context.route('https://example.com/**', (r) => r.fulfill({ body: 'example' }))
   await expect(card).toHaveCount(0)
   await editor.locator('.cm-lp-link').click()
   await expect(card.getByRole('link', { name: 'https://example.com' })).toHaveAttribute('target', '_blank')
