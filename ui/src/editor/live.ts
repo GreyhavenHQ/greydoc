@@ -1,12 +1,13 @@
 import { ensureSyntaxTree, syntaxHighlighting, syntaxTree } from '@codemirror/language'
 import { tagHighlighter, tags } from '@lezer/highlight'
-import { EditorState, Facet, RangeSet, StateEffect, StateField, Text, type ChangeSpec, type Extension, type Range } from '@codemirror/state'
-import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemirror/view'
+import { EditorState, Facet, Prec, RangeSet, StateEffect, StateField, Text, type ChangeSpec, type Extension, type Range } from '@codemirror/state'
+import { Decoration, EditorView, WidgetType, keymap, type DecorationSet } from '@codemirror/view'
 import katex from 'katex'
 import { yUndoManagerKeymap } from 'y-codemirror.next'
 import { renderInline, renderMarkdown } from '@/render/markdown'
 import { atomicAround, cellMarkdown, markdownSelection, richCell } from '@/editor/cellhtml'
 import { markKeys } from '@/editor/format'
+import { escapeTyped, rawContext } from '@/editor/docinput'
 import { addColumn, addRow, cellRaw, cellText, parseTable, removeColumn, removeRow, setAlign, setCell, tidy, type Align, type Table } from '@/editor/table'
 import { naturalSize, renderMermaid, themeMode } from '@/render/mermaid'
 import { noteLinkSource, slugify } from '@/render/plugins'
@@ -22,8 +23,9 @@ export type LiveStyle = 'obsidian' | 'document'
 export const defaultLiveStyle: LiveStyle = 'document'
 export const liveStyle = Facet.define<LiveStyle, LiveStyle>({ combine: (v) => v[0] ?? defaultLiveStyle })
 
+// revealAt puts the cursor inside a rendered block, which shows its source.
 function revealAt(view: EditorView, dom: HTMLElement) {
-  const pos = view.posAtDOM(dom)
+  const pos = Math.min(view.posAtDOM(dom) + 1, view.state.doc.length)
   view.dispatch({ selection: { anchor: pos } })
   view.focus()
 }
@@ -913,10 +915,11 @@ export function liveDecorations(state: EditorState): DecorationSet {
   const doc = state.doc
   const tree = ensureSyntaxTree(state, doc.length, 100) ?? syntaxTree(state)
   const ranges = state.selection.ranges
+  const docStyle = state.facet(liveStyle) === 'document'
   // touchesBlock reveals blocks that cannot be edited in place: diagrams, math and front matter.
   // Only the end of a selection counts, so selecting across the document does not turn every block into source.
-  const touchesBlock = (from: number, to: number) => ranges.some((r) => r.head >= from && r.head <= to)
-  const docStyle = state.facet(liveStyle) === 'document'
+  // In the document style the cursor must be inside: arrow keys that stop at the edge of a block go past it.
+  const touchesBlock = (from: number, to: number) => ranges.some((r) => (docStyle ? r.head > from && r.head < to : r.head >= from && r.head <= to))
   const touches = (from: number, to: number) => !docStyle && ranges.some((r) => r.from <= to && r.to >= from)
   const lineActive = (pos: number) => {
     const l = doc.lineAt(pos)
@@ -1044,6 +1047,10 @@ export function liveDecorations(state: EditorState): DecorationSet {
           return
         case 'CodeMark':
           if (parent === 'InlineCode' && !lineActive(node.from)) out.push(hide.range(node.from, node.to))
+          return
+        case 'Escape':
+          // An escaped character shows as itself. In the document style it is one character for the cursor and Backspace.
+          if (!lineActive(node.from)) out.push(Decoration.replace({ widget: new LabelWidget(doc.sliceString(node.from + 1, node.to), 'cm-lp-esc') }).range(node.from, node.to))
           return
         case 'Subscript':
         case 'Superscript':
@@ -1264,11 +1271,11 @@ export function liveDecorations(state: EditorState): DecorationSet {
       out.push(Decoration.mark({ class: 'cm-lp-mark' }).range(from + 2, from + m[0].length - 2))
       out.push(hide.range(from + m[0].length - 2, from + m[0].length))
     }
-    if (!line.text.includes('$') || touchesBlock(line.from, line.to)) continue
+    if (!line.text.includes('$')) continue
     const re = /(?<![\\$])\$(?!\s)([^$\n]+?)(?<!\s)\$(?!\d)/g
     for (let m = re.exec(line.text); m; m = re.exec(line.text)) {
       const from = line.from + m.index
-      if (inCode(from)) continue
+      if (inCode(from) || touchesBlock(from, from + m[0].length)) continue
       out.push(Decoration.replace({ widget: new MathWidget(m[1], false) }).range(from, from + m[0].length))
     }
   }
@@ -1455,6 +1462,73 @@ const liveHighlight = tagHighlighter([
   { tag: tags.inserted, class: 'hljs-addition' },
 ])
 
+// documentInput stores typed text as text in the document style. Formatting comes from the toolbar and the keys.
+const documentInput = Prec.highest(
+  EditorView.inputHandler.of((view, from, to, text) => {
+    const { state } = view
+    if (state.facet(liveStyle) !== 'document' || view.composing || state.readOnly || rawContext(state, from)) return false
+    let before = state.doc.sliceString(state.doc.lineAt(from).from, from)
+    let insert = ''
+    for (const ch of text) {
+      const t = escapeTyped(before, ch)
+      insert += t
+      before += t
+    }
+    if (insert === text) return false
+    view.dispatch({ changes: { from, to, insert }, selection: { anchor: from + insert.length }, userEvent: 'input.type', scrollIntoView: true })
+    return true
+  }),
+)
+
+// linePrefix is the length of the marks at the start of a line that the document style hides: list, task, quote, heading.
+const linePrefix = (text: string) => /^\s*(?:(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?|>\s?|#{1,6}\s+)*/.exec(text)![0].length
+
+// documentKeys move the cursor over what the document style shows. Home stops after the hidden marks of a line,
+// and the up and down arrows make one stop on a block such as a diagram, not one above it and one below it.
+const documentKeys = Prec.high(
+  keymap.of([
+    ...[false, true].map((extend) => ({
+      key: extend ? 'Shift-Home' : 'Home',
+      mac: extend ? 'Shift-Mod-ArrowLeft' : 'Mod-ArrowLeft',
+      run: (view: EditorView) => {
+        if (view.state.facet(liveStyle) !== 'document') return false
+        const range = view.state.selection.main
+        const line = view.state.doc.lineAt(range.head)
+        const start = line.from + linePrefix(line.text)
+        let head = view.moveToLineBoundary(range, false, true).head
+        if (head < start) head = start
+        view.dispatch({ selection: extend ? { anchor: range.anchor, head } : { anchor: head }, scrollIntoView: true })
+        return true
+      },
+    })),
+    ...([1, -1] as const).map((dir) => ({
+      key: dir > 0 ? 'ArrowDown' : 'ArrowUp',
+      run: (view: EditorView) => {
+        const { state } = view
+        const range = state.selection.main
+        if (!range.empty) return false
+        const go = (pos: number) => {
+          view.dispatch({ selection: { anchor: pos }, scrollIntoView: true })
+          return true
+        }
+        const near = (n: number) => (n >= 1 && n <= state.doc.lines ? state.doc.line(n) : null)
+        const line = state.doc.lineAt(range.head)
+        const moved = view.moveVertically(range, dir > 0).head
+        // A blank line is shorter than a line of text, so moving by height can jump over it.
+        const next = near(line.number + dir)
+        if (next && !next.length && state.doc.lineAt(moved).number !== line.number) return go(next.from)
+        // In the document style a rendered block, such as a diagram, is passed in one move, in both directions.
+        if (state.facet(liveStyle) !== 'document') return false
+        let past = -1
+        state.field(liveField).between(moved, moved, (from, to, d) => {
+          if ((d.spec as { block?: boolean }).block && (moved === from || moved === to)) past = dir > 0 ? to : from
+        })
+        return past < 0 ? false : go(near(state.doc.lineAt(past).number + dir)?.from ?? past)
+      },
+    })),
+  ]),
+)
+
 export function livePreview(): Extension {
-  return [tableSource, liveField, liveTheme, syntaxHighlighting(liveHighlight), EditorView.editorAttributes.of({ class: 'cm-live' })]
+  return [documentInput, documentKeys, tableSource, liveField, liveTheme, syntaxHighlighting(liveHighlight), EditorView.editorAttributes.of({ class: 'cm-live' })]
 }

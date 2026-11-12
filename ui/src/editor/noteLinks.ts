@@ -16,9 +16,11 @@ export function noteLinkSource(
   headings: (alias: string) => Promise<Heading[]> = async () => [],
 ) {
   return async (ctx: CompletionContext): Promise<CompletionResult | null> => {
-    const s = ctx.matchBefore(/\[\[[A-Za-z0-9_-]{1,64}#[^\]|\n]{0,64}$/)
+    // The document style stores typed brackets escaped: \[\[ opens the list too, and the choice replaces it.
+    const s = ctx.matchBefore(/\\?\[\\?\[[A-Za-z0-9_-]{1,64}#[^\]|\n]{0,64}$/)
     if (s) {
-      const alias = s.text.slice(2, s.text.indexOf('#')).toLowerCase()
+      const open = /^\\?\[\\?\[/.exec(s.text)![0].length
+      const alias = s.text.slice(open, s.text.indexOf('#')).toLowerCase()
       const list = (await headings(alias)).filter((h) => h.id)
       if (ctx.aborted || !list.length) return null
       return {
@@ -27,33 +29,34 @@ export function noteLinkSource(
           label: h.text || h.id,
           detail: h.id,
           type: 'text',
-          apply: (view: EditorView, _c: unknown, _from: number, to: number) => insertLink(view, s.from + 2, to, headingLink(alias, h)),
+          apply: (view: EditorView, _c: unknown, _from: number, to: number) => insertLink(view, s.from, to, headingLink(alias, h)),
         })),
       }
     }
-    const m = ctx.matchBefore(/\[\[[^\]|#\n]{0,64}$/)
+    const m = ctx.matchBefore(/\\?\[\\?\[[^\]|#\n]{0,64}$/)
     if (!m) return null
-    const notes = (await search(m.text.slice(2))).filter((n) => n.alias !== self()).slice(0, 20)
+    const open = /^\\?\[\\?\[/.exec(m.text)![0].length
+    const notes = (await search(m.text.slice(open).replace(/\\(.)/g, '$1'))).filter((n) => n.alias !== self()).slice(0, 20)
     if (ctx.aborted || !notes.length) return null
     return {
-      from: m.from + 2,
+      from: m.from + open,
       filter: false,
       options: notes.map((n) => ({
         label: n.title || n.alias,
         detail: n.alias,
         type: 'text',
-        apply: (view: EditorView, _c: unknown, from: number, to: number) => insertLink(view, from, to, noteLink(n)),
+        apply: (view: EditorView, _c: unknown, _from: number, to: number) => insertLink(view, m.from, to, noteLink(n)),
       })),
     }
   }
 }
 
-// insertLink writes link without its opening [[ over from..to.
+// insertLink writes link over from..to, where from is the start of its opening brackets.
 function insertLink(view: EditorView, from: number, to: number, link: string) {
   // Closing brackets may already follow, from bracket auto-closing.
   const after = view.state.sliceDoc(to, to + 2)
   const end = to + (after === ']]' ? 2 : after.startsWith(']') ? 1 : 0)
-  const insert = link.slice(2)
+  const insert = link
   view.dispatch({ changes: { from, to: end, insert }, selection: { anchor: from + insert.length } })
 }
 
