@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { linkAt, linkChange, linkMarkdown } from '@/editor/format'
-import { cellReplace, cellSelection, focusCell, type CellSelection } from '@/editor/live'
+import { cellReplace, cellSelection, type CellSelection } from '@/editor/live'
 
 export interface LinkTarget {
   text: string
@@ -19,7 +19,7 @@ export interface LinkTarget {
 
 // cellLinkTarget reads the link or the selection in a grid cell.
 export function cellLinkTarget(view: EditorView, el: HTMLElement): LinkTarget | null {
-  const cell = cellSelection(view, el)
+  const cell = cellSelection(el)
   if (!cell) return null
   const host = view.dom.getBoundingClientRect()
   return {
@@ -61,7 +61,7 @@ export function LinkPopover({ view, target, onClose }: { view: EditorView; targe
     const cell = target.cell
     if (cell) {
       if (apply !== undefined && (apply || target.existing)) cellReplace(view, cell, linkMarkdown(text, apply))
-      else focusCell(view, cell.from, cell.row, cell.col)
+      else cell.cell.focus()
       return
     }
     if (apply !== undefined && (apply || target.existing)) view.dispatch(linkChange(view.state, text, apply))

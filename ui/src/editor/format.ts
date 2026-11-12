@@ -1,6 +1,6 @@
 import { EditorSelection, Prec, type ChangeSpec, type EditorState, type Extension, type StateCommand, type Transaction } from '@codemirror/state'
 import { syntaxTree } from '@codemirror/language'
-import { slugify } from '@/render/plugins'
+import { noteLinkSource, slugify } from '@/render/plugins'
 import { keymap, type EditorView, type KeyBinding } from '@codemirror/view'
 
 const userEvent = 'input.format'
@@ -237,64 +237,56 @@ export function formatState(state: EditorState): FormatState {
   }
 }
 
-export interface LinkInfo {
-  from: number
-  to: number
-  text: string
-  url: string
-}
-
-// linkAt finds the [text](url) link around the main cursor.
-export function linkAt(state: EditorState): LinkInfo | null {
-  const head = state.selection.main.head
-  for (const side of [-1, 1] as const) {
-    for (let n: ReturnType<typeof syntaxTree>['topNode'] | null = syntaxTree(state).resolveInner(head, side); n; n = n.parent) {
-      if (n.name !== 'Link') continue
-      const marks = n.getChildren('LinkMark')
-      const url = n.getChild('URL')
-      if (marks.length < 2 || !url) return null
-      return { from: n.from, to: n.to, text: state.sliceDoc(marks[0].to, marks[1].from), url: state.sliceDoc(url.from, url.to) }
-    }
-  }
-  return null
-}
-
 // linkMarkdown is [text](url), or the text alone without an address.
 export function linkMarkdown(text: string, url: string): string {
   const label = text.replace(/[[\]]/g, '') || url
   return url ? `[${label}](${url.replace(/[()\s]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0'))})` : label
 }
 
-export interface LinkTargetInfo {
+export interface LinkInfo {
   from: number
   to: number
+  // text is the text of the link, or its address when it has none.
+  text: string
   url: string
-  // note is a link to another document. editable says whether the link popover can change it.
+  // note is a link to another document. editable says whether the link popover can change it: only [text](url) links.
   note: boolean
   editable: boolean
 }
 
+const noteLink = new RegExp(noteLinkSource, 'g')
+
 // linkInfoAt finds what a click at pos would open: a link, a bare address or a [[link]] to a document.
-export function linkInfoAt(state: EditorState, pos: number): LinkTargetInfo | null {
+export function linkInfoAt(state: EditorState, pos: number): LinkInfo | null {
   const line = state.doc.lineAt(pos)
-  for (const m of line.text.matchAll(/\[\[([A-Za-z0-9_-]{1,64})(?:#([^\]|\n]+))?(?:\|[^\]\n]+)?\]\]/g)) {
+  for (const m of line.text.matchAll(noteLink)) {
     const from = line.from + m.index!
     const to = from + m[0].length
     if (pos < from || pos > to || m[1].toLowerCase() === 'toc') continue
-    return { from, to, url: '/n/' + m[1].toLowerCase() + (m[2] ? '#' + slugify(m[2]) : ''), note: true, editable: false }
+    const alias = m[1].toLowerCase()
+    return { from, to, text: m[3]?.trim() || alias, url: '/n/' + alias + (m[2] ? '#' + slugify(m[2]) : ''), note: true, editable: false }
   }
   for (const side of [-1, 1] as const) {
     for (let n: ReturnType<typeof syntaxTree>['topNode'] | null = syntaxTree(state).resolveInner(pos, side); n; n = n.parent) {
       if (n.name === 'Link') {
+        const marks = n.getChildren('LinkMark')
         const url = n.getChild('URL')
-        if (url) return { from: n.from, to: n.to, url: state.sliceDoc(url.from, url.to), note: false, editable: true }
+        if (!url || marks.length < 2) continue
+        return { from: n.from, to: n.to, text: state.sliceDoc(marks[0].to, marks[1].from), url: state.sliceDoc(url.from, url.to), note: false, editable: true }
       }
       if (n.name === 'Autolink' || (n.name === 'URL' && !['Link', 'Image', 'Autolink'].includes(n.parent?.name ?? ''))) {
-        return { from: n.from, to: n.to, url: state.sliceDoc(n.from, n.to).replace(/^<|>$/g, ''), note: false, editable: false }
+        const url = state.sliceDoc(n.from, n.to).replace(/^<|>$/g, '')
+        return { from: n.from, to: n.to, text: url, url, note: false, editable: false }
       }
     }
   }
   return null
+}
+
+// linkAt finds the [text](url) link around the main cursor.
+export function linkAt(state: EditorState): LinkInfo | null {
+  const info = linkInfoAt(state, state.selection.main.head)
+  return info?.editable ? info : null
 }
 
 // linkChange sets the link at the cursor, or makes one of the selection. An empty url removes the link and keeps its text.
@@ -321,18 +313,23 @@ export const insertLink: StateCommand = ({ state, dispatch }) => {
   return true
 }
 
+// markKeys are the keys of the inline marks. The editor and the table cells use the same list.
+export const markKeys: Record<string, string> = {
+  'Mod-b': '**',
+  'Mod-i': '*',
+  'Mod-u': '++',
+  'Mod-Shift-x': '~~',
+  'Mod-Shift-h': '==',
+  'Mod-e': '`',
+  'Mod-.': '^',
+  'Mod-,': '~',
+}
+
 // formatKeymap binds the formatting keys. It runs before the default keymap, which binds Mod-i to selectParentSyntax.
 // onLink, when set, opens a link editor instead of writing the Markdown of a link.
 export function formatKeymap(opts: { onComment: (from: number, to: number) => void; onLink?: (view: EditorView) => boolean }): Extension {
   const bindings: KeyBinding[] = [
-    { key: 'Mod-b', run: toggleWrap('**') },
-    { key: 'Mod-i', run: toggleWrap('*') },
-    { key: 'Mod-u', run: toggleWrap('++') },
-    { key: 'Mod-Shift-x', run: toggleWrap('~~') },
-    { key: 'Mod-Shift-h', run: toggleWrap('==') },
-    { key: 'Mod-e', run: toggleWrap('`') },
-    { key: 'Mod-.', run: toggleWrap('^') },
-    { key: 'Mod-,', run: toggleWrap('~') },
+    ...Object.entries(markKeys).map(([key, m]) => ({ key, run: toggleWrap(m) })),
     { key: 'Mod-k', run: (view) => (opts.onLink && !view.state.readOnly ? opts.onLink(view) : insertLink(view)) },
     ...[0, 1, 2, 3, 4, 5, 6].map((n) => ({ key: `Mod-Alt-${n}`, run: setHeading(n) })),
     { key: 'Mod-Shift-7', run: toggleList('ordered') },

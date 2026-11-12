@@ -207,4 +207,41 @@ test.describe('in the document style', () => {
     await expect.poll(() => row(3)).toMatch(/^\| North America \| 2\.4 M\$ \| \+12 % \| Bob see \[\[[a-z0-9]+\\\|Zebra target\]\] \|$/)
     await expect(cell(page, 'Bob').locator('a.note-link')).toHaveText('Zebra target')
   })
+
+  test('cell keys match the editor: strikethrough, link, and a trailing space that survives a blur', async ({ page, context }) => {
+    const alias = await openSample(page)
+    const row = async (n: number) => tableLines(await markdown(page, alias))[n]
+    await cell(page, 'Asia').dblclick()
+    await page.keyboard.press('ControlOrMeta+Shift+x')
+    await expect.poll(() => row(4)).toBe('| ~~Asia~~ | 0.9 M$ | +3 % | Chen |')
+    await cell(page, 'Chen').dblclick()
+    await page.keyboard.press('ControlOrMeta+k')
+    await page.getByTestId('link-popover').getByLabel('Address').fill('https://chen.example')
+    await page.getByTestId('link-popover').getByLabel('Address').press('Enter')
+    await expect.poll(() => row(4)).toBe('| ~~Asia~~ | 0.9 M$ | +3 % | [Chen](https://chen.example) |')
+    await context.route('https://chen.example/**', (r) => r.fulfill({ body: 'chen' }))
+    const opened = context.waitForEvent('page')
+    await cell(page, 'Chen').locator('a').click({ modifiers: ['ControlOrMeta'] })
+    expect((await opened).url()).toContain('chen.example')
+    await (await opened).close()
+
+    await cell(page, 'Bob').click()
+    await page.keyboard.press('End')
+    await page.keyboard.type('by ')
+    await cell(page, 'Alice').click()
+    await cell(page, 'Bob').click()
+    await page.keyboard.press('End')
+    await page.keyboard.type('x')
+    await expect.poll(() => row(3)).toBe('| North America | 2.4 M$ | +12 % | Bobby x |')
+  })
+
+  test('typing right after a table menu choice goes into the cell', async ({ page }) => {
+    const alias = await openSample(page)
+    await cell(page, 'Chen').click()
+    await page.getByRole('button', { name: 'Table options' }).click()
+    await page.getByRole('menuitem', { name: 'Add row below' }).click()
+    await page.keyboard.type('Dana')
+    await expect.poll(async () => tableLines(await markdown(page, alias)).at(-1)).toBe('|  |  |  | Dana |')
+  })
 })
+

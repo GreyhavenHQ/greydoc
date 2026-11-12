@@ -1,6 +1,6 @@
 import { Copy, ExternalLink, FileText, Pencil, Unlink } from 'lucide-react'
 import { toast } from 'sonner'
-import type { LinkTargetInfo } from '@/editor/format'
+import type { LinkInfo } from '@/editor/format'
 
 const iconButton =
   'flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground [&_svg]:size-3.5'
@@ -9,18 +9,16 @@ const iconButton =
 // It never takes the focus, so typing goes on in the text.
 export function LinkCard({
   info,
-  label,
   top,
   left,
   onOpen,
   onEdit,
   onRemove,
 }: {
-  info: LinkTargetInfo
-  label: string
+  info: LinkInfo
   top: number
   left: number
-  onOpen: (info: LinkTargetInfo) => void
+  onOpen: (info: LinkInfo) => void
   onEdit?: () => void
   onRemove?: () => void
 }) {
@@ -46,7 +44,7 @@ export function LinkCard({
           onOpen(info)
         }}
       >
-        {info.note ? `Open ${label}` : info.url}
+        {info.note ? `Open ${info.text}` : info.url}
       </a>
       <span className="mx-1 h-4 w-px shrink-0 bg-border" />
       <button

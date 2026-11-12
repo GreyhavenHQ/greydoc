@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
-import { createPortal } from 'react-dom'
 import type { EditorState, StateCommand } from '@codemirror/state'
 import type { EditorView } from '@codemirror/view'
 import { yUndoManagerKeymap } from 'y-codemirror.next'
@@ -29,6 +28,7 @@ import { formatState, insertBlock, insertFootnote, setHeading, toggleList, toggl
 import { activeCell, cellHistory, cellReplace, cellSelection, focusCell, toggleCellMark, type CellSelection } from '@/editor/live'
 import { noteLink, type NoteHit } from '@/editor/noteLinks'
 import { DocPicker } from '@/components/DocPicker'
+import { MenuItem, MenuPanel, MenuSeparator } from '@/components/MenuPanel'
 import { uploadFile, uploadFiles } from '@/editor/upload'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
@@ -106,33 +106,9 @@ interface Group {
 // MoreMenu holds what the bar cannot show: the groups that do not fit, then the syntax beyond the common buttons.
 // Like the toolbar buttons, its items never take the focus, so the editor keeps its cursor and typing goes on.
 function MoreMenu({ view, inCell, groups, cellDocLink }: { view: EditorView | null; inCell: boolean; groups: Group[]; cellDocLink: () => void }) {
-  // open holds where the panel goes. It is in a portal, so the bar does not clip it.
+  // open holds where the panel goes, under the right edge of its button.
   const [open, setOpen] = useState<{ top: number; right: number } | null>(null)
   const button = useRef<HTMLButtonElement>(null)
-  const panel = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (!open) return
-    const down = (e: MouseEvent) => {
-      const t = e.target as Node
-      if (!panel.current?.contains(t) && !button.current?.contains(t)) setOpen(null)
-    }
-    const key = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
-      e.preventDefault()
-      e.stopPropagation()
-      setOpen(null)
-    }
-    document.addEventListener('mousedown', down, true)
-    document.addEventListener('keydown', key, true)
-    return () => {
-      document.removeEventListener('mousedown', down, true)
-      document.removeEventListener('keydown', key, true)
-    }
-  }, [open])
-  const usable = true
-  useEffect(() => {
-    if (!usable) setOpen(null)
-  }, [usable])
   const run = (cmd: Command) => {
     setOpen(null)
     if (!view) return
@@ -144,25 +120,18 @@ function MoreMenu({ view, inCell, groups, cellDocLink }: { view: EditorView | nu
     setOpen((o) => (o ? null : { top: r.bottom + 8, right: window.innerWidth - r.right }))
   }
   const entry = (label: string, act: () => void, keys?: string, disabled?: boolean, on?: boolean) => (
-    <button
+    <MenuItem
       key={label}
-      type="button"
-      role="menuitem"
       disabled={disabled}
-      aria-pressed={on}
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={() => {
+      pressed={on}
+      onSelect={() => {
         setOpen(null)
         act()
       }}
-      className={cn(
-        'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40',
-        on && 'text-primary',
-      )}
     >
       {label}
       {keys && <span className="ml-auto text-xs tracking-widest text-muted-foreground">{keys.replace('Mod-', mod)}</span>}
-    </button>
+    </MenuItem>
   )
   const item = (label: string, cmd: Command, keys?: string) => entry(label, () => run(cmd), keys, inCell)
   const chips = (label: string, names: string[], cmd: (name: string) => Command) => (
@@ -187,7 +156,6 @@ function MoreMenu({ view, inCell, groups, cellDocLink }: { view: EditorView | nu
     </div>
   )
   const heading = (text: string) => <div className="px-2 pt-1.5 pb-1 text-xs font-medium text-muted-foreground">{text}</div>
-  const line = <div className="-mx-1 my-1 h-px bg-border" />
   return (
     <>
       <button
@@ -197,7 +165,6 @@ function MoreMenu({ view, inCell, groups, cellDocLink }: { view: EditorView | nu
         title="Other formats"
         aria-haspopup="menu"
         aria-expanded={!!open}
-        disabled={!usable}
         onMouseDown={(e) => e.preventDefault()}
         onClick={toggle}
         className={cn(
@@ -207,43 +174,35 @@ function MoreMenu({ view, inCell, groups, cellDocLink }: { view: EditorView | nu
       >
         <Ellipsis />
       </button>
-      {open &&
-        createPortal(
-          <div
-            ref={panel}
-            role="menu"
-            aria-label="Other formats"
-            style={{ top: open.top, right: open.right }}
-            className="fixed z-50 max-h-[70vh] w-64 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
-          >
-            {groups.map((g) => (
-              <div key={g.title}>
-                {heading(g.title)}
-                {g.actions.map((a) => entry(a.label, a.act, a.keys, a.disabled, a.on))}
-                {line}
-              </div>
-            ))}
-            {heading('Text')}
-            {item('Underline', toggleWrap('++'), 'Mod-U')}
-            {item('Superscript', toggleWrap('^'), 'Mod-.')}
-            {item('Subscript', toggleWrap('~'), 'Mod-,')}
-            {item('Inline formula', toggleWrap('$'))}
-            {line}
-            {heading('Blocks')}
-            {chips('Callout', callouts, (c) => insertBlock(`> [!${c.toUpperCase()}]\n> §\n`))}
-            {chips('Box', boxes, (b) => insertBlock(`:::${b.toLowerCase()}\n§\n:::\n`))}
-            {item('Collapsible section', insertBlock(':::spoiler Details\n§\n:::\n'))}
-            {item('Formula', insertBlock('$$\n§\n$$\n'))}
-            {item('Diagram', insertBlock('```mermaid\nflowchart LR\n  Start --> §End\n```\n'))}
-            {item('CSV table', insertBlock('```csvpreview header="true"\nname,team\n§\n```\n'))}
-            {item('Definition', insertBlock('Term\n: §\n'))}
-            {item('Table of contents', insertBlock('[toc]\n§'))}
-            {item('Footnote', insertFootnote)}
-            {line}
-            {entry('Link to a document', inCell ? cellDocLink : () => run(linkDocument))}
-          </div>,
-          document.body,
-        )}
+      {open && (
+        <MenuPanel top={open.top} right={open.right} label="Other formats" keep={button} onClose={() => setOpen(null)} className="w-64">
+          {groups.map((g) => (
+            <div key={g.title}>
+              {heading(g.title)}
+              {g.actions.map((a) => entry(a.label, a.act, a.keys, a.disabled, a.on))}
+              <MenuSeparator />
+            </div>
+          ))}
+          {heading('Text')}
+          {item('Underline', toggleWrap('++'), 'Mod-U')}
+          {item('Superscript', toggleWrap('^'), 'Mod-.')}
+          {item('Subscript', toggleWrap('~'), 'Mod-,')}
+          {item('Inline formula', toggleWrap('$'))}
+          <MenuSeparator />
+          {heading('Blocks')}
+          {chips('Callout', callouts, (c) => insertBlock(`> [!${c.toUpperCase()}]\n> §\n`))}
+          {chips('Box', boxes, (b) => insertBlock(`:::${b.toLowerCase()}\n§\n:::\n`))}
+          {item('Collapsible section', insertBlock(':::spoiler Details\n§\n:::\n'))}
+          {item('Formula', insertBlock('$$\n§\n$$\n'))}
+          {item('Diagram', insertBlock('```mermaid\nflowchart LR\n  Start --> §End\n```\n'))}
+          {item('CSV table', insertBlock('```csvpreview header="true"\nname,team\n§\n```\n'))}
+          {item('Definition', insertBlock('Term\n: §\n'))}
+          {item('Table of contents', insertBlock('[toc]\n§'))}
+          {item('Footnote', insertFootnote)}
+          <MenuSeparator />
+          {entry('Link to a document', inCell ? cellDocLink : () => run(linkDocument))}
+        </MenuPanel>
+      )}
     </>
   )
 }
@@ -285,7 +244,7 @@ export function FormatToolbar({
   undoManager: Y.UndoManager | null
 }) {
   const [hasSel, setHasSel] = useState(false)
-  // cellTarget is the part of a grid cell an image or a document link goes into, kept while a dialog has the focus.
+  // imageCell and docPick are the part of a grid cell an image or a document link goes into, kept while a dialog has the focus.
   const imageCell = useRef<CellSelection | null>(null)
   const [docPick, setDocPick] = useState<CellSelection | null>(null)
   const [history, setHistory] = useState({ undo: false, redo: false })
@@ -402,7 +361,7 @@ export function FormatToolbar({
           icon: <ImagePlus />,
           act: () => {
             const cell = view && activeCell(view)
-            imageCell.current = cell ? cellSelection(view, cell) : null
+            imageCell.current = cell ? cellSelection(cell) : null
             file.current?.click()
           },
         },
@@ -479,7 +438,7 @@ export function FormatToolbar({
         groups={groups.filter((g) => !shown.has(g.title))}
         cellDocLink={() => {
           const cell = view && activeCell(view)
-          setDocPick(cell ? cellSelection(view, cell) : null)
+          setDocPick(cell ? cellSelection(cell) : null)
         }}
       />
       {docPick && view && (
@@ -488,7 +447,7 @@ export function FormatToolbar({
           search={searchNotes}
           onClose={() => {
             setDocPick(null)
-            focusCell(view, docPick.from, docPick.row, docPick.col)
+            docPick.cell.focus()
           }}
           onPick={(n) => {
             setDocPick(null)

@@ -50,12 +50,12 @@ import { AiMenu } from '@/components/AiMenu'
 import { SelectionToolbar, toolbarButton } from '@/components/SelectionToolbar'
 import { imageUpload } from '@/editor/upload'
 import { formatKeymap } from '@/editor/format'
-import { activeCell, canToggleTasks, tableMenu, type TableMenuRequest } from '@/editor/live'
+import { activeCell, canEditText, defaultLiveStyle, headingPos, linkEditor, linkOpener, tableMenu, type TableMenuRequest } from '@/editor/live'
 import { TableMenu } from '@/components/TableMenu'
 import { FormatToolbar } from '@/components/FormatToolbar'
 import { cellLinkTarget, LinkPopover, linkTarget, type LinkTarget } from '@/components/LinkPopover'
 import { LinkCard } from '@/components/LinkCard'
-import { linkAt, linkChange, linkInfoAt, type LinkTargetInfo } from '@/editor/format'
+import { linkAt, linkChange, linkInfoAt, type LinkInfo } from '@/editor/format'
 import { taskToggle } from '@/lib/tasks'
 import { captureEdits, setSuggestionRanges, suggestionDecorations, type SuggestionAction } from '@/editor/suggestions'
 import { anchorRange, resolvePoint, resolveRange } from '@/editor/anchors'
@@ -646,11 +646,16 @@ export default function Editor() {
     return true
   }, [])
   // linkCard is the link under the cursor, shown in a card that opens it.
-  const [linkCard, setLinkCard] = useState<{ info: LinkTargetInfo; label: string; top: number; left: number } | null>(null)
+  const [linkCard, setLinkCard] = useState<{ info: LinkInfo; top: number; left: number } | null>(null)
+  // openTarget opens every link of the editor: a heading of this document in place, the app in place, others in a new tab.
   const openTarget = useCallback(
-    (info: LinkTargetInfo) => {
-      if (info.note || info.url.startsWith('/')) navigate(info.url)
-      else window.open(info.url, '_blank', 'noopener,noreferrer')
+    (url: string) => {
+      const v = viewRef.current
+      if (url.startsWith('#')) {
+        const pos = v && headingPos(v, decodeURIComponent(url.slice(1)))
+        if (v && pos !== null) v.dispatch({ selection: { anchor: pos }, effects: CMView.scrollIntoView(pos, { y: 'start' }) })
+      } else if (url.startsWith('/')) navigate(url)
+      else window.open(url, '_blank', 'noopener,noreferrer')
     },
     [navigate],
   )
@@ -666,9 +671,7 @@ export default function Editor() {
         const at = info && v.coordsAtPos(info.from, 1)
         if (!info || !at) return setLinkCard(null)
         const host = v.dom.getBoundingClientRect()
-        const text = v.state.sliceDoc(info.from, info.to)
-        const label = info.note ? (/\|([^\]]+)\]\]$/.exec(text)?.[1] ?? /^\[\[([^\]|#]+)/.exec(text)?.[1] ?? '') : ''
-        setLinkCard({ info, label, top: at.bottom - host.top + 6, left: Math.max(4, Math.min(at.left - host.left, host.width - 390)) })
+        setLinkCard({ info, top: at.bottom - host.top + 6, left: Math.max(4, Math.min(at.left - host.left, host.width - 390)) })
       })
     }
     return [
@@ -684,7 +687,7 @@ export default function Editor() {
           const info = pos === null ? null : linkInfoAt(v.state, pos)
           if (!info) return false
           e.preventDefault()
-          openTargetRef.current(info)
+          openTargetRef.current(info.url)
           return true
         },
       }),
@@ -696,13 +699,13 @@ export default function Editor() {
     () =>
       CMView.domEventHandlers({
         mousedown(e, v) {
-          // A right click keeps the selection, so the menu acts on it.
-          if (e.button !== 2 || v.state.selection.main.empty) return false
+          // A right click keeps the selection, so the menu acts on it. Others keep the menu of the browser.
+          if (e.button !== 2 || !canEditRef.current || v.state.selection.main.empty) return false
           e.preventDefault()
           return true
         },
         contextmenu(e, v) {
-          if (v.state.selection.main.empty || activeCell(v)) return false
+          if (!canEditRef.current || v.state.selection.main.empty || activeCell(v)) return false
           e.preventDefault()
           const host = v.dom.getBoundingClientRect()
           setSelMenu({ top: e.clientY - host.top + 8, left: e.clientX - host.left })
@@ -766,8 +769,10 @@ export default function Editor() {
           setCommentsOpen(true)
         } else decideRef.current(sg, a === 'accept')
       }),
-      canToggleTasks.of(() => canEditRef.current),
+      canEditText.of(() => canEditRef.current),
       tableMenu.of(setTableMenuReq),
+      linkOpener.of((url) => openTargetRef.current(url)),
+      linkEditor.of((v) => openLink(v)),
       CMView.updateListener.of((u) => {
         if (u.selectionSet || u.docChanged) formatSink.current?.(u.state)
       }),
@@ -1196,7 +1201,7 @@ export default function Editor() {
                 {linkCard && !linkEdit && view && (
                   <LinkCard
                     {...linkCard}
-                    onOpen={openTarget}
+                    onOpen={(info) => openTarget(info.url)}
                     onEdit={canEdit && linkCard.info.editable ? () => openLink(view) : undefined}
                     onRemove={
                       canEdit && linkCard.info.editable
@@ -1217,7 +1222,7 @@ export default function Editor() {
                     readOnly={!atLeast(level, 'comment')}
                     overlay={authorsOverlay}
                     live={mode === 'live'}
-                    liveStyle={me?.prefs?.live_style ?? 'document'}
+                    liveStyle={me?.prefs?.live_style ?? defaultLiveStyle}
                     undoManager={undoManager ?? undefined}
                     extensions={editorExtensions}
                     onView={onView}

@@ -22,7 +22,7 @@ import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } 
 import * as Y from 'yjs'
 import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next'
 import type { Awareness } from 'y-protocols/awareness'
-import { livePreview, liveStyle, refreshLive, type LiveStyle } from '@/editor/live'
+import { defaultLiveStyle, livePreview, liveStyle, refreshLive, type LiveStyle } from '@/editor/live'
 import { useTheme } from '@/lib/theme'
 
 const theme = EditorView.theme({
@@ -80,7 +80,7 @@ export interface CodeEditorProps {
 // The source style also sizes headings. It MUST NOT apply in live mode, which has the sizes of the view.
 const sourceView = () => [lineNumbers(), highlightActiveLineGutter(), highlightActiveLine(), syntaxHighlighting(markdownStyle)]
 
-export function CodeEditor({ ytext, awareness, readOnly, extensions = [], overlay = [], live = false, liveStyle: style = 'obsidian', undoManager: shared, onView, autoFocus }: CodeEditorProps) {
+export function CodeEditor({ ytext, awareness, readOnly, extensions = [], overlay = [], live = false, liveStyle: style = defaultLiveStyle, undoManager: shared, onView, autoFocus }: CodeEditorProps) {
   const host = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const readOnlyCompartment = useRef(new Compartment())

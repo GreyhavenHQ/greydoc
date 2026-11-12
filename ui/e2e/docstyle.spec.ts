@@ -140,3 +140,12 @@ test('a link to a document opens it from its card', async ({ page }) => {
   await page.getByTestId('link-card').getByRole('link', { name: 'Open Target doc' }).click()
   await expect(page).toHaveURL(new RegExp('/n/' + target + '$'))
 })
+
+test('a link to a heading of the document scrolls to it from the card', async ({ page }) => {
+  const content = '[Go down](#far-away)\n\n' + Array.from({ length: 80 }, (_, i) => `Line ${i}`).join('\n\n') + '\n\n## Far away\n\nend\n'
+  const alias = (await (await page.request.post('/api/notes', { data: { content } })).json()).alias
+  await page.goto('/n/' + alias)
+  await page.getByTestId('editor').locator('.cm-lp-link').click()
+  await page.getByTestId('link-card').getByRole('link', { name: '#far-away' }).click()
+  await expect(page.getByTestId('editor').locator('.cm-lp-h2', { hasText: 'Far away' })).toBeInViewport()
+})

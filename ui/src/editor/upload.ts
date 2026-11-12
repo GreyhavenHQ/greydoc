@@ -20,34 +20,47 @@ export async function uploadFile(alias: string, file: File): Promise<string | nu
   }
 }
 
+// tracked are the positions of uploads in progress. Edits made meanwhile, by anyone, move them.
+const tracked = new Set<{ pos: number }>()
+const trackUploads = EditorView.updateListener.of((u) => {
+  if (u.docChanged) for (const t of tracked) t.pos = u.changes.mapPos(t.pos, 1)
+})
+
 // uploadFiles uploads files and inserts their Markdown links at pos.
 export async function uploadFiles(view: EditorView, alias: string, files: File[], pos: number) {
-  for (const file of files) {
-    const md = await uploadFile(alias, file)
-    if (!md) continue
-    view.dispatch({ changes: { from: pos, insert: md }, selection: { anchor: pos + md.length }, userEvent: 'input.paste' })
-    pos += md.length
+  const at = { pos }
+  tracked.add(at)
+  try {
+    for (const file of files) {
+      const md = await uploadFile(alias, file)
+      if (md) view.dispatch({ changes: { from: at.pos, insert: md }, selection: { anchor: at.pos + md.length }, userEvent: 'input.paste' })
+    }
+  } finally {
+    tracked.delete(at)
   }
 }
 
 // imageUpload uploads pasted or dropped files.
 export function imageUpload(alias: () => string, canWrite: () => boolean) {
   const send = (view: EditorView, files: File[], pos: number) => uploadFiles(view, alias(), files, pos)
-  return EditorView.domEventHandlers({
-    paste(e, view) {
-      const files = Array.from(e.clipboardData?.files ?? [])
-      if (!files.length || !canWrite()) return false
-      e.preventDefault()
-      void send(view, files, view.state.selection.main.head)
-      return true
-    },
-    drop(e, view) {
-      const files = Array.from(e.dataTransfer?.files ?? [])
-      if (!files.length || !canWrite()) return false
-      e.preventDefault()
-      const pos = view.posAtCoords({ x: e.clientX, y: e.clientY }) ?? view.state.selection.main.head
-      void send(view, files, pos)
-      return true
-    },
-  })
+  return [
+    trackUploads,
+    EditorView.domEventHandlers({
+      paste(e, view) {
+        const files = Array.from(e.clipboardData?.files ?? [])
+        if (!files.length || !canWrite()) return false
+        e.preventDefault()
+        void send(view, files, view.state.selection.main.head)
+        return true
+      },
+      drop(e, view) {
+        const files = Array.from(e.dataTransfer?.files ?? [])
+        if (!files.length || !canWrite()) return false
+        e.preventDefault()
+        const pos = view.posAtCoords({ x: e.clientX, y: e.clientY }) ?? view.state.selection.main.head
+        void send(view, files, pos)
+        return true
+      },
+    }),
+  ]
 }

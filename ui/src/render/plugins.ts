@@ -139,8 +139,11 @@ export function parseCSV(text: string, delimiter = ','): string[][] {
 }
 
 // noteLinks reads [[alias]], [[alias#section]] and [[alias#section|label]] as links to other notes. [[toc]] stays a table of contents.
+// noteLinkSource matches [[alias]], [[alias#section]] and [[alias#section|label]]. The editor uses it too.
+export const noteLinkSource = '\\[\\[([A-Za-z0-9_-]{1,64})(?:#([^\\]|\\n]+))?(?:\\|([^\\]\\n]+))?\\]\\]'
+
 export function noteLinks(md: MarkdownIt) {
-  const re = /^\[\[([A-Za-z0-9_-]{1,64})(?:#([^\]|\n]+))?(?:\|([^\]\n]+))?\]\]/
+  const re = new RegExp('^' + noteLinkSource)
   md.inline.ruler.before('link', 'note_link', (state: StateInline, silent: boolean) => {
     if (state.src.charCodeAt(state.pos) !== 0x5b || state.src.charCodeAt(state.pos + 1) !== 0x5b) return false
     const m = re.exec(state.src.slice(state.pos))

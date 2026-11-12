@@ -5,10 +5,11 @@ import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemir
 import katex from 'katex'
 import { yUndoManagerKeymap } from 'y-codemirror.next'
 import { renderInline, renderMarkdown } from '@/render/markdown'
-import { cellMarkdown, markdownSelection, richCell } from '@/editor/cellhtml'
-import { addColumn, addRow, cellText, parseTable, unescapeCell, removeColumn, removeRow, setAlign, setCell, tidy, type Align, type Table } from '@/editor/table'
+import { atomicAround, cellMarkdown, markdownSelection, richCell } from '@/editor/cellhtml'
+import { markKeys } from '@/editor/format'
+import { addColumn, addRow, cellRaw, cellText, parseTable, removeColumn, removeRow, setAlign, setCell, tidy, type Align, type Table } from '@/editor/table'
 import { naturalSize, renderMermaid, themeMode } from '@/render/mermaid'
-import { slugify } from '@/render/plugins'
+import { noteLinkSource, slugify } from '@/render/plugins'
 import { splitFrontMatter } from '@/lib/meta'
 import { mentionsOn } from '@/lib/mentions'
 
@@ -18,7 +19,8 @@ const hide = Decoration.replace({})
 
 // LiveStyle picks what the cursor reveals. obsidian shows the Markdown of the active line. document never shows marks.
 export type LiveStyle = 'obsidian' | 'document'
-export const liveStyle = Facet.define<LiveStyle, LiveStyle>({ combine: (v) => v[0] ?? 'obsidian' })
+export const defaultLiveStyle: LiveStyle = 'document'
+export const liveStyle = Facet.define<LiveStyle, LiveStyle>({ combine: (v) => v[0] ?? defaultLiveStyle })
 
 function revealAt(view: EditorView, dom: HTMLElement) {
   const pos = view.posAtDOM(dom)
@@ -67,7 +69,7 @@ class HTMLBlockWidget extends WidgetType {
     super()
   }
   eq(o: HTMLBlockWidget) {
-    return o.html === this.html
+    return o.html === this.html && o.cls === this.cls
   }
   toDOM(view: EditorView) {
     const el = document.createElement('div')
@@ -79,7 +81,7 @@ class HTMLBlockWidget extends WidgetType {
       // A link of a table of contents goes to its heading in the editor.
       if (href.startsWith('#')) {
         e.preventDefault()
-        const line = headingLine(view, decodeURIComponent(href.slice(1)))
+        const line = headingPos(view, decodeURIComponent(href.slice(1)))
         if (line !== null) view.dispatch({ selection: { anchor: line }, effects: EditorView.scrollIntoView(line, { y: 'start' }) })
         view.focus()
         return
@@ -98,7 +100,8 @@ class HTMLBlockWidget extends WidgetType {
   }
 }
 
-function headingLine(view: EditorView, id: string): number | null {
+// headingPos is the position of the heading of this document whose anchor is id.
+export function headingPos(view: EditorView, id: string): number | null {
   const doc = view.state.doc
   for (let n = 1; n <= doc.lines; n++) {
     const m = /^ {0,3}#{1,6}\s+(.*?)\s*#*\s*$/.exec(doc.line(n).text)
@@ -117,6 +120,20 @@ function tocHtml(headings: string[]): string {
     tocCache = { key, html: /<nav class="toc">[\s\S]*?<\/nav>/.exec(html)?.[0] ?? '' }
   }
   return tocCache.html
+}
+
+const noteLinkPattern = new RegExp(noteLinkSource, 'g')
+
+// htmlCache keeps the rendered HTML of blocks: decorations are rebuilt on every cursor move.
+const htmlCache = new Map<string, string>()
+function blockHtml(src: string): string {
+  let html = htmlCache.get(src)
+  if (html === undefined) {
+    html = renderMarkdown(src).html
+    if (htmlCache.size > 200) htmlCache.clear()
+    htmlCache.set(src, html)
+  }
+  return html
 }
 
 const emojiCache = new Map<string, string>()
@@ -231,7 +248,7 @@ class KindWidget extends WidgetType {
     name.className = 'cm-lp-kind-name'
     name.textContent = this.label
     el.appendChild(name)
-    if (!view.state.readOnly && view.state.facet(canToggleTasks)()) {
+    if (!view.state.readOnly && view.state.facet(canEditText)()) {
       const kinds = alertKinds.includes(this.kind) && this.cls.includes('alert') ? alertKinds : boxKinds
       const select = document.createElement('select')
       select.className = 'cm-lp-kind-select'
@@ -322,18 +339,24 @@ function selectText(el: HTMLElement, a: number, b: number) {
   sel?.addRange(r)
 }
 
-const cellWraps: Record<string, string> = { b: '**', i: '*', e: '`' }
-
 export interface TableMenuRequest {
   view: EditorView
-  from: number
-  row: number
-  col: number
+  cell: HTMLElement
   rect: DOMRect
 }
 
 // tableMenu opens the table menu of the page for a cell. Without it the grid shows no menu button.
 export const tableMenu = Facet.define<(r: TableMenuRequest) => void, ((r: TableMenuRequest) => void) | null>({
+  combine: (v) => v[0] ?? null,
+})
+
+// linkOpener opens an address the way the page does: a document of the app in place, others in a new tab.
+export const linkOpener = Facet.define<(url: string) => void, (url: string) => void>({
+  combine: (v) => v[0] ?? ((url) => window.open(url, '_blank', 'noopener,noreferrer')),
+})
+
+// linkEditor opens the link editor of the page, for Mod-K in a grid cell.
+export const linkEditor = Facet.define<(view: EditorView) => void, ((view: EditorView) => void) | null>({
   combine: (v) => v[0] ?? null,
 })
 
@@ -363,11 +386,10 @@ export type TableAction =
   | 'align-right'
   | 'tidy'
   | 'source'
-  | 'focus'
 
-// runTableAction changes the table at from for the cell at row and col, then puts the caret back in a cell.
-export function runTableAction(view: EditorView, from: number, row: number, col: number, action: TableAction) {
-  const t = parseTable(view.state.doc, from)
+// runTableAction changes the table of a cell, then puts the caret back in a cell. The table is found when the action runs.
+export function runTableAction(view: EditorView, cell: HTMLElement, action: TableAction) {
+  const { t, row, col } = cellAt(view, cell)
   if (!t) return
   const rows = t.body.length + 1
   const cols = t.header.cells.length
@@ -439,8 +461,8 @@ class TableWidget extends WidgetType {
         b.setAttribute('aria-label', 'Table options')
         b.onmousedown = (e) => e.preventDefault()
         b.onclick = () => {
-          const t = tableAt(view, wrap)
-          if (t) open({ view, from: t.from, row: Number(wrap.dataset.row), col: Number(wrap.dataset.col), rect: b.getBoundingClientRect() })
+          const cell = gridCellIn(wrap, Number(wrap.dataset.row), Number(wrap.dataset.col))
+          if (cell) open({ view, cell, rect: b.getBoundingClientRect() })
         }
         wrap.appendChild(b)
       }
@@ -472,8 +494,14 @@ class TableWidget extends WidgetType {
           tr.appendChild(el)
         }
         el.style.textAlign = t.align[c] ?? ''
+        // The focused cell keeps what its writer typed. It changes only when its Markdown changed under it,
+        // for example when a row was added above it.
+        if (el === document.activeElement) {
+          if (el.dataset.src !== cellRaw(t, r, c)) showCell(view, el, cellRaw(t, r, c))
+          continue
+        }
         const text = cellText(t, r, c)
-        if (el === document.activeElement || el.dataset.src === text) continue
+        if (el.dataset.src === text) continue
         el.dataset.src = text
         el.innerHTML = renderInline(text)
       }
@@ -486,19 +514,52 @@ class TableWidget extends WidgetType {
 
 const tableAt = (view: EditorView, wrap: HTMLElement) => parseTable(view.state.doc, view.posAtDOM(wrap))
 
+const gridCellIn = (wrap: HTMLElement, row: number, col: number) => wrap.querySelector('table')!.rows[row]?.cells[col] as HTMLElement | undefined
+
+// gridCell finds a cell of the grid of the table at from, after an update.
+function gridCell(view: EditorView, from: number, row: number, col: number): HTMLElement | undefined {
+  for (const w of view.contentDOM.querySelectorAll<HTMLElement>('.cm-lp-grid-wrap')) if (view.posAtDOM(w) === from) return gridCellIn(w, row, col)
+}
+
 // activeCell is the grid cell of this editor that has the focus.
 export function activeCell(view: EditorView): HTMLElement | null {
   const el = document.activeElement as HTMLElement | null
   return el && (el.tagName === 'TD' || el.tagName === 'TH') && el.closest('.cm-lp-grid') && view.contentDOM.contains(el) ? el : null
 }
 
-function cellAt(view: EditorView, el: HTMLElement) {
-  const wrap = el.closest<HTMLElement>('.cm-lp-grid-wrap')!
-  return { t: tableAt(view, wrap), row: (el.parentElement as HTMLTableRowElement).rowIndex, col: (el as HTMLTableCellElement).cellIndex }
+// cellAt reads the table of a cell element now, so a change made meanwhile above the table does not matter.
+export function cellAt(view: EditorView, el: HTMLElement) {
+  const wrap = el.closest<HTMLElement>('.cm-lp-grid-wrap')
+  const t = wrap?.isConnected ? tableAt(view, wrap) : null
+  return { t, row: (el.parentElement as HTMLTableRowElement).rowIndex, col: (el as HTMLTableCellElement).cellIndex }
 }
 
-// cellSource is the Markdown of a cell under edit.
-const cellSource = (el: HTMLElement) => (el.dataset.rich ? (cellMarkdown(el) ?? el.textContent ?? '') : (el.textContent ?? ''))
+// showCell sets what a cell shows: in the document style its rendered text when that writes back to the same
+// Markdown, otherwise the Markdown itself. A space typed at the end stays, so the next keystroke keeps it.
+function showCell(view: EditorView, el: HTMLElement, text: string) {
+  const trimmed = text.trimEnd()
+  el.dataset.src = text
+  if (view.state.facet(liveStyle) === 'document' && richCell(trimmed)) {
+    el.dataset.rich = '1'
+    el.innerHTML = renderInline(trimmed)
+    if (trimmed !== text) el.append(text.slice(trimmed.length))
+  } else {
+    delete el.dataset.rich
+    el.textContent = text
+  }
+}
+
+// cellSource is the Markdown of a cell under edit. When the browser leaves content that cannot be written back,
+// the cell goes back to its last Markdown, shown as text, rather than lose its marks and links.
+function cellSource(el: HTMLElement): string {
+  if (!el.dataset.rich) return el.textContent ?? ''
+  const md = cellMarkdown(el)
+  if (md !== null) return md
+  delete el.dataset.rich
+  el.textContent = el.dataset.src ?? ''
+  caretToEnd(el)
+  return el.textContent
+}
 
 const markTags: Record<string, string[]> = { '**': ['STRONG', 'B'], '*': ['EM', 'I'], '~~': ['S', 'DEL', 'STRIKE'], '`': ['CODE'], '==': ['MARK'] }
 
@@ -511,10 +572,10 @@ function unwrapNode(n: Node) {
 // toggleRichMark sets a mark on the selection of a rendered cell, or removes the mark around it.
 function toggleRichMark(el: HTMLElement, m: string) {
   const sel = getSelection()
-  if (!sel?.rangeCount) return
+  const tags = markTags[m]
+  if (!sel?.rangeCount || !tags) return
   const range = sel.getRangeAt(0)
   if (!el.contains(range.commonAncestorContainer)) return
-  const tags = markTags[m]
   for (let n: Node | null = range.commonAncestorContainer; n && n !== el; n = n.parentNode) {
     if (tags.includes((n as Element).tagName)) return unwrapNode(n)
   }
@@ -563,9 +624,7 @@ export function toggleCellMark(view: EditorView, el: HTMLElement, m: string) {
 
 // CellSelection is a part of a grid cell, as offsets in its Markdown. It stays valid while the cell loses the focus.
 export interface CellSelection {
-  from: number
-  row: number
-  col: number
+  cell: HTMLElement
   start: number
   end: number
   // text is the selected text as it reads. link is the link the selection is in, which start and end then cover.
@@ -574,21 +633,19 @@ export interface CellSelection {
   rect: DOMRect
 }
 
-export function cellSelection(view: EditorView, el: HTMLElement): CellSelection | null {
-  const { t, row, col } = cellAt(view, el)
+export function cellSelection(el: HTMLElement): CellSelection | null {
   const sel = getSelection()
-  if (!t || !sel?.rangeCount) return null
+  if (!sel?.rangeCount) return null
   const range = sel.getRangeAt(0)
   if (!el.contains(range.commonAncestorContainer)) range.selectNodeContents(el)
   let link: CellSelection['link'] = null
   let start: number
   let end: number
   if (el.dataset.rich) {
-    const a = (range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE ? (range.commonAncestorContainer as Element) : range.commonAncestorContainer.parentElement)?.closest('a')
-    if (a && el.contains(a) && !a.classList.contains('note-link')) {
-      link = { text: a.textContent ?? '', url: a.getAttribute('href') ?? '' }
-      range.selectNode(a)
-    }
+    // The Markdown of a link, a mention or an image cannot be split, so the selection takes all of it.
+    atomicAround(el, range)
+    const a = range.startContainer.childNodes[range.startOffset] as Element | undefined
+    if (a?.tagName === 'A' && !a.classList.contains('note-link')) link = { text: a.textContent ?? '', url: a.getAttribute('href') ?? '' }
     const m = markdownSelection(el, range)
     if (!m) return null
     ;[start, end] = [m.from, m.to]
@@ -602,111 +659,87 @@ export function cellSelection(view: EditorView, el: HTMLElement): CellSelection 
       }
     }
   }
-  return { from: t.from, row, col, start, end, text: link?.text ?? range.toString(), link, rect: el.getBoundingClientRect() }
+  return { cell: el, start, end, text: link?.text ?? range.toString(), link, rect: el.getBoundingClientRect() }
 }
 
 // cellReplace puts Markdown in place of a cell selection, then puts the caret back in the cell.
 export function cellReplace(view: EditorView, sel: CellSelection, insert: string) {
-  const t = parseTable(view.state.doc, sel.from)
+  const { t, row, col } = cellAt(view, sel.cell)
   if (!t) return
-  // The raw text keeps a space typed at the end of the cell, which the offsets count.
-  const c = (sel.row === 0 ? t.header : t.body[sel.row - 1])?.cells[sel.col]
-  const text = c ? unescapeCell(c.raw) : ''
+  const text = cellRaw(t, row, col)
   const next = text.slice(0, sel.start) + insert + text.slice(sel.end)
-  view.dispatch({ changes: setCell(t, sel.row, sel.col, next), userEvent: 'input.format' })
+  view.dispatch({ changes: setCell(t, row, col, next), userEvent: 'input.format' })
   // The grid leaves a focused cell alone, and the cell can keep the focus while a dialog is open.
-  for (const w of view.contentDOM.querySelectorAll<HTMLElement>('.cm-lp-grid-wrap')) {
-    const el = view.posAtDOM(w) === t.from ? (w.querySelector('table')!.rows[sel.row]?.cells[sel.col] as HTMLElement | undefined) : undefined
-    if (!el) continue
-    el.dataset.src = next
-    if (view.state.facet(liveStyle) === 'document' && richCell(next)) {
-      el.dataset.rich = '1'
-      el.innerHTML = renderInline(next)
-    } else {
-      delete el.dataset.rich
-      el.textContent = next
-    }
-  }
-  focusCell(view, t.from, sel.row, sel.col)
+  const el = gridCell(view, t.from, row, col)
+  if (el) showCell(view, el, next)
+  focusCell(view, t.from, row, col)
 }
 
 // cellHistory runs undo or redo from a cell, then shows the new text of the cell.
 export function cellHistory(view: EditorView, el: HTMLElement, which: 'undo' | 'redo') {
   ;(which === 'undo' ? undo : redo)(view)
   const { t, row, col } = cellAt(view, el)
-  const text = t ? cellText(t, row, col) : ''
-  if (el.dataset.rich) el.innerHTML = renderInline(text)
-  else el.textContent = text
-  el.dataset.src = text
+  showCell(view, el, t ? cellRaw(t, row, col) : '')
   caretToEnd(el)
 }
 
-// focusCell finds the grid of the table at from after an update and puts the caret at the end of a cell.
+// focusCell puts the caret at the end of a cell of the table at from, after an update.
 export function focusCell(view: EditorView, from: number, row: number, col: number) {
-  for (const w of view.contentDOM.querySelectorAll<HTMLElement>('.cm-lp-grid-wrap')) {
-    if (view.posAtDOM(w) === from) caretToEnd(w.querySelector('table')!.rows[row]?.cells[col] as HTMLElement | undefined)
-  }
+  caretToEnd(gridCell(view, from, row, col))
 }
 
 function editableCell(view: EditorView, wrap: HTMLElement, el: HTMLElement) {
   el.contentEditable = 'true'
   el.spellcheck = true
-  const pos = () => [(el.parentElement as HTMLTableRowElement).rowIndex, (el as HTMLTableCellElement).cellIndex] as const
   const write = (text: string) => {
-    const t = tableAt(view, wrap)
-    const [r, c] = pos()
+    const { t, row, col } = cellAt(view, el)
     el.dataset.src = text
-    if (t) view.dispatch({ changes: setCell(t, r, c, text), userEvent: 'input.type' })
+    if (t) view.dispatch({ changes: setCell(t, row, col, text), userEvent: 'input.type' })
+  }
+  // The menu button sits on the top right corner of the focused cell, so it covers no text.
+  const placeMenu = () => {
+    const menu = wrap.querySelector<HTMLElement>('.cm-lp-grid-menu')
+    if (!menu) return
+    const a = el.getBoundingClientRect()
+    const w = wrap.getBoundingClientRect()
+    menu.style.left = a.right - w.left - 9 + 'px'
+    menu.style.top = a.top - w.top - 9 + 'px'
   }
   // Ctrl or Cmd and a click opens a link of the cell. A plain click edits the cell.
   el.addEventListener('mousedown', (e) => {
     const a = (e.target as HTMLElement).closest('a')
     if (!(e.ctrlKey || e.metaKey) || !a || !el.contains(a)) return
     e.preventDefault()
-    const href = a.getAttribute('href') ?? ''
-    if (href.startsWith('/')) location.assign(href)
-    else window.open(href, '_blank', 'noopener,noreferrer')
+    view.state.facet(linkOpener)(a.getAttribute('href') ?? '')
   })
   el.oncontextmenu = (e) => {
     const open = view.state.facet(tableMenu)
-    const t = tableAt(view, wrap)
-    if (!open || !t) return
+    if (!open) return
     e.preventDefault()
-    const [r, c] = pos()
-    open({ view, from: t.from, row: r, col: c, rect: new DOMRect(e.clientX, e.clientY, 0, 0) })
+    open({ view, cell: el, rect: new DOMRect(e.clientX, e.clientY, 0, 0) })
   }
   el.onfocus = () => {
-    const t = tableAt(view, wrap)
-    const [r, c] = pos()
-    wrap.dataset.row = String(r)
-    wrap.dataset.col = String(c)
-    const menu = wrap.querySelector<HTMLElement>('.cm-lp-grid-menu')
-    if (menu) {
-      const a = el.getBoundingClientRect()
-      const w = wrap.getBoundingClientRect()
-      // On the top right corner of the cell, so it covers no text.
-      menu.style.left = a.right - w.left - 9 + 'px'
-      menu.style.top = a.top - w.top - 9 + 'px'
-    }
-    // The document style edits the rendered cell when its Markdown comes back unchanged. Otherwise the cell shows
-    // its source as plain text. Equal content stays, so a selection stays.
-    const src = t ? cellText(t, r, c) : ''
-    if (view.state.facet(liveStyle) === 'document' && richCell(src)) {
-      el.dataset.rich = '1'
-      if (el.dataset.src !== src) el.innerHTML = renderInline(src)
-    } else {
-      delete el.dataset.rich
-      if (el.textContent !== src || el.childElementCount) el.textContent = src
-    }
+    const { t, row, col } = cellAt(view, el)
+    wrap.dataset.row = String(row)
+    wrap.dataset.col = String(col)
+    placeMenu()
+    // The mode is set on every focus. Equal content stays, so a selection made by the click stays.
+    const src = t ? cellRaw(t, row, col) : ''
+    const rich = view.state.facet(liveStyle) === 'document' && richCell(src.trimEnd())
+    if (rich) el.dataset.rich = '1'
+    else delete el.dataset.rich
+    if (el.dataset.src !== src || (!rich && (el.childElementCount || el.textContent !== src))) showCell(view, el, src)
   }
   el.onblur = () => {
-    const t = tableAt(view, wrap)
-    const [r, c] = pos()
-    const text = t ? cellText(t, r, c) : (el.textContent ?? '')
+    const { t, row, col } = cellAt(view, el)
+    const text = t ? cellText(t, row, col) : (el.textContent ?? '')
     el.dataset.src = text
     el.innerHTML = renderInline(text)
   }
-  el.oninput = () => write(cellSource(el))
+  el.oninput = () => {
+    write(cellSource(el))
+    placeMenu()
+  }
   // Chromium and WebKit do not select a word on double click in an editable cell inside the editor, so the cell does it.
   el.ondblclick = (e) => {
     const sel = getSelection()
@@ -726,19 +759,22 @@ function editableCell(view: EditorView, wrap: HTMLElement, el: HTMLElement) {
     document.execCommand('insertText', false, (e.clipboardData?.getData('text/plain') ?? '').replace(/\r?\n/g, ' '))
   }
   el.onkeydown = (e) => {
-    const t = tableAt(view, wrap)
+    const { t, row: r, col: c } = cellAt(view, el)
     if (!t) return
-    const [r, c] = pos()
     const rows = t.body.length + 1
     const cols = t.header.cells.length
     const mod = e.ctrlKey || e.metaKey
-    const key = e.key.toLowerCase()
-    if (mod && cellWraps[key] && !e.shiftKey && !e.altKey) {
+    // The keys of the editor do not reach a cell, so the cell reads the same table of mark keys.
+    const combo = 'Mod-' + (e.shiftKey ? 'Shift-' : '') + e.key.toLowerCase()
+    if (mod && !e.altKey && markKeys[combo]) {
       e.preventDefault()
-      toggleCellMark(view, el, cellWraps[key])
-    } else if (mod && (key === 'z' || key === 'y')) {
+      toggleCellMark(view, el, markKeys[combo])
+    } else if (mod && !e.altKey && combo === 'Mod-k') {
       e.preventDefault()
-      cellHistory(view, el, key === 'y' || e.shiftKey ? 'redo' : 'undo')
+      view.state.facet(linkEditor)?.(view)
+    } else if (mod && (combo === 'Mod-z' || combo === 'Mod-y' || combo === 'Mod-Shift-z')) {
+      e.preventDefault()
+      cellHistory(view, el, combo === 'Mod-z' ? 'undo' : 'redo')
     } else if (e.key === 'Tab') {
       e.preventDefault()
       const i = r * cols + c + (e.shiftKey ? -1 : 1)
@@ -746,17 +782,17 @@ function editableCell(view: EditorView, wrap: HTMLElement, el: HTMLElement) {
       if (i >= rows * cols) {
         view.dispatch({ changes: addRow(t, rows - 1), userEvent: 'input.table' })
         focusCell(view, t.from, rows, 0)
-      } else caretToEnd(wrap.querySelector('table')!.rows[Math.floor(i / cols)].cells[i % cols] as HTMLElement)
+      } else caretToEnd(gridCellIn(wrap, Math.floor(i / cols), i % cols))
     } else if (e.key === 'Enter') {
       e.preventDefault()
       if (r === rows - 1) {
         view.dispatch({ changes: addRow(t, r), userEvent: 'input.table' })
         focusCell(view, t.from, r + 1, c)
-      } else caretToEnd(wrap.querySelector('table')!.rows[r + 1].cells[c] as HTMLElement)
+      } else caretToEnd(gridCellIn(wrap, r + 1, c))
     } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       e.preventDefault()
       const next = r + (e.key === 'ArrowUp' ? -1 : 1)
-      if (next >= 0 && next < rows) caretToEnd(wrap.querySelector('table')!.rows[next].cells[c] as HTMLElement)
+      if (next >= 0 && next < rows) caretToEnd(gridCellIn(wrap, next, c))
       else {
         view.focus()
         const anchor = next < 0 ? Math.max(t.from - 1, 0) : Math.min(t.to + 1, view.state.doc.length)
@@ -770,8 +806,8 @@ function editableCell(view: EditorView, wrap: HTMLElement, el: HTMLElement) {
   }
 }
 
-// canToggleTasks says whether this user may tick task boxes. People who can only comment or read cannot.
-export const canToggleTasks = Facet.define<() => boolean, () => boolean>({
+// canEditText says whether this user may change the text in place: tick tasks, edit cells, change a box type.
+export const canEditText = Facet.define<() => boolean, () => boolean>({
   combine: (v) => v[0] ?? (() => true),
 })
 
@@ -787,7 +823,7 @@ class CheckboxWidget extends WidgetType {
     box.type = 'checkbox'
     box.className = 'cm-lp-check'
     box.checked = this.checked
-    const allowed = () => !view.state.readOnly && view.state.facet(canToggleTasks)()
+    const allowed = () => !view.state.readOnly && view.state.facet(canEditText)()
     box.disabled = !allowed()
     box.onmousedown = (e) => e.preventDefault()
     box.onclick = (e) => {
@@ -914,7 +950,7 @@ export function liveDecorations(state: EditorState): DecorationSet {
   // The Markdown grammar does not know boxes, definitions and [toc]. They render as in the view until the cursor enters them.
   const rendered: [number, number][] = []
   const headings: string[] = []
-  const blocks: { from: number; to: number; kind: string }[] = []
+  const tocs: { from: number; to: number }[] = []
   const boxes: { open: { from: number; to: number; text: string }; close: { from: number; to: number }; kind: string }[] = []
   let fence = ''
   for (let n = 1; n <= doc.lines; n++) {
@@ -927,7 +963,7 @@ export function liveDecorations(state: EditorState): DecorationSet {
     }
     if (fence) continue
     if (/^ {0,3}#{1,6}\s/.test(line.text)) headings.push(line.text)
-    if (/^\[\[?toc\]?\]$/i.test(line.text.trim())) blocks.push({ from: line.from, to: line.to, kind: 'toc' })
+    if (/^\[\[?toc\]?\]$/i.test(line.text.trim())) tocs.push({ from: line.from, to: line.to })
     else if (/^:::\s*\w/.test(line.text)) {
       const kind = /^:::\s*(\w+)/.exec(line.text)![1].toLowerCase()
       let m = n + 1
@@ -962,12 +998,11 @@ export function liveDecorations(state: EditorState): DecorationSet {
     }
     out.push(Decoration.replace({ widget: new BoxEdgeWidget(cls), block: true }).range(b.close.from, b.close.to))
   }
-  for (const b of blocks) {
-    if (touchesBlock(b.from, b.to)) continue
-    const html = b.kind === 'toc' ? tocHtml(headings) : renderMarkdown(doc.sliceString(b.from, b.to)).html
-    if (!html.trim()) continue
+  for (const b of tocs) {
+    const html = tocHtml(headings)
+    if (touchesBlock(b.from, b.to) || !html) continue
     rendered.push([b.from, b.to])
-    out.push(Decoration.replace({ widget: new HTMLBlockWidget(html, 'cm-lp-' + b.kind), block: true }).range(b.from, b.to))
+    out.push(Decoration.replace({ widget: new HTMLBlockWidget(html, 'cm-lp-toc'), block: true }).range(b.from, b.to))
   }
   const inRendered = (pos: number) => rendered.some(([a, b]) => pos >= a && pos <= b)
 
@@ -1128,7 +1163,7 @@ export function liveDecorations(state: EditorState): DecorationSet {
           const src = textNode ? doc.sliceString(textNode.from, textNode.to) : ''
           const closed = node.node.getChildren('CodeMark').length >= 2
           if (lang === 'csvpreview' && closed && !touchesBlock(node.from, node.to)) {
-            const html = renderMarkdown(doc.sliceString(node.from, node.to)).html
+            const html = blockHtml(doc.sliceString(node.from, node.to))
             out.push(Decoration.replace({ widget: new HTMLBlockWidget(html, 'cm-lp-csv'), block: true }).range(node.from, node.to))
             return false
           }
@@ -1150,7 +1185,7 @@ export function liveDecorations(state: EditorState): DecorationSet {
         }
         case 'HTMLBlock': {
           if (touchesBlock(node.from, node.to)) return false
-          const html = renderMarkdown(doc.sliceString(node.from, node.to)).html
+          const html = blockHtml(doc.sliceString(node.from, node.to))
           if (html.trim()) out.push(Decoration.replace({ widget: new HTMLBlockWidget(html, 'cm-lp-html'), block: true }).range(node.from, node.to))
           return false
         }
@@ -1165,7 +1200,7 @@ export function liveDecorations(state: EditorState): DecorationSet {
             return false
           }
           if (t) {
-            const editable = !state.readOnly && state.facet(canToggleTasks)()
+            const editable = !state.readOnly && state.facet(canEditText)()
             out.push(Decoration.replace({ widget: new TableWidget(doc.sliceString(t.from, t.to), editable), block: true }).range(t.from, t.to))
             return false
           }
@@ -1173,7 +1208,7 @@ export function liveDecorations(state: EditorState): DecorationSet {
             lineClass(node.from, node.to, 'cm-lp-table-src')
             return false
           }
-          const html = renderMarkdown(doc.sliceString(node.from, node.to)).html
+          const html = blockHtml(doc.sliceString(node.from, node.to))
           out.push(Decoration.replace({ widget: new HTMLBlockWidget(html, 'cm-lp-table'), block: true }).range(node.from, node.to))
           return false
         }
@@ -1216,10 +1251,10 @@ export function liveDecorations(state: EditorState): DecorationSet {
       out.push(Decoration.mark({ class: 'cm-lp-ins' }).range(from + 2, from + m[0].length - 2))
       out.push(hide.range(from + m[0].length - 2, from + m[0].length))
     }
-    for (const m of line.text.matchAll(/\[\[([^\]|#\n]+)(#[^\]|\n]*)?(?:\|([^\]\n]+))?\]\]/g)) {
+    for (const m of line.text.matchAll(noteLinkPattern)) {
       const from = line.from + m.index!
       if (inCode(from) || m[1].toLowerCase() === 'toc') continue
-      const label = m[3] ?? m[1] + (m[2] ?? '')
+      const label = m[3]?.trim() || (m[2] ? `${m[1]} › ${m[2].trim()}` : m[1])
       out.push(Decoration.replace({ widget: new LabelWidget(label, 'cm-lp-notelink') }).range(from, from + m[0].length))
     }
     for (const m of line.text.matchAll(/==(?=\S)(.+?)(?<=\S)==/g)) {
@@ -1389,7 +1424,8 @@ const liveTheme = EditorView.theme({
   '.cm-lp-grid td, .cm-lp-grid th': { cursor: 'text', outline: 'none', minWidth: '5em' },
   // An empty cell keeps the height of a line of text.
   '.cm-lp-grid td:empty::before, .cm-lp-grid th:empty::before': { content: '"\\200b"' },
-  '.cm-lp-grid td:focus, .cm-lp-grid th:focus': { boxShadow: 'inset 0 0 0 2px rgb(var(--primary))' },
+  // A focused cell keeps its spaces visible, so a space typed at its end stays where the caret is.
+  '.cm-lp-grid td:focus, .cm-lp-grid th:focus': { boxShadow: 'inset 0 0 0 2px rgb(var(--primary))', whiteSpace: 'pre-wrap' },
   '.cm-lp-grid-add': {
     position: 'absolute', opacity: '0', border: '1px dashed rgb(var(--border))', borderRadius: '4px', color: 'rgb(var(--muted-foreground))',
     backgroundColor: 'rgb(var(--card))', fontSize: '13px', lineHeight: '1', cursor: 'pointer',

@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { defaultLiveStyle } from '@/editor/live'
 import { api, setPrefs, type Prefs } from '@/lib/api'
 import { loginHref, useMe } from '@/lib/me'
 import { relativeTime } from '@/lib/time'
@@ -119,7 +120,7 @@ function EditorPrefs() {
         <Choice
           label="Live style"
           hint="Document never shows Markdown. Obsidian shows the Markdown of the line you edit."
-          value={prefs.live_style ?? 'document'}
+          value={prefs.live_style ?? defaultLiveStyle}
           options={[
             ['document', 'Document'],
             ['obsidian', 'Obsidian'],

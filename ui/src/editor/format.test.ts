@@ -189,7 +189,7 @@ describe('links', () => {
   }
 
   it('reads the link at the cursor', () => {
-    expect(linkAt(state('See the [Q4 re|view](https://example.com) now.'))).toEqual({ from: 8, to: 40, text: 'Q4 review', url: 'https://example.com' })
+    expect(linkAt(state('See the [Q4 re|view](https://example.com) now.'))).toEqual({ from: 8, to: 40, text: 'Q4 review', url: 'https://example.com', note: false, editable: true })
     expect(linkAt(state('See |the [Q4 review](https://example.com) now.'))).toBeNull()
   })
 
@@ -222,10 +222,10 @@ describe('linkInfoAt', () => {
     return linkInfoAt(st, doc.indexOf(needle) + 1)
   }
   it('finds the address of a link, a bare address and a link to a document', () => {
-    expect(at('See [Q4 review](https://example.com).', 'review')).toEqual({ from: 4, to: 36, url: 'https://example.com', note: false, editable: true })
-    expect(at('Go to https://x.example/a now', 'example')).toEqual({ from: 6, to: 25, url: 'https://x.example/a', note: false, editable: false })
-    expect(at('Go to <https://x.example> now', 'example')).toEqual({ from: 6, to: 25, url: 'https://x.example', note: false, editable: false })
-    expect(at('See [[zz-target|Target]] here', 'target')).toEqual({ from: 4, to: 24, url: '/n/zz-target', note: true, editable: false })
+    expect(at('See [Q4 review](https://example.com).', 'review')).toEqual({ from: 4, to: 36, text: 'Q4 review', url: 'https://example.com', note: false, editable: true })
+    expect(at('Go to https://x.example/a now', 'example')).toEqual({ from: 6, to: 25, text: 'https://x.example/a', url: 'https://x.example/a', note: false, editable: false })
+    expect(at('Go to <https://x.example> now', 'example')).toEqual({ from: 6, to: 25, text: 'https://x.example', url: 'https://x.example', note: false, editable: false })
+    expect(at('See [[zz-target|Target]] here', 'target')).toEqual({ from: 4, to: 24, text: 'Target', url: '/n/zz-target', note: true, editable: false })
     expect(at('See [[zz-target#Release plan|Plan]] here', 'Plan]')?.url).toBe('/n/zz-target#release-plan')
     expect(at('Plain text', 'text')).toBeNull()
   })
