@@ -1,9 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 
-// These tests read the preview pane, so they use the split view.
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem('greydoc-mode', 'both'))
-})
+// These tests read the preview pane, so they use the split view, the default.
 
 async function newNote(page: Page, text: string) {
   await page.goto('/new')

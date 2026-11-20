@@ -1,5 +1,7 @@
 import { EditorSelection, Prec, type ChangeSpec, type EditorState, type Extension, type StateCommand, type Transaction } from '@codemirror/state'
-import { keymap, type KeyBinding } from '@codemirror/view'
+import { syntaxTree } from '@codemirror/language'
+import { noteLinkSource, slugify } from '@/render/plugins'
+import { keymap, type EditorView, type KeyBinding } from '@codemirror/view'
 
 const userEvent = 'input.format'
 
@@ -137,6 +139,164 @@ export function setHeading(level: number): StateCommand {
   }
 }
 
+// toggleQuote quotes every touched line, or unquotes them when all are quoted.
+export const toggleQuote: StateCommand = ({ state, dispatch }) => {
+  if (state.readOnly) return false
+  const lines = targetLines(state).map((l) => state.doc.line(l))
+  const quoted = (t: string) => /^>\s?/.exec(t)
+  const all = lines.every((l) => quoted(l.text))
+  applyLines(
+    state,
+    dispatch,
+    lines.map((l) => (all ? { from: l.from, to: l.from + quoted(l.text)![0].length } : { from: l.from, insert: '> ' })),
+  )
+  return true
+}
+
+// insertBlock puts a block of text on its own lines and leaves the cursor at §.
+export function insertBlock(text: string): StateCommand {
+  return ({ state, dispatch }) => {
+    if (state.readOnly) return false
+    const line = state.doc.lineAt(state.selection.main.head)
+    const pre = line.length ? '\n\n' : ''
+    const at = line.length ? line.to : line.from
+    const i = Math.max(text.indexOf('§'), 0)
+    const after = state.sliceDoc(at, at + 2)
+    const blank = after === '\n\n' || (after === '\n' && at + 1 === state.doc.length)
+    const body = blank && text.endsWith('\n') ? text.slice(0, -1) : text
+    dispatch(
+      state.update({
+        changes: { from: at, insert: pre + body.replace('§', '') },
+        selection: { anchor: at + pre.length + i },
+        scrollIntoView: true,
+        userEvent,
+      }),
+    )
+    return true
+  }
+}
+
+// insertFootnote puts the next footnote number at the cursor and its note at the end, with the cursor in the note.
+export const insertFootnote: StateCommand = ({ state, dispatch }) => {
+  if (state.readOnly) return false
+  const text = state.doc.toString()
+  const used = [...text.matchAll(/\[\^(\d+)\]/g)].map((m) => Number(m[1]))
+  const n = Math.max(0, ...used) + 1
+  const at = state.selection.main.head
+  const notes = /\n\[\^\d+\]: /.test(text)
+  const end = text.endsWith('\n') ? '' : '\n'
+  const note = (notes ? end : end + '\n') + `[^${n}]: `
+  const ref = `[^${n}]`
+  dispatch(
+    state.update({
+      changes: [
+        { from: at, insert: ref },
+        { from: text.length, insert: note },
+      ],
+      selection: { anchor: text.length + ref.length + note.length },
+      scrollIntoView: true,
+      userEvent,
+    }),
+  )
+  return true
+}
+
+export interface FormatState {
+  bold: boolean
+  italic: boolean
+  strike: boolean
+  code: boolean
+  link: boolean
+  quote: boolean
+  // block is p or h1 to h6.
+  block: string
+  list: ListKind | null
+}
+
+// formatState reads the formatting at the main cursor, for the toolbar.
+export function formatState(state: EditorState): FormatState {
+  const head = state.selection.main.head
+  const names = new Set<string>()
+  for (let n: ReturnType<typeof syntaxTree>['topNode'] | null = syntaxTree(state).resolveInner(head, -1); n; n = n.parent) names.add(n.name)
+  for (let n: ReturnType<typeof syntaxTree>['topNode'] | null = syntaxTree(state).resolveInner(head, 1); n; n = n.parent) {
+    if (n.name === 'StrongEmphasis' || n.name === 'Emphasis' || n.name === 'Link' || n.name === 'InlineCode') names.add(n.name)
+  }
+  const text = state.doc.lineAt(head).text
+  const h = headingPrefix.exec(text)
+  const item = /^\s*(?:>\s?)*\s*([-*+] \[[ xX]\] |[-*+] |\d+[.)] )/.exec(text)
+  const list = item ? (isKind.task.test(item[1]) ? 'task' : isKind.ordered.test(item[1]) ? 'ordered' : 'bullet') : null
+  return {
+    bold: names.has('StrongEmphasis'),
+    italic: names.has('Emphasis'),
+    strike: names.has('Strikethrough'),
+    code: names.has('InlineCode'),
+    link: names.has('Link'),
+    quote: names.has('Blockquote') || /^\s*>/.test(text),
+    block: h ? 'h' + h[1].length : 'p',
+    list,
+  }
+}
+
+// linkMarkdown is [text](url), or the text alone without an address.
+export function linkMarkdown(text: string, url: string): string {
+  const label = text.replace(/[[\]]/g, '') || url
+  return url ? `[${label}](${url.replace(/[()\s]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0'))})` : label
+}
+
+export interface LinkInfo {
+  from: number
+  to: number
+  // text is the text of the link, or its address when it has none.
+  text: string
+  url: string
+  // note is a link to another document. editable says whether the link popover can change it: only [text](url) links.
+  note: boolean
+  editable: boolean
+}
+
+const noteLink = new RegExp(noteLinkSource, 'g')
+
+// linkInfoAt finds what a click at pos would open: a link, a bare address or a [[link]] to a document.
+export function linkInfoAt(state: EditorState, pos: number): LinkInfo | null {
+  const line = state.doc.lineAt(pos)
+  for (const m of line.text.matchAll(noteLink)) {
+    const from = line.from + m.index!
+    const to = from + m[0].length
+    if (pos < from || pos > to || m[1].toLowerCase() === 'toc') continue
+    const alias = m[1].toLowerCase()
+    return { from, to, text: m[3]?.trim() || alias, url: '/n/' + alias + (m[2] ? '#' + slugify(m[2]) : ''), note: true, editable: false }
+  }
+  for (const side of [-1, 1] as const) {
+    for (let n: ReturnType<typeof syntaxTree>['topNode'] | null = syntaxTree(state).resolveInner(pos, side); n; n = n.parent) {
+      if (n.name === 'Link') {
+        const marks = n.getChildren('LinkMark')
+        const url = n.getChild('URL')
+        if (!url || marks.length < 2) continue
+        return { from: n.from, to: n.to, text: state.sliceDoc(marks[0].to, marks[1].from), url: state.sliceDoc(url.from, url.to), note: false, editable: true }
+      }
+      if (n.name === 'Autolink' || (n.name === 'URL' && !['Link', 'Image', 'Autolink'].includes(n.parent?.name ?? ''))) {
+        const url = state.sliceDoc(n.from, n.to).replace(/^<|>$/g, '')
+        return { from: n.from, to: n.to, text: url, url, note: false, editable: false }
+      }
+    }
+  }
+  return null
+}
+
+// linkAt finds the [text](url) link around the main cursor.
+export function linkAt(state: EditorState): LinkInfo | null {
+  const info = linkInfoAt(state, state.selection.main.head)
+  return info?.editable ? info : null
+}
+
+// linkChange sets the link at the cursor, or makes one of the selection. An empty url removes the link and keeps its text.
+export function linkChange(state: EditorState, text: string, url: string) {
+  const link = linkAt(state)
+  const { from, to } = link ?? state.selection.main
+  const insert = linkMarkdown(text, url)
+  return { changes: { from, to, insert }, selection: { anchor: from + insert.length }, scrollIntoView: true, userEvent }
+}
+
 // insertLink turns each range into [text](url) with url selected, or a selected address into [](address).
 export const insertLink: StateCommand = ({ state, dispatch }) => {
   if (state.readOnly) return false
@@ -153,18 +313,24 @@ export const insertLink: StateCommand = ({ state, dispatch }) => {
   return true
 }
 
+// markKeys are the keys of the inline marks. The editor and the table cells use the same list.
+export const markKeys: Record<string, string> = {
+  'Mod-b': '**',
+  'Mod-i': '*',
+  'Mod-u': '++',
+  'Mod-Shift-x': '~~',
+  'Mod-Shift-h': '==',
+  'Mod-e': '`',
+  'Mod-.': '^',
+  'Mod-,': '~',
+}
+
 // formatKeymap binds the formatting keys. It runs before the default keymap, which binds Mod-i to selectParentSyntax.
-export function formatKeymap(opts: { onComment: (from: number, to: number) => void }): Extension {
+// onLink, when set, opens a link editor instead of writing the Markdown of a link.
+export function formatKeymap(opts: { onComment: (from: number, to: number) => void; onLink?: (view: EditorView) => boolean }): Extension {
   const bindings: KeyBinding[] = [
-    { key: 'Mod-b', run: toggleWrap('**') },
-    { key: 'Mod-i', run: toggleWrap('*') },
-    { key: 'Mod-u', run: toggleWrap('++') },
-    { key: 'Mod-Shift-x', run: toggleWrap('~~') },
-    { key: 'Mod-Shift-h', run: toggleWrap('==') },
-    { key: 'Mod-e', run: toggleWrap('`') },
-    { key: 'Mod-.', run: toggleWrap('^') },
-    { key: 'Mod-,', run: toggleWrap('~') },
-    { key: 'Mod-k', run: insertLink },
+    ...Object.entries(markKeys).map(([key, m]) => ({ key, run: toggleWrap(m) })),
+    { key: 'Mod-k', run: (view) => (opts.onLink && !view.state.readOnly ? opts.onLink(view) : insertLink(view)) },
     ...[0, 1, 2, 3, 4, 5, 6].map((n) => ({ key: `Mod-Alt-${n}`, run: setHeading(n) })),
     { key: 'Mod-Shift-7', run: toggleList('ordered') },
     { key: 'Mod-Shift-8', run: toggleList('bullet') },

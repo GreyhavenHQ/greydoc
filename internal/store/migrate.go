@@ -49,6 +49,7 @@ var migrations = []migration{
 		return err
 	}},
 	addColumn("011_note_alias_custom", "note_alias", "custom", "INTEGER NOT NULL DEFAULT 0"),
+	addColumn("012_user_prefs", "app_user", "prefs", "TEXT NOT NULL DEFAULT '{}'"),
 }
 
 // dropNamedGroupGrants deletes grants to OIDC groups and records each one in the note history.

@@ -1,10 +1,8 @@
 import { expect, test, type Page } from '@playwright/test'
 
 // These tests read the preview pane, so they use the split view.
-const splitView = () => localStorage.setItem('greydoc-mode', 'both')
 
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript(splitView)
 })
 
 async function typeInEditor(page: Page, text: string) {
@@ -24,7 +22,6 @@ test('new note opens an editor ready for typing', async ({ page }) => {
 
 test('two browsers editing one note converge and see each other', async ({ browser }) => {
   const ctxA = await browser.newContext()
-  await ctxA.addInitScript(splitView)
   const a = await ctxA.newPage()
   await a.goto('/new')
   await expect(a).toHaveURL(/\/n\/[a-z0-9]+$/)
@@ -32,7 +29,6 @@ test('two browsers editing one note converge and see each other', async ({ brows
   await typeInEditor(a, 'from A.')
 
   const ctxB = await browser.newContext()
-  await ctxB.addInitScript(splitView)
   const b = await ctxB.newPage()
   await b.goto(url)
   await expect(b.locator('[data-testid=editor] .cm-content')).toContainText('from A.')
@@ -90,6 +86,7 @@ test('comment on a selection, reply and resolve', async ({ page }) => {
   await expect(page).toHaveURL(/\/n\//)
   await page.keyboard.type('The budget is final.')
   await page.keyboard.press('Shift+Home')
+  await page.getByTestId('editor').locator('.cm-content').click({ button: 'right' })
   await page.getByTestId('selection-toolbar').getByRole('button', { name: 'Comment' }).click()
   await page.getByTestId('comment-input').fill('Is it?')
   await page.getByTestId('comments-panel').getByRole('button', { name: 'Comment', exact: true }).click()
@@ -110,6 +107,7 @@ test('a suggestion from the selection toolbar becomes a tracked change', async (
   await page.keyboard.press('End')
   await page.keyboard.press('ArrowLeft')
   for (let i = 0; i < 3; i++) await page.keyboard.press('Shift+ArrowLeft')
+  await page.getByTestId('editor').locator('.cm-content').click({ button: 'right' })
   await page.getByTestId('selection-toolbar').getByRole('button', { name: 'Suggest' }).click()
   await page.getByTestId('suggest-input').fill('good')
   await page.getByTestId('suggest-composer').getByRole('button', { name: 'Suggest' }).click()
@@ -126,6 +124,7 @@ test('AI refine becomes an AI-assisted suggestion', async ({ page }) => {
   await expect(page).toHaveURL(/\/n\//)
   await page.keyboard.type('the meeting was good i think')
   await page.keyboard.press('Shift+Home')
+  await page.getByTestId('editor').locator('.cm-content').click({ button: 'right' })
   await page.getByTestId('selection-toolbar').getByRole('button', { name: 'AI' }).click()
   await page.getByTestId('ai-preset').filter({ hasText: 'Make it clearer' }).click()
   await expect(page.locator('.cm-sugg-ins.cm-sugg-ai_assisted .cm-sugg-text')).toHaveText('The meeting went well.')

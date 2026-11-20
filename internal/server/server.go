@@ -189,6 +189,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /auth/callback", s.handleAuthCallback)
 	s.mux.HandleFunc("POST /auth/logout", s.handleAuthLogout)
 	s.mux.HandleFunc("GET /api/me", s.handleMe)
+	s.mux.HandleFunc("PATCH /api/me/prefs", s.handleSetPrefs)
 	s.mux.HandleFunc("GET /api/users", s.handleSearchUsers)
 	s.mux.HandleFunc("GET /api/users/names", s.handleUserNames)
 	s.mux.HandleFunc("GET /api/notifications", s.handleNotifications)

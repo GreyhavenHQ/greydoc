@@ -50,13 +50,20 @@ import { AiMenu } from '@/components/AiMenu'
 import { SelectionToolbar, toolbarButton } from '@/components/SelectionToolbar'
 import { imageUpload } from '@/editor/upload'
 import { formatKeymap } from '@/editor/format'
-import { canToggleTasks } from '@/editor/live'
+import { activeCell, canEditText, defaultLiveStyle, headingPos, linkEditor, linkOpener, tableMenu, type TableMenuRequest } from '@/editor/live'
+import { TableMenu } from '@/components/TableMenu'
+import { FormatToolbar } from '@/components/FormatToolbar'
+import { cellLinkTarget, LinkPopover, linkTarget, type LinkTarget } from '@/components/LinkPopover'
+import { LinkCard } from '@/components/LinkCard'
+import { linkAt, linkChange, linkInfoAt, type LinkInfo } from '@/editor/format'
 import { taskToggle } from '@/lib/tasks'
 import { captureEdits, setSuggestionRanges, suggestionDecorations, type SuggestionAction } from '@/editor/suggestions'
 import { anchorRange, resolvePoint, resolveRange } from '@/editor/anchors'
 import { setThreadRanges, threadDecorations } from '@/editor/threads'
 import { selectionListener, type SelectionInfo } from '@/editor/selection'
 import { EditorView as CMView } from '@codemirror/view'
+import type { EditorState } from '@codemirror/state'
+import * as Y from 'yjs'
 import { attribution, setClients } from '@/editor/attribution'
 import { personColor, personSeed, sourceLabel, type NoteClient } from '@/lib/authors'
 import { PersonAvatar } from '@/components/PersonAvatar'
@@ -66,7 +73,7 @@ import { Preview } from '@/render/Preview'
 import { atBottom, editorTopLine, lineForY, measure, scrollEditorToLine, yForLine, type Point } from '@/render/scrollSync'
 import { selectionToSource, type SourceSelection } from '@/render/sourceMap'
 import { applyThreadMarks, type PreviewThread } from '@/render/previewThreads'
-import { api, ApiError, atLeast, duplicateNote, shareParam, withShare, type Level, type Note } from '@/lib/api'
+import { api, ApiError, atLeast, duplicateNote, shareParam, withShare, type Level, type Note, type Prefs } from '@/lib/api'
 import { loginHref, useMe } from '@/lib/me'
 import { localName } from '@/lib/presence'
 import { docWidth, docWidthPx, extractTitle, isSlides, widthEdit } from '@/lib/meta'
@@ -81,18 +88,21 @@ interface PreviewSelection extends SourceSelection {
   bottom: number
 }
 
-const MODE_KEY = 'greydoc-mode'
-// Split view, as in HedgeDoc, until the user picks another mode.
-const defaultEditMode: Mode = 'both'
+// The mode chosen with the header buttons holds for one note in one tab.
+const MODE_KEY = 'greydoc-mode:'
+// Live mode until the user picks another mode in Settings.
+const defaultEditMode: Mode = 'live'
+const prefModes: Record<NonNullable<Prefs['default_mode']>, Mode> = { live: 'live', editor: 'edit', split: 'both', preview: 'view' }
 
-// savedMode reads HedgeDoc 1's ?view, ?edit and ?both first, then the last mode used in this browser.
-// A new note has nothing to read, so it skips a remembered preview-only mode.
-function savedMode(fresh: boolean): Mode {
+// startMode reads HedgeDoc 1's ?view, ?edit and ?both first, then the mode of this note in this tab, then the account preference.
+// A new note has nothing to read, so it skips a preview-only default.
+function startMode(alias: string, fresh: boolean, prefs?: Prefs): Mode {
   const q = new URLSearchParams(location.search)
   for (const m of ['view', 'edit', 'both'] as const) if (q.has(m)) return m
-  const m = localStorage.getItem(MODE_KEY)
-  if (m === 'view' && fresh) return defaultEditMode
-  return m === 'live' || m === 'edit' || m === 'both' || m === 'view' ? m : defaultEditMode
+  const m = sessionStorage.getItem(MODE_KEY + alias.toLowerCase())
+  if (m === 'live' || m === 'edit' || m === 'both' || m === 'view') return m
+  const p = prefs?.default_mode ? prefModes[prefs.default_mode] : defaultEditMode
+  return p === 'view' && fresh ? defaultEditMode : p
 }
 
 interface PresenceUser {
@@ -144,14 +154,10 @@ function usePresence(session: NoteSession | null): PresenceUser[] {
   return users
 }
 
-// searchNotes feeds the [[ note picker: recent notes first, search results once the user types.
+// searchNotes lists the documents to link to: titles holding every word typed, the ones opened last first.
 async function searchNotes(query: string): Promise<NoteHit[]> {
-  const q = query.trim()
-  const sp = new URLSearchParams({ scope: q ? 'all' : 'recent', limit: '20' })
-  if (q) sp.set('q', q)
-  let { notes } = await api.get<{ notes: NoteHit[] }>('/api/notes?' + sp)
-  if (!q && notes.length === 0) notes = (await api.get<{ notes: NoteHit[] }>('/api/notes?scope=all&limit=20')).notes
-  return notes
+  const sp = new URLSearchParams({ scope: 'all', title: query.trim(), sort: 'visited', limit: '20' })
+  return (await api.get<{ notes: NoteHit[] }>('/api/notes?' + sp)).notes
 }
 
 // scrollSource calls take when the user starts to scroll or type in el.
@@ -170,11 +176,20 @@ export default function Editor() {
   const [inTrash, setInTrash] = useState(false)
   const [level, setLevel] = useState<Level>('read')
   const fresh = Boolean((useLocation().state as { fresh?: boolean } | null)?.fresh)
-  const [mode, setModeState] = useState<Mode>(() => savedMode(fresh))
-  const setMode = useCallback((m: Mode) => {
-    setModeState(m)
-    localStorage.setItem(MODE_KEY, m)
-  }, [])
+  const [mode, setModeState] = useState<Mode>(() => startMode(alias, fresh, me?.prefs))
+  const setMode = useCallback(
+    (m: Mode) => {
+      setModeState(m)
+      sessionStorage.setItem(MODE_KEY + alias.toLowerCase(), m)
+    },
+    [alias],
+  )
+  // Another note starts in its own mode. The preferences can arrive after the first render.
+  const prefMode = me?.prefs?.default_mode
+  useEffect(() => {
+    setModeState(startMode(alias, fresh, me?.prefs))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [alias, prefMode])
   const [session, setSession] = useState<NoteSession | null>(null)
   const [synced, setSynced] = useState(false)
   // The editor mounts after the first sync, so it opens on the real text and not on an empty document.
@@ -615,14 +630,115 @@ export default function Editor() {
     return () => el.removeEventListener('click', onClick)
   }, [previewEl])
 
+  const [tableMenuReq, setTableMenuReq] = useState<TableMenuRequest | null>(null)
+  const formatSink = useRef<((s: EditorState) => void) | null>(null)
+  // One undo history per note, so it survives a switch to the preview and back.
+  const undoManager = useMemo(() => (session ? new Y.UndoManager(session.text) : null), [session])
+  useEffect(() => () => undoManager?.destroy(), [undoManager])
+  const [linkEdit, setLinkEdit] = useState<LinkTarget | null>(null)
+  const openLink = useCallback((v: CMView) => {
+    const cell = activeCell(v)
+    setLinkEdit(cell ? cellLinkTarget(v, cell) : linkTarget(v))
+    return true
+  }, [])
+  // linkCard is the link under the cursor, shown in a card that opens it.
+  const [linkCard, setLinkCard] = useState<{ info: LinkInfo; top: number; left: number } | null>(null)
+  // openTarget opens every link of the editor: a heading of this document in place, the app in place, others in a new tab.
+  const openTarget = useCallback(
+    (url: string) => {
+      const v = viewRef.current
+      if (url.startsWith('#')) {
+        const pos = v && headingPos(v, decodeURIComponent(url.slice(1)))
+        if (v && pos !== null) v.dispatch({ selection: { anchor: pos }, effects: CMView.scrollIntoView(pos, { y: 'start' }) })
+      } else if (url.startsWith('/')) navigate(url)
+      else window.open(url, '_blank', 'noopener,noreferrer')
+    },
+    [navigate],
+  )
+  const openTargetRef = useRef(openTarget)
+  openTargetRef.current = openTarget
+  const linkCards = useMemo(() => {
+    let frame = 0
+    const place = (v: CMView) => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const sel = v.state.selection.main
+        const info = sel.empty && v.hasFocus ? linkInfoAt(v.state, sel.head) : null
+        const at = info && v.coordsAtPos(info.from, 1)
+        if (!info || !at) return setLinkCard(null)
+        const host = v.dom.getBoundingClientRect()
+        setLinkCard({ info, top: at.bottom - host.top + 6, left: Math.max(4, Math.min(at.left - host.left, host.width - 390)) })
+      })
+    }
+    return [
+      CMView.updateListener.of((u) => {
+        if (u.selectionSet || u.docChanged || u.geometryChanged || u.focusChanged || u.viewportChanged) place(u.view)
+      }),
+      CMView.domEventHandlers({
+        scroll: (_e, v) => place(v),
+        // Ctrl or Cmd and a click opens the link, as in a word processor.
+        mousedown(e, v) {
+          if (e.button !== 0 || !(e.ctrlKey || e.metaKey)) return false
+          const pos = v.posAtCoords({ x: e.clientX, y: e.clientY })
+          const info = pos === null ? null : linkInfoAt(v.state, pos)
+          if (!info) return false
+          e.preventDefault()
+          openTargetRef.current(info.url)
+          return true
+        },
+      }),
+    ]
+  }, [])
+  // selMenu is where a right click on a selection opened Comment and Suggest. Writers see them only then.
+  const [selMenu, setSelMenu] = useState<{ top: number; left: number } | null>(null)
+  const selectionMenu = useMemo(
+    () =>
+      CMView.domEventHandlers({
+        mousedown(e, v) {
+          // A right click keeps the selection, so the menu acts on it. Others keep the menu of the browser.
+          if (e.button !== 2 || !canEditRef.current || v.state.selection.main.empty) return false
+          e.preventDefault()
+          return true
+        },
+        contextmenu(e, v) {
+          if (!canEditRef.current || v.state.selection.main.empty || activeCell(v)) return false
+          e.preventDefault()
+          const host = v.dom.getBoundingClientRect()
+          setSelMenu({ top: e.clientY - host.top + 8, left: e.clientX - host.left })
+          return true
+        },
+      }),
+    [],
+  )
+  const lastSel = useRef('')
+  const onSelection = useCallback((s: SelectionInfo | null) => {
+    setSelection(s)
+    const key = s ? s.from + ':' + s.to : ''
+    if (key !== lastSel.current) setSelMenu(null)
+    lastSel.current = key
+  }, [])
+  useEffect(() => {
+    if (!selMenu) return
+    // Escape closes the menu and keeps the selection, which the editor would drop.
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.preventDefault()
+      e.stopPropagation()
+      setSelMenu(null)
+    }
+    document.addEventListener('keydown', key, true)
+    return () => document.removeEventListener('keydown', key, true)
+  }, [selMenu])
   const editorExtensions = useMemo(
     () => [
-      formatKeymap({ onComment: commentOn }),
+      formatKeymap({ onComment: commentOn, onLink: openLink }),
       threadDecorations((id) => {
         setActiveThread(id)
         setCommentsOpen(true)
       }),
-      selectionListener(setSelection),
+      selectionListener(onSelection),
+      selectionMenu,
+      linkCards,
       noteLinkCompletion(searchNotes, () => aliasRef.current, (a) => noteInfo(a).then((i) => i?.headings ?? [])),
       mentionsEnabled
         ? mentions(
@@ -649,7 +765,13 @@ export default function Editor() {
           setCommentsOpen(true)
         } else decideRef.current(sg, a === 'accept')
       }),
-      canToggleTasks.of(() => canEditRef.current),
+      canEditText.of(() => canEditRef.current),
+      tableMenu.of(setTableMenuReq),
+      linkOpener.of((url) => openTargetRef.current(url)),
+      linkEditor.of((v) => openLink(v)),
+      CMView.updateListener.of((u) => {
+        if (u.selectionSet || u.docChanged) formatSink.current?.(u.state)
+      }),
       captureEdits(
         () => suggestingRef.current,
         (e) => {
@@ -662,7 +784,7 @@ export default function Editor() {
         },
       ),
     ],
-    [commentOn, mentionsEnabled],
+    [commentOn, openLink, onSelection, selectionMenu, linkCards, mentionsEnabled],
   )
 
   const toggleTask = useCallback(
@@ -695,7 +817,13 @@ export default function Editor() {
   }
 
   const startComment = () => {
+    setSelMenu(null)
     if (selection) commentOn(selection.from, selection.to)
+  }
+  const commentSelection = () => {
+    const v = viewRef.current
+    const sel = v?.state.selection.main
+    if (sel && !sel.empty) commentOn(sel.from, sel.to)
   }
 
   const loadClients = useCallback(() => {
@@ -998,75 +1126,110 @@ export default function Editor() {
         </header>
         <main className="flex min-h-0 flex-1">
           {showEditor && (
-            <section className={cn('relative min-w-0 border-r', showPreview ? 'w-1/2' : 'w-full')}>
-              {selection && atLeast(level, 'comment') && (
-                <SelectionToolbar
-                  top={selection.top}
-                  left={selection.left}
-                  onComment={startComment}
-                  onSuggest={() => startSuggest(selection.from, selection.to)}
-                >
-                  {me?.ai_enabled && (
-                    <AiMenu
-                      triggerClassName={toolbarButton}
-                      alias={note.alias}
-                      target={() => {
-                        const v = viewRef.current
-                        if (!v || !session) return null
-                        const sel = v.state.selection.main
-                        if (sel.empty) return null
-                        return { original: v.state.sliceDoc(sel.from, sel.to), ...anchorRange(session.text, sel.from, sel.to) }
-                      }}
-                      onCreated={loadSuggestions}
-                      onStart={() => {
-                        const v = viewRef.current
-                        if (v) v.dispatch({ selection: { anchor: v.state.selection.main.to } })
-                      }}
-                    />
-                  )}
-                </SelectionToolbar>
-              )}
-              {suggestDraft && note && (
-                <SuggestComposer
+            <section className={cn('relative flex min-w-0 flex-col border-r', showPreview ? 'w-1/2' : 'w-full')}>
+              {canEdit && ready && (
+                <FormatToolbar
+                  view={view}
                   alias={note.alias}
-                  draft={suggestDraft}
-                  top={viewRef.current?.coordsAtPos(suggestDraft.to) ? viewRef.current.coordsAtPos(suggestDraft.to)!.bottom - viewRef.current.dom.getBoundingClientRect().top + 8 : 40}
-                  onChange={(proposed) => setSuggestDraft({ ...suggestDraft, proposed })}
-                  onNoAccess={onNoAccess}
-                  onDone={(created) => {
-                    setSuggestDraft(null)
-                    if (created) loadSuggestions()
-                    viewRef.current?.focus()
-                  }}
+                  sink={formatSink}
+                  onLink={openLink}
+                  onComment={commentSelection}
+                  searchNotes={searchNotes}
+                  undoManager={undoManager}
                 />
               )}
-              {showAuthors && legend.length > 0 && (
-                <div className="absolute right-3 bottom-3 z-10 flex max-w-[80%] flex-wrap gap-2 rounded-md border bg-card/95 px-2.5 py-1.5 text-xs shadow-sm" data-testid="authors-legend">
-                  {legend.map((a) => (
-                    <span key={a.name} className="flex items-center gap-1">
-                      <span className="size-2.5 rounded-sm" style={{ backgroundColor: a.color }} />
-                      {a.name}
-                      {a.sources.size > 0 && <span className="text-muted-foreground">({[...a.sources].join(', ')})</span>}
-                    </span>
-                  ))}
-                </div>
-              )}
-              {session && ready ? (
-                <CodeEditor
-                  ytext={session.text}
-                  awareness={session.provider.awareness}
-                  readOnly={!atLeast(level, 'comment')}
-                  overlay={authorsOverlay}
-                  live={mode === 'live'}
-                  extensions={editorExtensions}
-                  onView={onView}
-                  autoFocus
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center text-sm text-muted-foreground" data-testid="editor-connecting">
-                  {connected ? 'Loading the live copy…' : 'Connecting…'}
-                </div>
-              )}
+              <div className="relative min-h-0 flex-1">
+                {selection && atLeast(level, 'comment') && (!canEdit || selMenu) && (
+                  <SelectionToolbar
+                    top={selMenu?.top ?? selection.top}
+                    left={selMenu?.left ?? selection.left}
+                    onComment={startComment}
+                    onSuggest={() => {
+                      setSelMenu(null)
+                      startSuggest(selection.from, selection.to)
+                    }}
+                  >
+                    {me?.ai_enabled && (
+                      <AiMenu
+                        triggerClassName={toolbarButton}
+                        alias={note.alias}
+                        target={() => {
+                          const v = viewRef.current
+                          if (!v || !session) return null
+                          const sel = v.state.selection.main
+                          if (sel.empty) return null
+                          return { original: v.state.sliceDoc(sel.from, sel.to), ...anchorRange(session.text, sel.from, sel.to) }
+                        }}
+                        onCreated={loadSuggestions}
+                        onStart={() => {
+                          const v = viewRef.current
+                          if (v) v.dispatch({ selection: { anchor: v.state.selection.main.to } })
+                        }}
+                      />
+                    )}
+                  </SelectionToolbar>
+                )}
+                {suggestDraft && note && (
+                  <SuggestComposer
+                    alias={note.alias}
+                    draft={suggestDraft}
+                    top={viewRef.current?.coordsAtPos(suggestDraft.to) ? viewRef.current.coordsAtPos(suggestDraft.to)!.bottom - viewRef.current.dom.getBoundingClientRect().top + 8 : 40}
+                    onChange={(proposed) => setSuggestDraft({ ...suggestDraft, proposed })}
+                    onNoAccess={onNoAccess}
+                    onDone={(created) => {
+                      setSuggestDraft(null)
+                      if (created) loadSuggestions()
+                      viewRef.current?.focus()
+                    }}
+                  />
+                )}
+                {showAuthors && legend.length > 0 && (
+                  <div className="absolute right-3 bottom-3 z-10 flex max-w-[80%] flex-wrap gap-2 rounded-md border bg-card/95 px-2.5 py-1.5 text-xs shadow-sm" data-testid="authors-legend">
+                    {legend.map((a) => (
+                      <span key={a.name} className="flex items-center gap-1">
+                        <span className="size-2.5 rounded-sm" style={{ backgroundColor: a.color }} />
+                        {a.name}
+                        {a.sources.size > 0 && <span className="text-muted-foreground">({[...a.sources].join(', ')})</span>}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {linkCard && !linkEdit && view && (
+                  <LinkCard
+                    {...linkCard}
+                    onOpen={(info) => openTarget(info.url)}
+                    onEdit={canEdit && linkCard.info.editable ? () => openLink(view) : undefined}
+                    onRemove={
+                      canEdit && linkCard.info.editable
+                        ? () => {
+                            const l = linkAt(view.state)
+                            if (l) view.dispatch(linkChange(view.state, l.text, ''))
+                          }
+                        : undefined
+                    }
+                  />
+                )}
+                {linkEdit && view && <LinkPopover view={view} target={linkEdit} onClose={() => setLinkEdit(null)} />}
+                {tableMenuReq && <TableMenu request={tableMenuReq} onClose={() => setTableMenuReq(null)} />}
+                {session && ready ? (
+                  <CodeEditor
+                    ytext={session.text}
+                    awareness={session.provider.awareness}
+                    readOnly={!atLeast(level, 'comment')}
+                    overlay={authorsOverlay}
+                    live={mode === 'live'}
+                    liveStyle={me?.prefs?.live_style ?? defaultLiveStyle}
+                    undoManager={undoManager ?? undefined}
+                    extensions={editorExtensions}
+                    onView={onView}
+                    autoFocus
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground" data-testid="editor-connecting">
+                    {connected ? 'Loading the live copy…' : 'Connecting…'}
+                  </div>
+                )}
+              </div>
             </section>
           )}
           {showPreview && (

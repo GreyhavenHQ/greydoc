@@ -1,14 +1,8 @@
 import { expect, test } from '@playwright/test'
+import { startWith } from './prefs'
 
 // These tests are about live mode, which is not the default.
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
-    if (!sessionStorage.getItem('mode-set')) {
-      localStorage.setItem('greydoc-mode', 'live')
-      sessionStorage.setItem('mode-set', '1')
-    }
-  })
-})
+startWith({ default_mode: 'live' })
 
 async function noteWith(page: import('@playwright/test').Page, text: string): Promise<string> {
   const resp = await page.request.post('/api/notes', { data: { content: text } })
@@ -25,7 +19,7 @@ test('live mode renders markdown in place', async ({ page }) => {
   await expect(editor.locator('.cm-lp-h1')).toHaveText('Plan')
   await expect(editor.locator('.cm-lp-strong')).toHaveText('bold')
   await expect(editor.locator('.cm-lp-mermaid svg').first()).toBeVisible({ timeout: 15_000 })
-  await expect(editor.locator('.cm-lp-table table')).toHaveCount(1)
+  await expect(editor.locator('.cm-lp-grid')).toHaveCount(1)
   await expect(editor.locator('.cm-lp-check')).toHaveCount(1)
 
   // Clicking a rendered diagram shows its source for editing.
@@ -45,6 +39,7 @@ test('AI and comments work while reading in live mode', async ({ page }) => {
   await line.click()
   await page.keyboard.press('End')
   await page.keyboard.press('Shift+Home')
+  await page.getByTestId('editor').locator('.cm-content').click({ button: 'right' })
   const toolbar = page.getByTestId('selection-toolbar')
   await expect(toolbar.getByRole('button', { name: 'Comment' })).toBeVisible()
   await toolbar.getByRole('button', { name: 'AI' }).click()
@@ -91,6 +86,7 @@ test('an AI diagram shows as a rendered card under the text and can be revised',
   await line.click()
   await page.keyboard.press('End')
   await page.keyboard.press('Shift+Home')
+  await page.getByTestId('editor').locator('.cm-content').click({ button: 'right' })
   await page.getByTestId('selection-toolbar').getByRole('button', { name: 'AI' }).click()
   await page.getByTestId('ai-preset').filter({ hasText: 'Make a diagram below' }).click()
   const card = page.getByTestId('suggestion-card')
@@ -158,7 +154,8 @@ test('front matter collapses to one line in live mode', async ({ page }) => {
   await expect(editor.locator('.cm-line', { hasText: 'tags: [design, q4]' })).toHaveCount(1)
 })
 
-test('a new note opens in split view, and a chosen mode is remembered', async ({ browser }) => {
+test('a new note opens in the default mode, and a mode chosen in the header holds for that note only', async ({ browser, request }) => {
+  await request.patch('/api/me/prefs', { data: { default_mode: 'split' } })
   const ctx = await browser.newContext()
   const page = await ctx.newPage()
   await page.goto('/new')
@@ -167,24 +164,12 @@ test('a new note opens in split view, and a chosen mode is remembered', async ({
   await expect(page.getByTestId('preview')).toHaveCount(1)
   await page.getByRole('radio', { name: /Live/ }).click()
   await expect(page.getByTestId('preview')).toHaveCount(0)
-  await page.goto('/new')
-  await expect(page).toHaveURL(/\/n\//)
+  await page.reload()
   await expect(page.getByTestId('editor').locator('.cm-live')).toHaveCount(1)
-  await ctx.close()
-})
-
-test('a new note opens for editing even after preview-only mode', async ({ page }) => {
-  await page.goto('/')
-  await page.evaluate(() => localStorage.setItem('greydoc-mode', 'view'))
   await page.goto('/new')
   await expect(page).toHaveURL(/\/n\//)
-  await expect(page.getByTestId('editor')).toHaveCount(1)
-  await expect(page.getByRole('radio', { name: /Split view/ })).toHaveAttribute('aria-checked', 'true')
-  expect(await page.evaluate(() => localStorage.getItem('greydoc-mode'))).toBe('view')
-  const alias = new URL(page.url()).pathname.split('/').pop()
-  await page.goto('/')
-  await page.goto('/n/' + alias)
-  await expect(page.getByTestId('editor')).toHaveCount(0)
+  await expect(page.getByTestId('preview')).toHaveCount(1)
+  await ctx.close()
 })
 
 test('the AI menu takes a request in your own words, and presets show what they ask', async ({ page }) => {
@@ -194,6 +179,7 @@ test('the AI menu takes a request in your own words, and presets show what they 
   await line.click()
   await page.keyboard.press('End')
   await page.keyboard.press('Shift+Home')
+  await page.getByTestId('editor').locator('.cm-content').click({ button: 'right' })
   await page.getByTestId('selection-toolbar').getByRole('button', { name: 'AI' }).click()
   const menu = page.getByTestId('ai-menu')
   await expect(menu.getByTestId('ai-preset').filter({ hasText: 'Fix spelling and grammar' })).toContainText('Change nothing else.')

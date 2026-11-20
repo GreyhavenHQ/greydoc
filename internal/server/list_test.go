@@ -1,6 +1,7 @@
 package server_test
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -33,5 +34,30 @@ func TestListNotesAndTags(t *testing.T) {
 	_, body = e.do(nil, "GET", "/api/notes?scope=recent", nil)
 	if !strings.Contains(body, "Beta") || strings.Contains(body, "Alpha") {
 		t.Fatalf("recent: %s", body)
+	}
+}
+
+func TestListNotesByTitleOrderedByVisit(t *testing.T) {
+	e := newTestEnv(t)
+	first := e.createNote(nil, "# Zebra first\n")
+	second := e.createNote(nil, "# Zebra second\n")
+	e.createNote(nil, "# Body\n\nzebra in the text\n")
+	for _, a := range []string{first, second} {
+		if code, body := e.do(nil, "GET", "/api/notes/"+a+"?visit=1", nil); code != 200 {
+			t.Fatalf("visit %s: %d %s", a, code, body)
+		}
+	}
+	code, body := e.do(nil, "GET", "/api/notes?scope=all&title=zebra&sort=visited", nil)
+	if code != 200 {
+		t.Fatalf("%d %s", code, body)
+	}
+	var r struct {
+		Notes []struct {
+			Alias string `json:"alias"`
+		} `json:"notes"`
+	}
+	_ = json.Unmarshal([]byte(body), &r)
+	if len(r.Notes) != 2 || r.Notes[0].Alias != second || r.Notes[1].Alias != first {
+		t.Fatalf("notes: %s", body)
 	}
 }

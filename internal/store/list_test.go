@@ -274,3 +274,54 @@ func TestSharedEmptyInLocalMode(t *testing.T) {
 		}
 	})
 }
+
+func TestListNotesByTitleAndVisit(t *testing.T) {
+	eachDialect(t, func(t *testing.T, st *Store) {
+		alice, _ := st.UpsertOIDCUser(ctx, "a", "alice", "Alice", "", nil)
+		bob, _ := st.UpsertOIDCUser(ctx, "b", "bob", "Bob", "", nil)
+		note := func(owner *User, alias, title, content string) *Note {
+			n, err := st.CreateNote(ctx, NewNote{OwnerID: owner.ID, Alias: alias, Content: content})
+			if err != nil {
+				t.Fatal(err)
+			}
+			_ = st.SaveNoteState(ctx, n.ID, NoteState{Title: title, Content: content})
+			return n
+		}
+		target := note(alice, "target", "Zebra target", "")
+		other := note(alice, "other", "Other ZEBRA", "")
+		note(alice, "body", "Body", "zebra in the text only")
+		note(alice, "never", "Zebra never opened", "")
+		note(bob, "secret", "Zebra secret", "")
+		note(alice, "percent", "100% sure", "")
+		visit := func(n *Note, at string) {
+			if _, err := st.db.Exec(st.q(`INSERT INTO note_visit (user_id, note_id, visited_at) VALUES (?, ?, ?)`), alice.ID, n.ID, at); err != nil {
+				t.Fatal(err)
+			}
+		}
+		visit(target, "2026-01-01T10:00:00.000000Z")
+		visit(other, "2026-01-02T10:00:00.000000Z")
+		aliases := func(title string) []string {
+			ns, err := st.ListNotes(ctx, ListFilter{Viewer: Viewer{UserID: alice.ID}, Scope: ScopeAll, Title: title, Sort: SortVisited})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var out []string
+			for _, n := range ns {
+				out = append(out, n.PrimaryAlias)
+			}
+			return out
+		}
+		if got := aliases("zebra"); !slices.Equal(got, []string{"other", "target", "never"}) {
+			t.Fatalf("zebra: %v", got)
+		}
+		if got := aliases("ZEB tar"); !slices.Equal(got, []string{"target"}) {
+			t.Fatalf("two words: %v", got)
+		}
+		if got := aliases("%"); !slices.Equal(got, []string{"percent"}) {
+			t.Fatalf("percent: %v", got)
+		}
+		if got := aliases(""); len(got) != 5 || got[0] != "other" || got[1] != "target" {
+			t.Fatalf("empty: %v", got)
+		}
+	})
+}

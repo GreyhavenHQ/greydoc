@@ -5,6 +5,7 @@ const port = 3999
 // Runs against the built binary (just e2e builds it first) on a throwaway database.
 export default defineConfig({
   testDir: './e2e',
+  globalSetup: './e2e/global-setup.ts',
   timeout: 30_000,
   fullyParallel: false,
   workers: 1,

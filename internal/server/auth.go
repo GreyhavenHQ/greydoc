@@ -114,6 +114,13 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		view["display_name"] = id.User.DisplayName
 		view["groups"] = id.User.Groups
 		view["admin"] = id.Admin
+		// The local user is cached at startup, so the preferences come from the store.
+		u, err := s.store.UserByID(r.Context(), id.User.ID)
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		view["prefs"] = u.Prefs
 	}
 	writeJSON(w, http.StatusOK, view)
 }
