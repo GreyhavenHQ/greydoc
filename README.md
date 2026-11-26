@@ -4,6 +4,17 @@ greydoc is a collaborative Markdown editor in one Go binary, in the style of Hed
 
 It adds what HedgeDoc does not have:
 
+<table>
+  <tr>
+    <td><img src="docs/screenshot-editor.png" height="300" alt="Editor with the review panel"></td>
+    <td><img src="docs/screenshot-documents.png" height="300" alt="Document list"></td>
+  </tr>
+  <tr>
+    <td align="center">Editor with comments and the review panel</td>
+    <td align="center">Document list with folders, tags and owners</td>
+  </tr>
+</table>
+
 - A timeline of every change, with who made it and how: by hand, with AI help, or by an agent.
 - An authors view that marks each part of the text with its writer, and AI-assisted text as such.
 - Comments on a text range, with replies, resolve and reopen.
